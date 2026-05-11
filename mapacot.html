@@ -1,35 +1,21 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="MapaCot">
-  <title>MapaCot - Sistema de Cotacao</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #f0f2f5; font-family: 'DM Sans', sans-serif; }
-    input, textarea, button { font-family: inherit; }
-    input { text-transform: uppercase; }
-    textarea { text-transform: uppercase; }
-    input[type=date] { text-transform: none; }
-    input[type=password] { text-transform: none; }
-    input::placeholder, textarea::placeholder { color: #bbb; text-transform: uppercase; }
-    input:focus, textarea:focus { outline: none; }
-    button { cursor: pointer; }
-    #root { min-height: 100vh; }
-    @keyframes spin { to { transform: rotate(360deg) } }
-    @keyframes fadeUp { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MapaCot</title>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4ff;min-height:100vh;}
+input{text-transform:uppercase;}
+input[type=password]{text-transform:none;}
+</style>
 </head>
 <body>
-  <div id="root"></div>
-  <script>
-function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
+<div id="root"></div>
+<script>function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
 function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
 function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
 function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
@@ -659,12 +645,28 @@ function AutocompleteInput(_ref9) {
     var bs = normalize(b).startsWith(nv);
     return as && !bs ? -1 : !as && bs ? 1 : 0;
   }).slice(0, 20) : [];
+  var dropRef = useRef();
   var select = function select(s) {
     _onChange(s);
     onCommit && onCommit(s);
     setOpen(false);
     setHi(-1);
   };
+  useEffect(function () {
+    if (hi >= 0 && dropRef.current) {
+      var container = dropRef.current;
+      var item = container.children[hi];
+      if (item) {
+        var itemTop = item.offsetTop;
+        var itemBottom = itemTop + item.offsetHeight;
+        if (itemBottom > container.scrollTop + container.clientHeight) {
+          container.scrollTop = itemBottom - container.clientHeight;
+        } else if (itemTop < container.scrollTop) {
+          container.scrollTop = itemTop;
+        }
+      }
+    }
+  }, [hi]);
   var handleKey = function handleKey(e) {
     if (!open || !filtered.length) {
       if (e.key === "Enter" || e.key === "Tab") {
@@ -724,6 +726,7 @@ function AutocompleteInput(_ref9) {
       fontFamily: "inherit"
     }, inputStyle)
   }), open && filtered.length > 0 && /*#__PURE__*/React.createElement("div", {
+    ref: dropRef,
     style: {
       position: "absolute",
       top: "100%",
@@ -3790,7 +3793,6 @@ function Root() {
   return /*#__PURE__*/React.createElement(App, null);
 }
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Root, null));
-
-  </script>
+</script>
 </body>
 </html>
