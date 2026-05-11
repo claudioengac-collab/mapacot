@@ -1,0 +1,3790 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MapaCot">
+  <title>MapaCot - Sistema de Cotacao</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f0f2f5; font-family: 'DM Sans', sans-serif; }
+    input, textarea, button { font-family: inherit; }
+    input { text-transform: uppercase; }
+    textarea { text-transform: uppercase; }
+    input[type=date] { text-transform: none; }
+    input[type=password] { text-transform: none; }
+    input::placeholder, textarea::placeholder { color: #bbb; text-transform: uppercase; }
+    input:focus, textarea:focus { outline: none; }
+    button { cursor: pointer; }
+    #root { min-height: 100vh; }
+    @keyframes spin { to { transform: rotate(360deg) } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
+function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
+function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
+function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == _typeof(i) ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != _typeof(t) || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != _typeof(i)) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
+function _slicedToArray(r, e) { return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest(); }
+function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t.return && (u = t.return(), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
+function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
+function _toConsumableArray(r) { return _arrayWithoutHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableSpread(); }
+function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
+function _iterableToArray(r) { if ("undefined" != typeof Symbol && null != r[Symbol.iterator] || null != r["@@iterator"]) return Array.from(r); }
+function _arrayWithoutHoles(r) { if (Array.isArray(r)) return _arrayLikeToArray(r); }
+function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
+function _regenerator() { /*! regenerator-runtime -- Copyright (c) 2014-present, Facebook, Inc. -- license (MIT): https://github.com/babel/babel/blob/main/packages/babel-helpers/LICENSE */ var e, t, r = "function" == typeof Symbol ? Symbol : {}, n = r.iterator || "@@iterator", o = r.toStringTag || "@@toStringTag"; function i(r, n, o, i) { var c = n && n.prototype instanceof Generator ? n : Generator, u = Object.create(c.prototype); return _regeneratorDefine2(u, "_invoke", function (r, n, o) { var i, c, u, f = 0, p = o || [], y = !1, G = { p: 0, n: 0, v: e, a: d, f: d.bind(e, 4), d: function d(t, r) { return i = t, c = 0, u = e, G.n = r, a; } }; function d(r, n) { for (c = r, u = n, t = 0; !y && f && !o && t < p.length; t++) { var o, i = p[t], d = G.p, l = i[2]; r > 3 ? (o = l === n) && (u = i[(c = i[4]) ? 5 : (c = 3, 3)], i[4] = i[5] = e) : i[0] <= d && ((o = r < 2 && d < i[1]) ? (c = 0, G.v = n, G.n = i[1]) : d < l && (o = r < 3 || i[0] > n || n > l) && (i[4] = r, i[5] = n, G.n = l, c = 0)); } if (o || r > 1) return a; throw y = !0, n; } return function (o, p, l) { if (f > 1) throw TypeError("Generator is already running"); for (y && 1 === p && d(p, l), c = p, u = l; (t = c < 2 ? e : u) || !y;) { i || (c ? c < 3 ? (c > 1 && (G.n = -1), d(c, u)) : G.n = u : G.v = u); try { if (f = 2, i) { if (c || (o = "next"), t = i[o]) { if (!(t = t.call(i, u))) throw TypeError("iterator result is not an object"); if (!t.done) return t; u = t.value, c < 2 && (c = 0); } else 1 === c && (t = i.return) && t.call(i), c < 2 && (u = TypeError("The iterator does not provide a '" + o + "' method"), c = 1); i = e; } else if ((t = (y = G.n < 0) ? u : r.call(n, G)) !== a) break; } catch (t) { i = e, c = 1, u = t; } finally { f = 1; } } return { value: t, done: y }; }; }(r, o, i), !0), u; } var a = {}; function Generator() {} function GeneratorFunction() {} function GeneratorFunctionPrototype() {} t = Object.getPrototypeOf; var c = [][n] ? t(t([][n]())) : (_regeneratorDefine2(t = {}, n, function () { return this; }), t), u = GeneratorFunctionPrototype.prototype = Generator.prototype = Object.create(c); function f(e) { return Object.setPrototypeOf ? Object.setPrototypeOf(e, GeneratorFunctionPrototype) : (e.__proto__ = GeneratorFunctionPrototype, _regeneratorDefine2(e, o, "GeneratorFunction")), e.prototype = Object.create(u), e; } return GeneratorFunction.prototype = GeneratorFunctionPrototype, _regeneratorDefine2(u, "constructor", GeneratorFunctionPrototype), _regeneratorDefine2(GeneratorFunctionPrototype, "constructor", GeneratorFunction), GeneratorFunction.displayName = "GeneratorFunction", _regeneratorDefine2(GeneratorFunctionPrototype, o, "GeneratorFunction"), _regeneratorDefine2(u), _regeneratorDefine2(u, o, "Generator"), _regeneratorDefine2(u, n, function () { return this; }), _regeneratorDefine2(u, "toString", function () { return "[object Generator]"; }), (_regenerator = function _regenerator() { return { w: i, m: f }; })(); }
+function _regeneratorDefine2(e, r, n, t) { var i = Object.defineProperty; try { i({}, "", {}); } catch (e) { i = 0; } _regeneratorDefine2 = function _regeneratorDefine(e, r, n, t) { function o(r, n) { _regeneratorDefine2(e, r, function (e) { return this._invoke(r, n, e); }); } r ? i ? i(e, r, { value: n, enumerable: !t, configurable: !t, writable: !t }) : e[r] = n : (o("next", 0), o("throw", 1), o("return", 2)); }, _regeneratorDefine2(e, r, n, t); }
+function asyncGeneratorStep(n, t, e, r, o, a, c) { try { var i = n[a](c), u = i.value; } catch (n) { return void e(n); } i.done ? t(u) : Promise.resolve(u).then(r, o); }
+function _asyncToGenerator(n) { return function () { var t = this, e = arguments; return new Promise(function (r, o) { var a = n.apply(t, e); function _next(n) { asyncGeneratorStep(a, r, o, _next, _throw, "next", n); } function _throw(n) { asyncGeneratorStep(a, r, o, _next, _throw, "throw", n); } _next(void 0); }); }; }
+var _React = React,
+  useState = _React.useState,
+  useEffect = _React.useEffect,
+  useRef = _React.useRef,
+  useCallback = _React.useCallback;
+var SUPABASE_URL = "https://lvlysqltdkwkvagfnbnr.supabase.co";
+var SUPABASE_KEY = "sb_publishable_OET0SyEvAkh_KmWBmC5M5Q_29z6hvG7";
+var SB = {
+  "apikey": SUPABASE_KEY,
+  "Authorization": "Bearer " + SUPABASE_KEY,
+  "Content-Type": "application/json",
+  "Prefer": "resolution=merge-duplicates"
+};
+var sbGetMapas = /*#__PURE__*/function () {
+  var _ref = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee() {
+    var r, d;
+    return _regenerator().w(function (_context) {
+      while (1) switch (_context.n) {
+        case 0:
+          _context.n = 1;
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?select=dados&order=criado_em.desc"), {
+            headers: SB
+          });
+        case 1:
+          r = _context.v;
+          if (r.ok) {
+            _context.n = 2;
+            break;
+          }
+          return _context.a(2, []);
+        case 2:
+          _context.n = 3;
+          return r.json();
+        case 3:
+          d = _context.v;
+          return _context.a(2, d.map(function (x) {
+            return x.dados;
+          }));
+      }
+    }, _callee);
+  }));
+  return function sbGetMapas() {
+    return _ref.apply(this, arguments);
+  };
+}();
+var sbSaveMapa = /*#__PURE__*/function () {
+  var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(m) {
+    return _regenerator().w(function (_context2) {
+      while (1) switch (_context2.n) {
+        case 0:
+          _context2.n = 1;
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/mapas"), {
+            method: "POST",
+            headers: SB,
+            body: JSON.stringify({
+              id: m.id,
+              dados: m,
+              atualizado_em: new Date().toISOString()
+            })
+          });
+        case 1:
+          return _context2.a(2);
+      }
+    }, _callee2);
+  }));
+  return function sbSaveMapa(_x) {
+    return _ref2.apply(this, arguments);
+  };
+}();
+var sbDeleteMapa = /*#__PURE__*/function () {
+  var _ref3 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(id) {
+    return _regenerator().w(function (_context3) {
+      while (1) switch (_context3.n) {
+        case 0:
+          _context3.n = 1;
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(id), {
+            method: "DELETE",
+            headers: SB
+          });
+        case 1:
+          return _context3.a(2);
+      }
+    }, _callee3);
+  }));
+  return function sbDeleteMapa(_x2) {
+    return _ref3.apply(this, arguments);
+  };
+}();
+var sbGetCadastros = /*#__PURE__*/function () {
+  var _ref4 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee4() {
+    var _d$;
+    var r, d;
+    return _regenerator().w(function (_context4) {
+      while (1) switch (_context4.n) {
+        case 0:
+          _context4.n = 1;
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados"), {
+            headers: SB
+          });
+        case 1:
+          r = _context4.v;
+          if (r.ok) {
+            _context4.n = 2;
+            break;
+          }
+          return _context4.a(2, null);
+        case 2:
+          _context4.n = 3;
+          return r.json();
+        case 3:
+          d = _context4.v;
+          return _context4.a(2, ((_d$ = d[0]) === null || _d$ === void 0 ? void 0 : _d$.dados) || null);
+      }
+    }, _callee4);
+  }));
+  return function sbGetCadastros() {
+    return _ref4.apply(this, arguments);
+  };
+}();
+var sbGetInsumos = /*#__PURE__*/function () {
+  var _ref5 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee5() {
+    var _d$2;
+    var r, d;
+    return _regenerator().w(function (_context5) {
+      while (1) switch (_context5.n) {
+        case 0:
+          _context5.n = 1;
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.insumos&select=dados"), {
+            headers: SB
+          });
+        case 1:
+          r = _context5.v;
+          if (r.ok) {
+            _context5.n = 2;
+            break;
+          }
+          return _context5.a(2, []);
+        case 2:
+          _context5.n = 3;
+          return r.json();
+        case 3:
+          d = _context5.v;
+          return _context5.a(2, ((_d$2 = d[0]) === null || _d$2 === void 0 || (_d$2 = _d$2.dados) === null || _d$2 === void 0 ? void 0 : _d$2.insumos) || []);
+      }
+    }, _callee5);
+  }));
+  return function sbGetInsumos() {
+    return _ref5.apply(this, arguments);
+  };
+}();
+var sbSaveCadastros = /*#__PURE__*/function () {
+  var _ref6 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(c) {
+    var main;
+    return _regenerator().w(function (_context6) {
+      while (1) switch (_context6.n) {
+        case 0:
+          main = {
+            obras: c.obras || [],
+            fornecedores: c.fornecedores || [],
+            unidades: c.unidades || []
+          };
+          _context6.n = 1;
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
+            method: "POST",
+            headers: SB,
+            body: JSON.stringify({
+              id: "global",
+              dados: main,
+              atualizado_em: new Date().toISOString()
+            })
+          });
+        case 1:
+          return _context6.a(2);
+      }
+    }, _callee6);
+  }));
+  return function sbSaveCadastros(_x3) {
+    return _ref6.apply(this, arguments);
+  };
+}();
+var sbSaveInsumos = /*#__PURE__*/function () {
+  var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(insumos) {
+    return _regenerator().w(function (_context7) {
+      while (1) switch (_context7.n) {
+        case 0:
+          _context7.n = 1;
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
+            method: "POST",
+            headers: SB,
+            body: JSON.stringify({
+              id: "insumos",
+              dados: {
+                insumos: insumos
+              },
+              atualizado_em: new Date().toISOString()
+            })
+          });
+        case 1:
+          return _context7.a(2);
+      }
+    }, _callee7);
+  }));
+  return function sbSaveInsumos(_x4) {
+    return _ref7.apply(this, arguments);
+  };
+}();
+var CHUNK_SIZE = 4;
+var DEFAULT_UNIDADES = ["BD", "CX", "FD", "FX", "GL", "JG", "KG", "L", "M", "M²", "M³", "ML", "PAR", "PC", "PR", "RL", "SC", "T", "UN", "VB"];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+var uid = function uid() {
+  return crypto.randomUUID();
+};
+var fmtDate = function fmtDate(d) {
+  return (d instanceof Date ? d : new Date(d)).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+};
+var fmtHora = function fmtHora(d) {
+  return (d instanceof Date ? d : new Date(d)).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
+var fmtMoney = function fmtMoney(v) {
+  if (v === null || v === undefined || v === "" || isNaN(v)) return "";
+  return Number(v).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+var parseMoney = function parseMoney(s) {
+  if (s === null || s === undefined || s === "") return null;
+  var n = parseFloat(String(s).replace(/\./g, "").replace(",", "."));
+  return isNaN(n) ? null : n;
+};
+var normalize = function normalize(s) {
+  return (s || "").trim().toUpperCase();
+};
+var addToList = function addToList(list, val) {
+  var v = normalize(val);
+  if (!v) return list;
+  return list.some(function (x) {
+    return normalize(x) === v;
+  }) ? list : [].concat(_toConsumableArray(list), [v]).sort();
+};
+var emptyMap = function emptyMap() {
+  var n = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 1;
+  return {
+    id: uid(),
+    nome: "",
+    responsavel: "",
+    obra: "",
+    numero: n,
+    criadoEm: new Date().toISOString(),
+    atualizadoEm: new Date().toISOString(),
+    itens: [],
+    fornecedores: [],
+    precos: {},
+    rodape: {},
+    corTema: "blue"
+  };
+};
+var emptyItem = function emptyItem(n) {
+  return {
+    id: uid(),
+    num: n,
+    descricao: "",
+    qt: "",
+    unid: ""
+  };
+};
+var emptyForn = function emptyForn() {
+  return {
+    id: uid(),
+    nome: ""
+  };
+};
+var calcResumo = function calcResumo(item, fns, precos) {
+  if (!fns.length) return {
+    vlUnit: null,
+    vlTotal: null,
+    forn: null
+  };
+  var minVal = null,
+    minForn = null;
+  fns.forEach(function (f) {
+    var v = parseMoney(precos["".concat(item.id, "_").concat(f.id)]);
+    if (v !== null && v > 0 && (minVal === null || v < minVal)) {
+      minVal = v;
+      minForn = f.nome || "—";
+    }
+  });
+  var qt = parseFloat(String(item.qt).replace(",", "."));
+  return {
+    vlUnit: minVal,
+    vlTotal: minVal !== null && !isNaN(qt) && qt > 0 ? minVal * qt : null,
+    forn: minForn
+  };
+};
+
+// ─── Themes ───────────────────────────────────────────────────────────────────
+var THEMES = [{
+  id: "blue",
+  name: "AZUL",
+  hdr: "#2a5298",
+  sub: "#c5d8f0",
+  best: "#b0e8b8"
+}, {
+  id: "salmon",
+  name: "SALMÃO",
+  hdr: "#c0392b",
+  sub: "#fce4e2",
+  best: "#a8e6b8"
+}, {
+  id: "green",
+  name: "VERDE",
+  hdr: "#1a7a44",
+  sub: "#d0f0e0",
+  best: "#f0e060"
+}, {
+  id: "amber",
+  name: "ÂMBAR",
+  hdr: "#b06000",
+  sub: "#fdf0c8",
+  best: "#a8e0a8"
+}, {
+  id: "purple",
+  name: "ROXO",
+  hdr: "#5b2d8e",
+  sub: "#ead8f8",
+  best: "#a0e8b0"
+}, {
+  id: "gray",
+  name: "CINZA",
+  hdr: "#445566",
+  sub: "#e8ecf2",
+  best: "#a8e6b8"
+}];
+var getTheme = function getTheme(id) {
+  return THEMES.find(function (t) {
+    return t.id === id;
+  }) || THEMES[0];
+};
+
+// ─── PDF ──────────────────────────────────────────────────────────────────────
+var buildMapaHTML = function buildMapaHTML(mapa) {
+  var now = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : new Date();
+  var T = getTheme(mapa.corTema);
+  var fns = mapa.fornecedores || [];
+  var itens = mapa.itens || [];
+  var precos = mapa.precos || {};
+  var rodape = mapa.rodape || {};
+  var totalBruto = function totalBruto(fid) {
+    return itens.reduce(function (acc, item) {
+      var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
+      var qt = parseFloat(String(item.qt).replace(",", "."));
+      return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
+    }, 0);
+  };
+  var calcVL = function calcVL(fid) {
+    var r = rodape[fid] || {};
+    return totalBruto(fid) - (parseMoney(r.desconto) || 0) + (parseMoney(r.impostos) || 0) + (parseMoney(r.frete) || 0);
+  };
+  var bestFornId = function () {
+    var minVal = null,
+      minId = null;
+    fns.forEach(function (f) {
+      var vl = calcVL(f.id);
+      if (vl > 0 && (minVal === null || vl < minVal)) {
+        minVal = vl;
+        minId = f.id;
+      }
+    });
+    return minId;
+  }();
+  var resumoTotal = itens.reduce(function (acc, item) {
+    var r = calcResumo(item, fns, precos);
+    return acc + (r.vlTotal || 0);
+  }, 0);
+  var chunks = [];
+  for (var i = 0; i < Math.max(fns.length, 1); i += CHUNK_SIZE) chunks.push(fns.slice(i, i + CHUNK_SIZE));
+  var hdrColor = T.hdr;
+  var subColor = T.sub;
+  var bestColor = T.best;
+  var RODAPE_ROWS = [{
+    key: "desconto",
+    label: "DESCONTO",
+    money: true
+  }, {
+    key: "impostos",
+    label: "IMPOSTOS",
+    money: true
+  }, {
+    key: "frete",
+    label: "FRETE",
+    money: true
+  }, {
+    key: "valorLiquido",
+    label: "VALOR LÍQUIDO",
+    computed: true
+  }, {
+    key: "contato",
+    label: "CONTATO",
+    maxLen: 1000
+  }, {
+    key: "observacao",
+    label: "OBSERVAÇÕES",
+    maxLen: 2000
+  }];
+  var th = function th(txt) {
+    var ex = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : "";
+    return "<th style=\"border:1px solid #999;padding:5px 7px;text-align:center;font-size:10px;letter-spacing:0.3px;".concat(ex, "\">").concat(txt, "</th>");
+  };
+  var renderChunk = function renderChunk(chunk, ci) {
+    var isFirst = ci === 0;
+    var emptyChunk = chunk.length === 0;
+    var itemRows = itens.map(function (item, idx) {
+      var r = calcResumo(item, fns, precos);
+      var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
+      var fornCells = chunk.map(function (f) {
+        var key = "".concat(item.id, "_").concat(f.id);
+        var unit = parseMoney(precos[key]);
+        var isMin = r.vlUnit !== null && unit !== null && unit > 0 && unit === r.vlUnit;
+        return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "", "</td>");
+      }).join("");
+      var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
+      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", "</td>").concat(resumoCells).concat(fornCells, "</tr>");
+    }).join("");
+    var rodapeRows = RODAPE_ROWS.map(function (row) {
+      var resumoCell = isFirst ? function () {
+        var rr = rodape["__resumo__"] || {};
+        var val = "";
+        if (row.computed) {
+          var desc = parseMoney(rr.desconto) || 0;
+          var imp = parseMoney(rr.impostos) || 0;
+          var fret = parseMoney(rr.frete) || 0;
+          var vl = resumoTotal - desc + imp + fret;
+          val = vl > 0 ? fmtMoney(vl) : "—";
+        } else {
+          var raw = rr[row.key] || "";
+          val = row.money ? raw ? fmtMoney(parseMoney(raw)) || raw : "" : raw;
+        }
+        if (!row.money && !row.computed) {
+          return "<td colspan=\"3\" style=\"border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;font-size:9px;background:#eef2ff;color:#555;\">".concat(val, "</td>");
+        }
+        var vs = row.money || row.computed ? "text-align:right;" : "text-align:left;";
+        return "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;padding:4px 6px;".concat(vs, "background:#eef2ff;color:#555;\">").concat(val, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>");
+      }() : "";
+      var fornCells = chunk.map(function (f) {
+        var r2 = rodape[f.id] || {};
+        if (row.computed) {
+          var vl = calcVL(f.id);
+          return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;color:#1a56b0;\">".concat(vl > 0 ? fmtMoney(vl) : "—", "</td>");
+        }
+        var cellStyle = row.money ? "border:1px solid #ccc;padding:4px 6px;text-align:right;" : "border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;font-size:9px;";
+        return "<td style=\"".concat(cellStyle, "\">").concat(r2[row.key] || "", "</td>");
+      }).join("");
+      return "<tr><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;font-size:10px;\">".concat(row.label, "</td>").concat(resumoCell).concat(fornCells, "</tr>");
+    }).join("");
+    var totalFornCells = chunk.map(function (f) {
+      var t = totalBruto(f.id);
+      return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#f0f2f8;\">".concat(t > 0 ? fmtMoney(t) : "—", "</td>");
+    }).join("");
+    var fornHdrs = emptyChunk ? th("—", "background:".concat(hdrColor, ";color:#fff;")) : chunk.map(function (f) {
+      return th(f.nome || "FORNECEDOR", "background:".concat(hdrColor, ";color:#fff;"));
+    }).join("");
+    var fornSubHdrs = emptyChunk ? th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;")) : chunk.map(function () {
+      return th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"));
+    }).join("");
+    var resumaTotCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">".concat(resumoTotal > 0 ? fmtMoney(resumoTotal) : "—", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>") : "";
+    return "<table style=\"border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;margin-bottom:0;\"><colgroup><col style=\"width:26px\"/><col style=\"width:30px\"/><col style=\"width:30px\"/><col style=\"width:15%\"/>".concat(isFirst ? "<col style=\"width:7%\"/><col style=\"width:8%\"/><col style=\"width:9%\"/>" : "", " ").concat(chunk.map(function () {
+      return "<col style=\"width:".concat(isFirst ? emptyChunk ? 20 : Math.floor(41 / Math.max(chunk.length, 1)) : Math.floor(61 / Math.max(chunk.length, 1)), "%\"/>");
+    }).join(""), "</colgroup><thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(isFirst ? "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:".concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO</th>") : "").concat(fornHdrs, "</tr><tr>").concat(isFirst ? "".concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;"))) : "", " ").concat(fornSubHdrs, "</tr></thead><tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>").concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
+  };
+  var obsGeralHTML = mapa.obsGeral ? "<div style=\"margin-top:14px;border:1.5px solid ".concat(hdrColor, ";border-radius:4px;overflow:hidden;\"><div style=\"background:").concat(hdrColor, ";color:#fff;padding:7px 12px;font-weight:700;font-size:11px;letter-spacing:0.4px;\">OBSERVACAO GERAL DO MAPA</div><div style=\"padding:10px 12px;font-size:11px;white-space:pre-wrap;background:#fff;\">").concat((mapa.obsGeral || "").toUpperCase(), "</div></div>") : "";
+  var pagesHTML = chunks.map(function (chunk, ci) {
+    return "<div style=\"margin-bottom:20px;".concat(ci > 0 ? "page-break-before:always;" : "", "\"><div style=\"background:").concat(hdrColor, ";padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;\"><div style=\"font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;\">MAPA DE COTA\xC7\xC3O</div><div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;\">MP N\xBA: ").concat(mapa.numero || 1, "</div>").concat(mapa.obra ? "<div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;\">OBRA: ".concat((mapa.obra || "").toUpperCase(), "</div>") : "", "<div style=\"font-size:11px;color:rgba(255,255,255,0.9);font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;margin-left:auto;\">DATA: ").concat(fmtDate(now), "&nbsp;&nbsp;HORA: ").concat(fmtHora(now), "</div></div>").concat(renderChunk(chunk, ci), "</div>").concat(ci === chunks.length - 1 ? obsGeralHTML : "");
+  }).join("");
+  return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>MAPA DE COTACAO</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>".concat(pagesHTML, "</body></html>");
+};
+var abrirPDF = function abrirPDF(html) {
+  var win = window.open("", "_blank");
+  if (!win) {
+    alert("PERMITA POPUPS PARA GERAR O PDF.");
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+  setTimeout(function () {
+    try {
+      win.focus();
+      win.print();
+    } catch (_) {}
+  }, 800);
+};
+
+// ─── Report PDFs ──────────────────────────────────────────────────────────────
+var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim) {
+  var de = new Date(inicio + "T00:00:00"),
+    ate = new Date(fim + "T23:59:59");
+  var filtrados = mapas.filter(function (m) {
+    var d = new Date(m.criadoEm);
+    return d >= de && d <= ate;
+  });
+  if (!filtrados.length) {
+    alert("NENHUM MAPA NO PERÍODO.");
+    return;
+  }
+  var rows = filtrados.map(function (m, i) {
+    var _m$itens;
+    var bg = i % 2 === 0 ? "#fff" : "#f5f7fc";
+    var rt = (m.itens || []).reduce(function (a, item) {
+      var r = calcResumo(item, m.fornecedores || [], m.precos || {});
+      return a + (r.vlTotal || 0);
+    }, 0);
+    return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(m.numero || "—", "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat((m.nome || "").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat((m.obra || "—").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat((m.responsavel || "—").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(fmtDate(new Date(m.criadoEm)), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(((_m$itens = m.itens) === null || _m$itens === void 0 ? void 0 : _m$itens.length) || 0, "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:right;font-weight:bold;\">").concat(rt > 0 ? fmtMoney(rt) : "—", "</td></tr>");
+  }).join("");
+  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:10px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO DE MAPAS POR PER\xCDODO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">PER\xCDODO: ".concat(fmtDate(de), " A ").concat(fmtDate(ate), " \u2014 ").concat(filtrados.length, " MAPA(S)</div></div><table style=\"border-collapse:collapse;width:100%;font-size:11px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">NOME</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">RESPONS\xC1VEL</th><th style=\"border:1px solid #999;padding:5px 7px;width:80px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;width:55px;\">ITENS</th><th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">TOTAL RESUMO</th></tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
+};
+var gerarRelatorioObra = function gerarRelatorioObra(mapas, obra) {
+  var filtrados = mapas.filter(function (m) {
+    return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
+  });
+  if (!filtrados.length) {
+    alert("NENHUM MAPA ENCONTRADO.");
+    return;
+  }
+  var now = new Date();
+  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>".concat(filtrados.map(function (m, i) {
+    var body = buildMapaHTML(m, now).replace(/[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*/, "");
+    return "<div style=\"".concat(i > 0 ? "page-break-before:always;" : "", "\">").concat(body, "</div>");
+  }).join(""), "</body></html>"));
+};
+var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapas, insumo) {
+  var resultados = [];
+  mapas.forEach(function (mapa) {
+    (mapa.itens || []).forEach(function (item) {
+      if ((item.descricao || "").toUpperCase().includes(insumo.toUpperCase())) resultados.push({
+        mapa: mapa,
+        item: item
+      });
+    });
+  });
+  if (!resultados.length) {
+    alert("NENHUM INSUMO ENCONTRADO.");
+    return;
+  }
+  var allForns = _toConsumableArray(new Set(resultados.flatMap(function (_ref8) {
+    var mapa = _ref8.mapa;
+    return (mapa.fornecedores || []).map(function (f) {
+      return (f.nome || "").toUpperCase();
+    }).filter(Boolean);
+  }))).slice(0, 8);
+  var rows = resultados.map(function (r2, i) {
+    var mapa = r2.mapa,
+      item = r2.item;
+    var bg = i % 2 === 0 ? "#fff" : "#f5f7fc";
+    var resumo = calcResumo(item, mapa.fornecedores || [], mapa.precos || {});
+    var fornCells = allForns.map(function (fname) {
+      var f = (mapa.fornecedores || []).find(function (x) {
+        return (x.nome || "").toUpperCase() === fname;
+      });
+      if (!f) return "<td style=\"border:1px solid #ddd;padding:4px 6px;text-align:right;color:#ccc;\">\u2014</td>";
+      var v = parseMoney((mapa.precos || {})["".concat(item.id, "_").concat(f.id)]);
+      var isMin = resumo.vlUnit !== null && v !== null && v > 0 && v === resumo.vlUnit;
+      return "<td style=\"border:1px solid #ddd;padding:4px 6px;text-align:right;background:".concat(isMin ? "#b0e8b8" : "inherit", ";font-weight:").concat(isMin ? "bold" : "normal", ";\">").concat(v !== null ? fmtMoney(v) : "—", "</td>");
+    }).join("");
+    return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:center;\">").concat(mapa.numero || "—", "</td><td style=\"border:1px solid #ddd;padding:4px 6px;\">").concat((mapa.obra || "—").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:4px 6px;\">").concat(fmtDate(new Date(mapa.criadoEm)), "</td><td style=\"border:1px solid #ddd;padding:4px 6px;\">").concat((item.descricao || "").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "—", "</td>").concat(fornCells, "</tr>");
+  }).join("");
+  var fornHdrs = allForns.map(function (f) {
+    return "<th style=\"border:1px solid #999;padding:5px 7px;background:#2a5298;color:#fff;\">".concat(f, "</th>");
+  }).join("");
+  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:9px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO POR INSUMO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">BUSCA: \"".concat(insumo.toUpperCase(), "\" \u2014 ").concat(resultados.length, " OCORR\xCANCIA(S)</div></div><table style=\"border-collapse:collapse;width:100%;font-size:10px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:44px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;min-width:110px;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;width:76px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;min-width:150px;\">DESCRI\xC7\xC3O</th><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">QT</th><th style=\"border:1px solid #999;padding:5px 7px;width:44px;\">UNID</th><th style=\"border:1px solid #999;padding:5px 7px;width:76px;background:#2a5298;color:#fff;\">MENOR</th>").concat(fornHdrs, "</tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
+};
+
+// ─── AutocompleteInput ────────────────────────────────────────────────────────
+function AutocompleteInput(_ref9) {
+  var value = _ref9.value,
+    _onChange = _ref9.onChange,
+    onCommit = _ref9.onCommit,
+    _ref9$suggestions = _ref9.suggestions,
+    suggestions = _ref9$suggestions === void 0 ? [] : _ref9$suggestions,
+    placeholder = _ref9.placeholder,
+    _ref9$style = _ref9.style,
+    xStyle = _ref9$style === void 0 ? {} : _ref9$style,
+    maxLen = _ref9.maxLen,
+    _ref9$inputStyle = _ref9.inputStyle,
+    inputStyle = _ref9$inputStyle === void 0 ? {} : _ref9$inputStyle,
+    autoFocus = _ref9.autoFocus;
+  var _useState = useState(false),
+    _useState2 = _slicedToArray(_useState, 2),
+    open = _useState2[0],
+    setOpen = _useState2[1];
+  var _useState3 = useState(-1),
+    _useState4 = _slicedToArray(_useState3, 2),
+    hi = _useState4[0],
+    setHi = _useState4[1];
+  var ref = useRef();
+  var filtered = value.length > 0 ? (suggestions || []).filter(function (s) {
+    return normalize(s).includes(normalize(value)) && normalize(s) !== normalize(value);
+  }).slice(0, 20) : [];
+  var select = function select(s) {
+    _onChange(s);
+    onCommit && onCommit(s);
+    setOpen(false);
+    setHi(-1);
+  };
+  var handleKey = function handleKey(e) {
+    if (!open || !filtered.length) {
+      if (e.key === "Enter" || e.key === "Tab") {
+        onCommit && onCommit(value);
+        setOpen(false);
+      }
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHi(function (h) {
+        return Math.min(h + 1, filtered.length - 1);
+      });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHi(function (h) {
+        return Math.max(h - 1, -1);
+      });
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      if (hi >= 0) select(filtered[hi]);else {
+        onCommit && onCommit(value);
+        setOpen(false);
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+      setHi(-1);
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread({
+      position: "relative"
+    }, xStyle)
+  }, /*#__PURE__*/React.createElement("input", {
+    ref: ref,
+    value: value,
+    autoFocus: autoFocus,
+    onChange: function onChange(e) {
+      var v = (maxLen ? e.target.value.slice(0, maxLen) : e.target.value).toUpperCase();
+      _onChange(v);
+      setOpen(true);
+      setHi(-1);
+    },
+    onFocus: function onFocus() {
+      return setOpen(true);
+    },
+    onBlur: function onBlur() {
+      return setTimeout(function () {
+        setOpen(false);
+        setHi(-1);
+      }, 180);
+    },
+    onKeyDown: handleKey,
+    placeholder: placeholder,
+    maxLength: maxLen,
+    style: _objectSpread({
+      width: "100%",
+      textTransform: "uppercase",
+      fontFamily: "inherit"
+    }, inputStyle)
+  }), open && filtered.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "100%",
+      left: 0,
+      right: 0,
+      background: "#fff",
+      border: "1.5px solid #2a5298",
+      borderTop: "none",
+      borderRadius: "0 0 7px 7px",
+      zIndex: 9999,
+      boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
+      maxHeight: 220,
+      overflowY: "auto"
+    }
+  }, filtered.map(function (s, i) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      onMouseDown: function onMouseDown() {
+        return select(s);
+      },
+      style: {
+        padding: "7px 11px",
+        cursor: "pointer",
+        fontSize: 12,
+        textTransform: "uppercase",
+        background: hi === i ? "#eef2ff" : "#fff",
+        color: hi === i ? "#2a5298" : "#1a1a2e",
+        borderBottom: "1px solid #f0f2f8",
+        fontWeight: hi === i ? 600 : 400
+      }
+    }, s);
+  })));
+}
+
+// ─── Editable Cell (with optional autocomplete) ───────────────────────────────
+function EC(_ref0) {
+  var value = _ref0.value,
+    onChange = _ref0.onChange,
+    _ref0$placeholder = _ref0.placeholder,
+    placeholder = _ref0$placeholder === void 0 ? "" : _ref0$placeholder,
+    _ref0$align = _ref0.align,
+    align = _ref0$align === void 0 ? "left" : _ref0$align,
+    _ref0$tdSt = _ref0.tdSt,
+    tdSt = _ref0$tdSt === void 0 ? {} : _ref0$tdSt,
+    maxLen = _ref0.maxLen,
+    _ref0$suggestions = _ref0.suggestions,
+    suggestions = _ref0$suggestions === void 0 ? [] : _ref0$suggestions,
+    colSpan = _ref0.colSpan,
+    numericOnly = _ref0.numericOnly;
+  var _useState5 = useState(false),
+    _useState6 = _slicedToArray(_useState5, 2),
+    ed = _useState6[0],
+    setEd = _useState6[1];
+  var _useState7 = useState(""),
+    _useState8 = _slicedToArray(_useState7, 2),
+    raw = _useState8[0],
+    setRaw = _useState8[1];
+  var ref = useRef();
+  var hasSugg = suggestions.length > 0;
+  var start = function start() {
+    setRaw(value !== null && value !== void 0 ? value : "");
+    setEd(true);
+    setTimeout(function () {
+      var _ref$current;
+      return (_ref$current = ref.current) === null || _ref$current === void 0 ? void 0 : _ref$current.focus();
+    }, 0);
+  };
+  var commit = function commit(v) {
+    setEd(false);
+    onChange(v !== null && v !== void 0 ? v : raw);
+  };
+  if (ed) return /*#__PURE__*/React.createElement("td", {
+    style: _objectSpread(_objectSpread(_objectSpread({}, SC.td), tdSt), {}, {
+      padding: 0
+    }),
+    colSpan: colSpan
+  }, hasSugg ? /*#__PURE__*/React.createElement(AutocompleteInput, {
+    ref: ref,
+    value: raw,
+    onChange: setRaw,
+    onCommit: commit,
+    suggestions: suggestions,
+    maxLen: maxLen,
+    autoFocus: true,
+    inputStyle: {
+      border: "2px solid #f0a500",
+      background: "#fffbee",
+      padding: "5px 7px",
+      fontSize: 12,
+      textAlign: align,
+      outline: "none"
+    }
+  }) : /*#__PURE__*/React.createElement("input", {
+    ref: ref,
+    value: raw,
+    onChange: function onChange(e) {
+      var v = (maxLen ? e.target.value.slice(0, maxLen) : e.target.value).toUpperCase();
+      if (numericOnly) v = v.replace(/[^0-9.,]/g, "");
+      setRaw(v);
+    },
+    onBlur: function onBlur() {
+      return commit(raw);
+    },
+    onKeyDown: function onKeyDown(e) {
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        commit(raw);
+      }
+      if (e.key === "Escape") setEd(false);
+    },
+    style: {
+      width: "100%",
+      border: "2px solid #f0a500",
+      background: "#fffbee",
+      padding: "5px 7px",
+      fontSize: 12,
+      fontFamily: "inherit",
+      textTransform: "uppercase",
+      textAlign: align,
+      outline: "none"
+    },
+    autoFocus: true,
+    maxLength: maxLen
+  }));
+  return /*#__PURE__*/React.createElement("td", {
+    style: _objectSpread(_objectSpread(_objectSpread({}, SC.td), tdSt), {}, {
+      textAlign: align,
+      cursor: "text"
+    }),
+    colSpan: colSpan,
+    onClick: start
+  }, value !== "" && value !== null && value !== undefined ? value : /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#ccc"
+    }
+  }, placeholder));
+}
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+var IcoPlus = function IcoPlus(_ref1) {
+  var _ref1$w = _ref1.w,
+    w = _ref1$w === void 0 ? 16 : _ref1$w;
+  return /*#__PURE__*/React.createElement("svg", {
+    width: w,
+    height: w,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "12",
+    y1: "5",
+    x2: "12",
+    y2: "19"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "5",
+    y1: "12",
+    x2: "19",
+    y2: "12"
+  }));
+};
+var IcoTrash = function IcoTrash() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "3 6 5 6 21 6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M19 6l-1 14H6L5 6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M10 11v6M14 11v6"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M9 6V4h6v2"
+  }));
+};
+var IcoSearch = function IcoSearch() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "14",
+    height: "14",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("circle", {
+    cx: "11",
+    cy: "11",
+    r: "8"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "21",
+    y1: "21",
+    x2: "16.65",
+    y2: "16.65"
+  }));
+};
+var IcoBack = function IcoBack() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "15",
+    height: "15",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "15 18 9 12 15 6"
+  }));
+};
+var IcoClose = function IcoClose() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "15",
+    height: "15",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("line", {
+    x1: "18",
+    y1: "6",
+    x2: "6",
+    y2: "18"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "6",
+    y1: "6",
+    x2: "18",
+    y2: "18"
+  }));
+};
+var IcoClip = function IcoClip() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "32",
+    height: "32",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+  }), /*#__PURE__*/React.createElement("rect", {
+    x: "8",
+    y: "2",
+    width: "8",
+    height: "4",
+    rx: "1"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "9",
+    y1: "12",
+    x2: "15",
+    y2: "12"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "9",
+    y1: "16",
+    x2: "13",
+    y2: "16"
+  }));
+};
+var IcoChev = function IcoChev() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.5",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("polyline", {
+    points: "9 18 15 12 9 6"
+  }));
+};
+var IcoPDF = function IcoPDF() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+  }), /*#__PURE__*/React.createElement("polyline", {
+    points: "14 2 14 8 20 8"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "16",
+    y1: "13",
+    x2: "8",
+    y2: "13"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "16",
+    y1: "17",
+    x2: "8",
+    y2: "17"
+  }));
+};
+var IcoReport = function IcoReport() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("rect", {
+    x: "3",
+    y: "3",
+    width: "18",
+    height: "18",
+    rx: "2"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "9",
+    y1: "9",
+    x2: "15",
+    y2: "9"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "9",
+    y1: "13",
+    x2: "15",
+    y2: "13"
+  }), /*#__PURE__*/React.createElement("line", {
+    x1: "9",
+    y1: "17",
+    x2: "12",
+    y2: "17"
+  }));
+};
+var IcoDb = function IcoDb() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("ellipse", {
+    cx: "12",
+    cy: "5",
+    rx: "9",
+    ry: "3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"
+  }));
+};
+var IcoPencil = function IcoPencil() {
+  return /*#__PURE__*/React.createElement("svg", {
+    width: "13",
+    height: "13",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2.2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+  }));
+};
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+function Modal(_ref10) {
+  var open = _ref10.open,
+    onClose = _ref10.onClose,
+    children = _ref10.children,
+    _ref10$maxWidth = _ref10.maxWidth,
+    maxWidth = _ref10$maxWidth === void 0 ? 480 : _ref10$maxWidth;
+  useEffect(function () {
+    document.body.style.overflow = open ? "hidden" : "";
+    return function () {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+  if (!open) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    style: SC.overlay,
+    onClick: function onClick(e) {
+      return e.target === e.currentTarget && onClose();
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread(_objectSpread({}, SC.modal), {}, {
+      maxWidth: maxWidth
+    })
+  }, children));
+}
+
+// ─── Cadastros Modal ──────────────────────────────────────────────────────────
+function CadastrosModal(_ref11) {
+  var _tabs$find;
+  var open = _ref11.open,
+    onClose = _ref11.onClose,
+    cadastros = _ref11.cadastros,
+    onAdd = _ref11.onAdd,
+    onRemove = _ref11.onRemove,
+    onEdit = _ref11.onEdit;
+  var _useState9 = useState("fornecedores"),
+    _useState0 = _slicedToArray(_useState9, 2),
+    tab = _useState0[0],
+    setTab = _useState0[1];
+  var _useState1 = useState(""),
+    _useState10 = _slicedToArray(_useState1, 2),
+    novo = _useState10[0],
+    setNovo = _useState10[1];
+  var _useState11 = useState(""),
+    _useState12 = _slicedToArray(_useState11, 2),
+    busca = _useState12[0],
+    setBusca = _useState12[1];
+  var _useState13 = useState(null),
+    _useState14 = _slicedToArray(_useState13, 2),
+    editIdx = _useState14[0],
+    setEditIdx = _useState14[1];
+  var _useState15 = useState(""),
+    _useState16 = _slicedToArray(_useState15, 2),
+    editVal = _useState16[0],
+    setEditVal = _useState16[1];
+  var editRef = useRef();
+  var startEdit = function startEdit(item, idx) {
+    setEditIdx(idx);
+    setEditVal(item);
+    setTimeout(function () {
+      var _editRef$current;
+      return (_editRef$current = editRef.current) === null || _editRef$current === void 0 ? void 0 : _editRef$current.select();
+    }, 0);
+  };
+  var cancelEdit = function cancelEdit() {
+    setEditIdx(null);
+    setEditVal("");
+  };
+  var confirmEdit = function confirmEdit(oldVal) {
+    var v = normalize(editVal);
+    if (v && v !== normalize(oldVal)) onEdit(tab, oldVal, v);
+    cancelEdit();
+  };
+  var tabs = [{
+    id: "fornecedores",
+    label: "FORNECEDORES",
+    icon: "🏢"
+  }, {
+    id: "insumos",
+    label: "INSUMOS",
+    icon: "🧱"
+  }, {
+    id: "unidades",
+    label: "UNIDADES",
+    icon: "📐"
+  }, {
+    id: "obras",
+    label: "OBRAS",
+    icon: "🏗️"
+  }];
+  var lista = (cadastros[tab] || []).filter(function (x) {
+    return normalize(x).includes(normalize(busca));
+  });
+  var handleAdd = function handleAdd() {
+    var v = normalize(novo);
+    if (!v) return;
+    onAdd(tab, v);
+    setNovo("");
+  };
+  return /*#__PURE__*/React.createElement(Modal, {
+    open: open,
+    onClose: onClose,
+    maxWidth: 560
+  }, /*#__PURE__*/React.createElement("div", {
+    style: SC.mHdr
+  }, /*#__PURE__*/React.createElement("span", {
+    style: SC.mTitle
+  }, "BANCO DE CADASTROS"), /*#__PURE__*/React.createElement("button", {
+    style: {
+      background: "none",
+      border: "none",
+      color: "#999",
+      cursor: "pointer"
+    },
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(IcoClose, null))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      background: "#f5f7fb",
+      borderBottom: "2px solid #e4e8f0"
+    }
+  }, tabs.map(function (t) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      onClick: function onClick() {
+        setTab(t.id);
+        setBusca("");
+        setNovo("");
+        cancelEdit();
+      },
+      style: {
+        flex: 1,
+        border: "none",
+        background: "none",
+        padding: "11px 6px",
+        fontSize: 11,
+        fontWeight: 700,
+        cursor: "pointer",
+        color: tab === t.id ? "#2a5298" : "#888",
+        borderBottom: tab === t.id ? "2px solid #2a5298" : "2px solid transparent",
+        marginBottom: -2,
+        letterSpacing: 0.3
+      }
+    }, t.icon, " ", t.label, " ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 10,
+        color: "#aaa"
+      }
+    }, "(", (cadastros[t.id] || []).length, ")"));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: "16px 22px 20px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement(AutocompleteInput, {
+    value: novo,
+    onChange: setNovo,
+    onCommit: handleAdd,
+    suggestions: cadastros[tab] || [],
+    placeholder: "ADICIONAR ".concat((_tabs$find = tabs.find(function (t) {
+      return t.id === tab;
+    })) === null || _tabs$find === void 0 ? void 0 : _tabs$find.label, "..."),
+    xStyle: {
+      flex: 1
+    },
+    inputStyle: {
+      border: "1.5px solid #dde1e9",
+      borderRadius: 8,
+      padding: "9px 12px",
+      fontSize: 13,
+      outline: "none"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: handleAdd,
+    style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
+      padding: "9px 16px",
+      fontSize: 13
+    })
+  }, /*#__PURE__*/React.createElement(IcoPlus, {
+    w: 14
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: "#f5f7fb",
+      border: "1px solid #e4e8f0",
+      borderRadius: 7,
+      padding: "7px 11px",
+      color: "#888"
+    }
+  }, /*#__PURE__*/React.createElement(IcoSearch, null), /*#__PURE__*/React.createElement("input", {
+    value: busca,
+    onChange: function onChange(e) {
+      return setBusca(e.target.value);
+    },
+    placeholder: "BUSCAR...",
+    style: {
+      border: "none",
+      background: "transparent",
+      fontSize: 13,
+      fontFamily: "inherit",
+      textTransform: "uppercase",
+      outline: "none",
+      flex: 1
+    }
+  }), busca && /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setBusca("");
+    },
+    style: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      color: "#aaa",
+      display: "flex"
+    }
+  }, /*#__PURE__*/React.createElement(IcoClose, null))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxHeight: 320,
+      overflowY: "auto",
+      border: "1px solid #e4e8f0",
+      borderRadius: 8,
+      background: "#fff"
+    }
+  }, lista.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 32,
+      color: "#aaa",
+      fontSize: 13
+    }
+  }, "NENHUM CADASTRO", busca ? " ENCONTRADO" : "") : lista.map(function (item, i) {
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "7px 12px",
+        borderBottom: i < lista.length - 1 ? "1px solid #f0f2f6" : undefined,
+        background: editIdx === i ? "#f0f4ff" : i % 2 === 0 ? "#fff" : "#fafbfd"
+      }
+    }, editIdx === i ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
+      ref: editRef,
+      value: editVal,
+      onChange: function onChange(e) {
+        return setEditVal(e.target.value.toUpperCase());
+      },
+      onKeyDown: function onKeyDown(e) {
+        if (e.key === "Enter") confirmEdit(item);
+        if (e.key === "Escape") cancelEdit();
+      },
+      style: {
+        flex: 1,
+        border: "2px solid #2a5298",
+        borderRadius: 6,
+        padding: "5px 9px",
+        fontSize: 13,
+        fontFamily: "inherit",
+        textTransform: "uppercase",
+        outline: "none",
+        background: "#fff"
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return confirmEdit(item);
+      },
+      style: {
+        background: "#e8f5e9",
+        border: "none",
+        borderRadius: 5,
+        padding: "5px 10px",
+        color: "#2e7d32",
+        cursor: "pointer",
+        fontWeight: 700,
+        fontSize: 12,
+        whiteSpace: "nowrap"
+      }
+    }, "SALVAR"), /*#__PURE__*/React.createElement("button", {
+      onClick: cancelEdit,
+      style: {
+        background: "#f5f5f5",
+        border: "none",
+        borderRadius: 5,
+        padding: "5px 10px",
+        color: "#888",
+        cursor: "pointer",
+        fontWeight: 700,
+        fontSize: 12
+      }
+    }, "X")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        fontSize: 13,
+        fontWeight: 500,
+        color: "#1a1a2e"
+      }
+    }, item), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        return startEdit(item, i);
+      },
+      title: "EDITAR",
+      style: {
+        background: "#eef2fb",
+        border: "none",
+        borderRadius: 5,
+        padding: "4px 7px",
+        color: "#2a5298",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center"
+      }
+    }, /*#__PURE__*/React.createElement(IcoPencil, null)), /*#__PURE__*/React.createElement("button", {
+      onClick: function onClick() {
+        if (window.confirm("EXCLUIR \"" + item + "\"?")) onRemove(tab, item);
+      },
+      title: "EXCLUIR",
+      style: {
+        background: "#fdecea",
+        border: "none",
+        borderRadius: 5,
+        padding: "4px 7px",
+        color: "#c0392b",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center"
+      }
+    }, /*#__PURE__*/React.createElement(IcoTrash, null))));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#aaa",
+      textAlign: "right"
+    }
+  }, (cadastros[tab] || []).length, " CADASTRO(S) NO TOTAL")));
+}
+
+// ─── Reports Modal ────────────────────────────────────────────────────────────
+function ReportsModal(_ref12) {
+  var open = _ref12.open,
+    onClose = _ref12.onClose,
+    mapas = _ref12.mapas,
+    cadastros = _ref12.cadastros;
+  var _useState17 = useState("periodo"),
+    _useState18 = _slicedToArray(_useState17, 2),
+    tab = _useState18[0],
+    setTab = _useState18[1];
+  var _useState19 = useState({
+      inicio: "",
+      fim: ""
+    }),
+    _useState20 = _slicedToArray(_useState19, 2),
+    periodo = _useState20[0],
+    setPeriodo = _useState20[1];
+  var _useState21 = useState(""),
+    _useState22 = _slicedToArray(_useState21, 2),
+    obra = _useState22[0],
+    setObra = _useState22[1];
+  var _useState23 = useState(""),
+    _useState24 = _slicedToArray(_useState23, 2),
+    insumo = _useState24[0],
+    setInsumo = _useState24[1];
+  return /*#__PURE__*/React.createElement(Modal, {
+    open: open,
+    onClose: onClose,
+    maxWidth: 520
+  }, /*#__PURE__*/React.createElement("div", {
+    style: SC.mHdr
+  }, /*#__PURE__*/React.createElement("span", {
+    style: SC.mTitle
+  }, "RELAT\xD3RIOS EM PDF"), /*#__PURE__*/React.createElement("button", {
+    style: {
+      background: "none",
+      border: "none",
+      color: "#999",
+      cursor: "pointer"
+    },
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(IcoClose, null))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      borderBottom: "2px solid #e8eaf0",
+      background: "#f8f9fb"
+    }
+  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["insumo", "POR INSUMO"]].map(function (_ref13) {
+    var _ref14 = _slicedToArray(_ref13, 2),
+      id = _ref14[0],
+      lbl = _ref14[1];
+    return /*#__PURE__*/React.createElement("button", {
+      key: id,
+      onClick: function onClick() {
+        return setTab(id);
+      },
+      style: {
+        flex: 1,
+        border: "none",
+        background: "none",
+        padding: "12px 6px",
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        color: tab === id ? "#2a5298" : "#888",
+        borderBottom: tab === id ? "2px solid #2a5298" : "2px solid transparent",
+        marginBottom: -2
+      }
+    }, lbl);
+  })), /*#__PURE__*/React.createElement("div", {
+    style: SC.mBody
+  }, tab === "periodo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: SC.rDesc
+  }, "Lista todos os mapas criados no intervalo selecionado com totais."), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "DATA INICIAL"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    style: SC.inp,
+    value: periodo.inicio,
+    onChange: function onChange(e) {
+      return setPeriodo(function (p) {
+        return _objectSpread(_objectSpread({}, p), {}, {
+          inicio: e.target.value
+        });
+      });
+    }
+  }), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "DATA FINAL"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    style: SC.inp,
+    value: periodo.fim,
+    onChange: function onChange(e) {
+      return setPeriodo(function (p) {
+        return _objectSpread(_objectSpread({}, p), {}, {
+          fim: e.target.value
+        });
+      });
+    }
+  }), periodo.inicio && periodo.fim && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#888",
+      marginTop: 4
+    }
+  }, mapas.filter(function (m) {
+    var d = new Date(m.criadoEm);
+    return d >= new Date(periodo.inicio + "T00:00:00") && d <= new Date(periodo.fim + "T23:59:59");
+  }).length, " MAPA(S) NO PER\xCDODO")), tab === "obra" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: SC.rDesc
+  }, "Exibe todos os mapas de uma obra espec\xEDfica, um por p\xE1gina."), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "OBRA"), /*#__PURE__*/React.createElement(AutocompleteInput, {
+    value: obra,
+    onChange: setObra,
+    suggestions: cadastros.obras || [],
+    placeholder: "BUSCAR OU DIGITAR OBRA...",
+    xStyle: {
+      marginBottom: 4
+    },
+    inputStyle: {
+      border: "1.5px solid #dde1e9",
+      borderRadius: 8,
+      padding: "10px 12px",
+      fontSize: 13,
+      outline: "none"
+    }
+  }), obra && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#888",
+      marginTop: 4
+    }
+  }, mapas.filter(function (m) {
+    return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
+  }).length, " MAPA(S)")), tab === "insumo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: SC.rDesc
+  }, "Compara pre\xE7os de um insumo em todos os mapas."), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "INSUMO"), /*#__PURE__*/React.createElement(AutocompleteInput, {
+    value: insumo,
+    onChange: setInsumo,
+    suggestions: cadastros.insumos || [],
+    placeholder: "EX: TIJOLO, CIMENTO...",
+    xStyle: {
+      marginBottom: 4
+    },
+    inputStyle: {
+      border: "1.5px solid #dde1e9",
+      borderRadius: 8,
+      padding: "10px 12px",
+      fontSize: 13,
+      outline: "none"
+    }
+  }), insumo && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#888",
+      marginTop: 4
+    }
+  }, mapas.flatMap(function (m) {
+    return (m.itens || []).filter(function (i) {
+      return (i.descricao || "").toUpperCase().includes(insumo.toUpperCase());
+    });
+  }).length, " OCORR\xCANCIA(S)"))), /*#__PURE__*/React.createElement("div", {
+    style: SC.mFtr
+  }, /*#__PURE__*/React.createElement("button", {
+    style: SC.btnSec,
+    onClick: onClose
+  }, "FECHAR"), /*#__PURE__*/React.createElement("button", {
+    style: SC.btnPri,
+    onClick: function onClick() {
+      if (tab === "periodo") {
+        if (!periodo.inicio || !periodo.fim) {
+          alert("SELECIONE O PERÍODO.");
+          return;
+        }
+        gerarRelatorioPeriodo(mapas, periodo.inicio, periodo.fim);
+      }
+      if (tab === "obra") {
+        if (!obra.trim()) {
+          alert("INFORME A OBRA.");
+          return;
+        }
+        gerarRelatorioObra(mapas, obra);
+      }
+      if (tab === "insumo") {
+        if (!insumo.trim()) {
+          alert("INFORME O INSUMO.");
+          return;
+        }
+        gerarRelatorioInsumo(mapas, insumo);
+      }
+    }
+  }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
+}
+
+// ─── Map Editor ───────────────────────────────────────────────────────────────
+function MapEditor(_ref15) {
+  var init = _ref15.mapa,
+    onBack = _ref15.onBack,
+    onSave = _ref15.onSave,
+    cadastros = _ref15.cadastros,
+    addCadastro = _ref15.addCadastro;
+  var _useState25 = useState(init),
+    _useState26 = _slicedToArray(_useState25, 2),
+    mapa = _useState26[0],
+    setMapa = _useState26[1];
+  var _useState27 = useState(true),
+    _useState28 = _slicedToArray(_useState27, 2),
+    saved = _useState28[0],
+    setSaved = _useState28[1];
+  var _useState29 = useState(""),
+    _useState30 = _slicedToArray(_useState29, 2),
+    filter = _useState30[0],
+    setFilter = _useState30[1];
+  var _useState31 = useState(false),
+    _useState32 = _slicedToArray(_useState31, 2),
+    showTheme = _useState32[0],
+    setShowTheme = _useState32[1];
+  var _useState33 = useState(new Date()),
+    _useState34 = _slicedToArray(_useState33, 2),
+    clock = _useState34[0],
+    setClock = _useState34[1];
+  var saveTimer = useRef();
+  var mapContainerRef = useRef();
+  var _useState35 = useState(false),
+    _useState36 = _slicedToArray(_useState35, 2),
+    showColPanel = _useState36[0],
+    setShowColPanel = _useState36[1];
+  var _useState37 = useState({
+      resumo: false
+    }),
+    _useState38 = _slicedToArray(_useState37, 2),
+    hiddenCols = _useState38[0],
+    setHiddenCols = _useState38[1];
+  var toggleCol = function toggleCol(key) {
+    return setHiddenCols(function (prev) {
+      return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, key, !prev[key]));
+    });
+  };
+  useEffect(function () {
+    var t = setInterval(function () {
+      return setClock(new Date());
+    }, 30000);
+    return function () {
+      return clearInterval(t);
+    };
+  }, []);
+  var update = useCallback(function (fn) {
+    setMapa(function (prev) {
+      return fn(_objectSpread(_objectSpread({}, prev), {}, {
+        precos: _objectSpread({}, prev.precos),
+        rodape: _objectSpread({}, prev.rodape),
+        atualizadoEm: new Date().toISOString()
+      }));
+    });
+    setSaved(false);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(function () {
+      return setSaved(true);
+    }, 900);
+  }, []);
+  useEffect(function () {
+    if (!saved) onSave(mapa);
+  }, [saved, mapa]);
+  var addItem = function addItem() {
+    return update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        itens: [].concat(_toConsumableArray(m.itens), [emptyItem(m.itens.length + 1)])
+      });
+    });
+  };
+  var removeItem = function removeItem(id) {
+    return update(function (m) {
+      var itens = m.itens.filter(function (i) {
+        return i.id !== id;
+      }).map(function (x, i) {
+        return _objectSpread(_objectSpread({}, x), {}, {
+          num: i + 1
+        });
+      });
+      var precos = _objectSpread({}, m.precos);
+      Object.keys(precos).forEach(function (k) {
+        if (k.startsWith(id)) delete precos[k];
+      });
+      return _objectSpread(_objectSpread({}, m), {}, {
+        itens: itens,
+        precos: precos
+      });
+    });
+  };
+  var updItem = function updItem(id, f, v) {
+    if (f === "descricao" && v) addCadastro("insumos", v);
+    if (f === "unid" && v) addCadastro("unidades", v);
+    update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        itens: m.itens.map(function (i) {
+          return i.id === id ? _objectSpread(_objectSpread({}, i), {}, _defineProperty({}, f, v)) : i;
+        })
+      });
+    });
+  };
+  var addForn = function addForn() {
+    return update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        fornecedores: [].concat(_toConsumableArray(m.fornecedores), [emptyForn()])
+      });
+    });
+  };
+  var removeForn = function removeForn(id) {
+    return update(function (m) {
+      var fornecedores = m.fornecedores.filter(function (f) {
+        return f.id !== id;
+      });
+      var precos = _objectSpread({}, m.precos);
+      Object.keys(precos).forEach(function (k) {
+        if (k.endsWith("_".concat(id))) delete precos[k];
+      });
+      var rodape = _objectSpread({}, m.rodape);
+      delete rodape[id];
+      return _objectSpread(_objectSpread({}, m), {}, {
+        fornecedores: fornecedores,
+        precos: precos,
+        rodape: rodape
+      });
+    });
+  };
+  var updForn = function updForn(id, f, v) {
+    if (f === "nome" && v) addCadastro("fornecedores", v);
+    update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        fornecedores: m.fornecedores.map(function (x) {
+          return x.id === id ? _objectSpread(_objectSpread({}, x), {}, _defineProperty({}, f, v)) : x;
+        })
+      });
+    });
+  };
+  var setPreco = function setPreco(iid, fid, v) {
+    return update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        precos: _objectSpread(_objectSpread({}, m.precos), {}, _defineProperty({}, "".concat(iid, "_").concat(fid), v))
+      });
+    });
+  };
+  var setRodape = function setRodape(fid, f, v) {
+    return update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        rodape: _objectSpread(_objectSpread({}, m.rodape), {}, _defineProperty({}, fid, _objectSpread(_objectSpread({}, m.rodape[fid] || {}), {}, _defineProperty({}, f, v))))
+      });
+    });
+  };
+  var setRodapeResumo = function setRodapeResumo(f, v) {
+    return setRodape("__resumo__", f, v);
+  };
+  var setObsGeral = function setObsGeral(v) {
+    return update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        obsGeral: v
+      });
+    });
+  };
+  var itens = mapa.itens,
+    fornecedores = mapa.fornecedores,
+    precos = mapa.precos,
+    rodape = mapa.rodape;
+  var rodapeResumo = rodape["__resumo__"] || {};
+  var T = getTheme(mapa.corTema);
+  var totalBruto = function totalBruto(fid) {
+    return itens.reduce(function (acc, item) {
+      var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
+      var qt = parseFloat(String(item.qt).replace(",", "."));
+      return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
+    }, 0);
+  };
+  var calcVL = function calcVL(fid) {
+    var r = rodape[fid] || {};
+    return totalBruto(fid) - (parseMoney(r.desconto) || 0) + (parseMoney(r.impostos) || 0) + (parseMoney(r.frete) || 0);
+  };
+  var bestFornId = function () {
+    var minVal = null,
+      minId = null;
+    fornecedores.forEach(function (f) {
+      var vl = calcVL(f.id);
+      if (vl > 0 && (minVal === null || vl < minVal)) {
+        minVal = vl;
+        minId = f.id;
+      }
+    });
+    return minId;
+  }();
+  var resumoTotal = itens.reduce(function (acc, item) {
+    var r = calcResumo(item, fornecedores, precos);
+    return acc + (r.vlTotal || 0);
+  }, 0);
+  var calcVLResumo = function calcVLResumo() {
+    return resumoTotal - (parseMoney(rodapeResumo.desconto) || 0) + (parseMoney(rodapeResumo.impostos) || 0) + (parseMoney(rodapeResumo.frete) || 0);
+  };
+  var filteredItens = filter ? itens.filter(function (i) {
+    return i.descricao.toUpperCase().includes(filter.toUpperCase());
+  }) : itens;
+  var chunks = [];
+  for (var i = 0; i < fornecedores.length; i += CHUNK_SIZE) chunks.push(fornecedores.slice(i, i + CHUNK_SIZE));
+  if (chunks.length === 0) chunks.push([]);
+  var RODAPE_ROWS = [{
+    key: "desconto",
+    label: "DESCONTO",
+    money: true
+  }, {
+    key: "impostos",
+    label: "IMPOSTOS",
+    money: true
+  }, {
+    key: "frete",
+    label: "FRETE",
+    money: true
+  }, {
+    key: "valorLiquido",
+    label: "VALOR LÍQUIDO",
+    computed: true
+  }, {
+    key: "contato",
+    label: "CONTATO",
+    maxLen: 1000
+  }, {
+    key: "observacao",
+    label: "OBSERVAÇÕES",
+    maxLen: 2000
+  }];
+  var thC = _objectSpread(_objectSpread({}, SC.th), {}, {
+    background: T.hdr,
+    color: "#fff"
+  });
+  var thS = _objectSpread(_objectSpread({}, SC.th), {}, {
+    background: T.sub,
+    color: "#333"
+  });
+  var renderChunk = function renderChunk(chunk, ci) {
+    var hiddenCols = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+    var isFirst = ci === 0,
+      isLast = ci === chunks.length - 1;
+    var showResumo = isFirst && !hiddenCols.resumo;
+    var visibleChunk = chunk.filter(function (f) {
+      return !hiddenCols[f.id];
+    });
+    var emptyChunk = visibleChunk.length === 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: ci,
+      "data-chunk": ci,
+      style: {
+        marginBottom: 24
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: T.hdr,
+        padding: "8px 14px",
+        borderRadius: "6px 6px 0 0",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        flexWrap: "wrap"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontFamily: "'Syne',sans-serif",
+        fontWeight: 800,
+        fontSize: 14,
+        color: "#fff",
+        whiteSpace: "nowrap"
+      }
+    }, "MAPA DE COTA\xC7\xC3O"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "rgba(255,255,255,0.9)",
+        fontWeight: 700,
+        whiteSpace: "nowrap",
+        borderLeft: "1px solid rgba(255,255,255,0.3)",
+        paddingLeft: 14
+      }
+    }, "MP N\xBA: ", mapa.numero || 1), mapa.obra && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "rgba(255,255,255,0.9)",
+        fontWeight: 600,
+        flex: 1,
+        borderLeft: "1px solid rgba(255,255,255,0.3)",
+        paddingLeft: 14,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      }
+    }, "OBRA: ", mapa.obra), mapa.responsavel && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        color: "rgba(255,255,255,0.75)",
+        borderLeft: "1px solid rgba(255,255,255,0.3)",
+        paddingLeft: 14,
+        whiteSpace: "nowrap"
+      }
+    }, "RESP.: ", mapa.responsavel), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: "rgba(255,255,255,0.9)",
+        fontWeight: 600,
+        borderLeft: "1px solid rgba(255,255,255,0.3)",
+        paddingLeft: 14,
+        whiteSpace: "nowrap",
+        marginLeft: "auto"
+      }
+    }, "DATA: ", fmtDate(clock), "\xA0\xA0HORA: ", fmtHora(clock))), /*#__PURE__*/React.createElement("div", {
+      style: SC.tableScroll
+    }, /*#__PURE__*/React.createElement("table", {
+      style: SC.table
+    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+      rowSpan: 3,
+      style: _objectSpread(_objectSpread({}, thC), {}, {
+        width: 38,
+        textAlign: "center"
+      })
+    }, "ITEM"), /*#__PURE__*/React.createElement("th", {
+      rowSpan: 3,
+      style: _objectSpread(_objectSpread({}, thC), {}, {
+        width: 56,
+        textAlign: "center"
+      })
+    }, "QT."), /*#__PURE__*/React.createElement("th", {
+      rowSpan: 3,
+      style: _objectSpread(_objectSpread({}, thC), {}, {
+        width: 58,
+        textAlign: "center"
+      })
+    }, "UNID."), /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, thC), {}, {
+        minWidth: 180,
+        textAlign: "left",
+        paddingLeft: 10
+      })
+    }, "DESCRI\xC7\xC3O"), showResumo && /*#__PURE__*/React.createElement("th", {
+      colSpan: 3,
+      style: _objectSpread(_objectSpread({}, thC), {}, {
+        textAlign: "center",
+        borderLeft: "2px solid rgba(255,255,255,0.25)",
+        borderRight: "2px solid rgba(255,255,255,0.25)"
+      })
+    }, "RESUMO"), /*#__PURE__*/React.createElement("th", {
+      colSpan: emptyChunk ? 1 : visibleChunk.length,
+      style: _objectSpread(_objectSpread({}, thC), {}, {
+        textAlign: "center",
+        borderLeft: "2px solid rgba(255,255,255,0.25)"
+      })
+    }, "FORNECEDORES"), /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, SC.th), {}, {
+        background: "#d0d4e0",
+        width: 30
+      })
+    })), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, thS), {}, {
+        padding: "3px 7px"
+      })
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 4
+      }
+    }, /*#__PURE__*/React.createElement(IcoSearch, null), /*#__PURE__*/React.createElement("input", {
+      value: filter,
+      onChange: function onChange(e) {
+        return setFilter(e.target.value);
+      },
+      placeholder: "FILTRO...",
+      style: {
+        border: "none",
+        background: "transparent",
+        fontSize: 11,
+        fontFamily: "inherit",
+        textTransform: "uppercase",
+        outline: "none",
+        width: "100%",
+        color: "#444"
+      }
+    }))), showResumo && /*#__PURE__*/React.createElement("th", {
+      colSpan: 3,
+      style: _objectSpread(_objectSpread({}, thS), {}, {
+        textAlign: "center",
+        fontWeight: 700,
+        borderLeft: "2px solid rgba(0,0,0,0.08)",
+        borderRight: "2px solid rgba(0,0,0,0.08)"
+      })
+    }, "FORNECEDOR SELECIONADO"), visibleChunk.map(function (f) {
+      return /*#__PURE__*/React.createElement("th", {
+        key: f.id,
+        style: _objectSpread(_objectSpread({}, thC), {}, {
+          padding: "4px 6px",
+          borderLeft: "1px solid rgba(255,255,255,0.2)",
+          minWidth: 160
+        })
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: 3
+        }
+      }, /*#__PURE__*/React.createElement(AutocompleteInput, {
+        value: f.nome,
+        onChange: function onChange(v) {
+          return updForn(f.id, "nome", v);
+        },
+        onCommit: function onCommit(v) {
+          if (v) addCadastro("fornecedores", v);
+        },
+        suggestions: cadastros.fornecedores || [],
+        placeholder: "NOME DO FORNECEDOR",
+        inputStyle: {
+          flex: 1,
+          border: "1px solid rgba(255,255,255,0.3)",
+          borderRadius: 3,
+          background: "rgba(255,255,255,0.15)",
+          padding: "3px 6px",
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#fff",
+          outline: "none",
+          minWidth: 120,
+          maxWidth: 200
+        },
+        xStyle: {
+          flex: 1,
+          minWidth: 120
+        }
+      }), /*#__PURE__*/React.createElement("button", {
+        onClick: function onClick() {
+          if (window.confirm("EXCLUIR FORNECEDOR \"" + f.nome + "\"?")) removeForn(f.id);
+        },
+        style: {
+          background: "rgba(255,80,80,0.25)",
+          border: "none",
+          borderRadius: 3,
+          padding: "3px 4px",
+          cursor: "pointer",
+          color: "#ffaaaa",
+          display: "flex",
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement(IcoClose, null))));
+    }), emptyChunk && /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, thC), {}, {
+        borderLeft: "2px solid rgba(255,255,255,0.2)",
+        color: "rgba(255,255,255,0.4)",
+        textAlign: "center",
+        fontSize: 11
+      })
+    }, "\u2014"), /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, SC.th), {}, {
+        background: "#d0d4e0"
+      })
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: addForn,
+      style: {
+        background: T.hdr,
+        border: "none",
+        borderRadius: 5,
+        padding: "5px 7px",
+        cursor: "pointer",
+        color: "#fff",
+        display: "flex"
+      }
+    }, /*#__PURE__*/React.createElement(IcoPlus, {
+      w: 14
+    })))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread({}, thS)
+    }), showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, thS), {}, {
+        textAlign: "right",
+        borderLeft: "2px solid rgba(0,0,0,0.08)",
+        fontSize: 10
+      })
+    }, "VL. UNIT."), /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, thS), {}, {
+        textAlign: "right",
+        fontSize: 10
+      })
+    }, "VL. TOTAL"), /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, thS), {}, {
+        fontSize: 10
+      })
+    }, "FORNECEDOR")), visibleChunk.map(function (f, fi) {
+      return /*#__PURE__*/React.createElement("th", {
+        key: "".concat(f.id, "l"),
+        style: _objectSpread(_objectSpread({}, thS), {}, {
+          textAlign: "right",
+          borderLeft: fi === 0 ? "2px solid rgba(255,255,255,0.2)" : "1px solid rgba(0,0,0,0.1)",
+          fontSize: 10
+        })
+      }, "VL. UNIT.");
+    }), emptyChunk && /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, thS), {}, {
+        borderLeft: "2px solid rgba(0,0,0,0.1)"
+      })
+    }), /*#__PURE__*/React.createElement("th", {
+      style: _objectSpread(_objectSpread({}, SC.th), {}, {
+        background: "#d0d4e0"
+      })
+    }))), /*#__PURE__*/React.createElement("tbody", null, filteredItens.length === 0 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", {
+      colSpan: 4 + (isFirst ? 3 : 0) + Math.max(chunk.length, 1) + 1,
+      style: {
+        textAlign: "center",
+        padding: 28,
+        color: "#aaa",
+        fontSize: 12
+      }
+    }, "NENHUM ITEM \u2014 CLIQUE EM \"+ ADICIONAR ITEM\"")), filteredItens.map(function (item, idx) {
+      var resumo = calcResumo(item, fornecedores, precos);
+      var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
+      return /*#__PURE__*/React.createElement("tr", {
+        key: item.id,
+        style: {
+          background: bg
+        }
+      }, /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          textAlign: "center",
+          color: "#666",
+          fontSize: 11
+        })
+      }, item.num), /*#__PURE__*/React.createElement(EC, {
+        value: item.qt,
+        onChange: function onChange(v) {
+          return updItem(item.id, "qt", v.replace(/[^0-9.,]/g, ""));
+        },
+        placeholder: "0",
+        align: "center",
+        tdSt: SC.td,
+        numericOnly: true
+      }), /*#__PURE__*/React.createElement(EC, {
+        value: item.unid,
+        onChange: function onChange(v) {
+          var u = (cadastros.unidades || []).find(function (x) {
+            return x.toUpperCase() === v.toUpperCase();
+          });
+          updItem(item.id, "unid", u || "");
+        },
+        placeholder: "UN",
+        align: "center",
+        tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
+          width: 58
+        }),
+        maxLen: 8,
+        suggestions: cadastros.unidades || []
+      }), /*#__PURE__*/React.createElement(EC, {
+        value: item.descricao,
+        onChange: function onChange(v) {
+          return updItem(item.id, "descricao", v);
+        },
+        placeholder: "DESCRI\xC7\xC3O DO INSUMO...",
+        tdSt: SC.td,
+        suggestions: cadastros.insumos || []
+      }), showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          textAlign: "right",
+          background: "#f0f4ff",
+          borderLeft: "2px solid #b8c8e8"
+        })
+      }, resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : ""), /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          textAlign: "right",
+          fontWeight: 600,
+          background: "#f0f4ff"
+        })
+      }, resumo.vlTotal !== null ? fmtMoney(resumo.vlTotal) : ""), /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          fontSize: 11,
+          background: "#f0f4ff",
+          borderRight: "2px solid #b8c8e8",
+          maxWidth: 130,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        })
+      }, resumo.forn || "")), visibleChunk.map(function (f) {
+        var _precos$key;
+        var key = "".concat(item.id, "_").concat(f.id);
+        var unit = parseMoney(precos[key]);
+        var isMin = resumo.vlUnit !== null && unit !== null && unit > 0 && unit === resumo.vlUnit;
+        return /*#__PURE__*/React.createElement(EC, {
+          key: key,
+          value: (_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "",
+          onChange: function onChange(v) {
+            return setPreco(item.id, f.id, v.replace(/[^0-9.,]/g, ""));
+          },
+          placeholder: "0,00",
+          align: "right",
+          numericOnly: true,
+          tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
+            borderLeft: "1px solid #e4e8f4",
+            background: isMin ? T.best : bg,
+            color: isMin ? "#1a6a1a" : undefined,
+            fontWeight: isMin ? 700 : 400
+          })
+        });
+      }), emptyChunk && /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          background: bg,
+          borderLeft: "2px solid #e4e8f4"
+        })
+      }), /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          background: "#f0f2f6",
+          textAlign: "center",
+          padding: "2px 4px"
+        })
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: function onClick() {
+          if (window.confirm("EXCLUIR ITEM \"" + item.descricao + "\"?")) removeItem(item.id);
+        },
+        style: {
+          background: "none",
+          border: "none",
+          color: "#e57373",
+          cursor: "pointer",
+          padding: 2,
+          display: "flex"
+        }
+      }, /*#__PURE__*/React.createElement(IcoTrash, null))));
+    }), /*#__PURE__*/React.createElement("tr", {
+      style: {
+        background: T.sub,
+        borderTop: "2px solid rgba(0,0,0,0.1)"
+      }
+    }, /*#__PURE__*/React.createElement("td", {
+      colSpan: 4,
+      style: _objectSpread(_objectSpread({}, SC.td), {}, {
+        fontWeight: 700,
+        paddingLeft: 10,
+        fontSize: 12
+      })
+    }, "TOTAL"), showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, SC.td), {}, {
+        background: "#e8eeff",
+        borderLeft: "2px solid #b8c8e8"
+      })
+    }), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, SC.td), {}, {
+        textAlign: "right",
+        fontWeight: 700,
+        background: "#e8eeff"
+      })
+    }, resumoTotal > 0 ? fmtMoney(resumoTotal) : "—"), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, SC.td), {}, {
+        background: "#e8eeff",
+        borderRight: "2px solid #b8c8e8"
+      })
+    })), visibleChunk.map(function (f) {
+      var t = totalBruto(f.id);
+      return /*#__PURE__*/React.createElement("td", {
+        key: "t_".concat(f.id),
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          textAlign: "right",
+          fontWeight: 700,
+          borderLeft: "1px solid #e4e8f4"
+        })
+      }, t > 0 ? fmtMoney(t) : "—");
+    }), emptyChunk && /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, SC.td), {}, {
+        borderLeft: "2px solid #e4e8f4"
+      })
+    }), /*#__PURE__*/React.createElement("td", {
+      style: _objectSpread(_objectSpread({}, SC.td), {}, {
+        background: "#f0f2f6"
+      })
+    })), RODAPE_ROWS.map(function (row, ri) {
+      return /*#__PURE__*/React.createElement("tr", {
+        key: row.key,
+        style: {
+          background: ri % 2 === 0 ? "#fff" : "#fafafa",
+          borderTop: ri === 0 ? "1px solid #d8dce8" : undefined
+        }
+      }, /*#__PURE__*/React.createElement("td", {
+        colSpan: 4,
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          fontWeight: 600,
+          fontSize: 11,
+          paddingLeft: 10,
+          letterSpacing: 0.3
+        })
+      }, row.label), showResumo && function (_rodapeResumo$row$key2) {
+        var bg = "#e8eeff",
+          bl = "2px solid #b8c8e8",
+          br = "2px solid #b8c8e8";
+        if (row.computed) {
+          var vl = calcVLResumo();
+          return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
+            style: _objectSpread(_objectSpread({}, SC.td), {}, {
+              background: bg,
+              borderLeft: bl
+            })
+          }), /*#__PURE__*/React.createElement("td", {
+            style: _objectSpread(_objectSpread({}, SC.td), {}, {
+              textAlign: "right",
+              fontWeight: 700,
+              color: "#1a56b0",
+              background: bg
+            })
+          }, vl > 0 ? fmtMoney(vl) : "—"), /*#__PURE__*/React.createElement("td", {
+            style: _objectSpread(_objectSpread({}, SC.td), {}, {
+              background: bg,
+              borderRight: br
+            })
+          }));
+        }
+        // CONTATO e OBSERVAÇÕES: célula larga colspan=3
+        if (!row.money) {
+          var _rodapeResumo$row$key;
+          return /*#__PURE__*/React.createElement(EC, {
+            value: (_rodapeResumo$row$key = rodapeResumo[row.key]) !== null && _rodapeResumo$row$key !== void 0 ? _rodapeResumo$row$key : "",
+            onChange: function onChange(v) {
+              return setRodapeResumo(row.key, v);
+            },
+            placeholder: "\u2014",
+            align: "left",
+            colSpan: 3,
+            maxLen: row.maxLen,
+            tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
+              background: bg,
+              borderLeft: bl,
+              borderRight: br
+            })
+          });
+        }
+        return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
+          style: _objectSpread(_objectSpread({}, SC.td), {}, {
+            background: bg,
+            borderLeft: bl
+          })
+        }), /*#__PURE__*/React.createElement(EC, {
+          value: (_rodapeResumo$row$key2 = rodapeResumo[row.key]) !== null && _rodapeResumo$row$key2 !== void 0 ? _rodapeResumo$row$key2 : "",
+          onChange: function onChange(v) {
+            return setRodapeResumo(row.key, v.replace(/[^0-9.,]/g, ""));
+          },
+          placeholder: "0,00",
+          align: "right",
+          maxLen: row.maxLen,
+          tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
+            background: bg
+          })
+        }), /*#__PURE__*/React.createElement("td", {
+          style: _objectSpread(_objectSpread({}, SC.td), {}, {
+            background: bg,
+            borderRight: br
+          })
+        }));
+      }(), visibleChunk.map(function (f) {
+        var _r2$row$key;
+        var r2 = rodape[f.id] || {};
+        if (row.computed) {
+          var vl = calcVL(f.id);
+          return /*#__PURE__*/React.createElement("td", {
+            key: "vl_".concat(f.id),
+            style: _objectSpread(_objectSpread({}, SC.td), {}, {
+              textAlign: "right",
+              fontWeight: 700,
+              color: "#1a56b0",
+              borderLeft: "1px solid #e4e8f4"
+            })
+          }, vl > 0 ? fmtMoney(vl) : "—");
+        }
+        return /*#__PURE__*/React.createElement(EC, {
+          key: "r_".concat(f.id, "_").concat(row.key),
+          value: (_r2$row$key = r2[row.key]) !== null && _r2$row$key !== void 0 ? _r2$row$key : "",
+          onChange: function onChange(v) {
+            return setRodape(f.id, row.key, row.money ? v.replace(/[^0-9.,]/g, "") : v);
+          },
+          placeholder: row.money ? "0,00" : "—",
+          align: row.money ? "right" : "left",
+          maxLen: row.maxLen,
+          numericOnly: row.money,
+          tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
+            borderLeft: "1px solid #e4e8f4"
+          })
+        });
+      }), emptyChunk && /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          borderLeft: "2px solid #e4e8f4"
+        })
+      }), /*#__PURE__*/React.createElement("td", {
+        style: _objectSpread(_objectSpread({}, SC.td), {}, {
+          background: "#f0f2f6"
+        })
+      }));
+    })))), isLast && function () {
+      var totalQt = itens.reduce(function (acc, it) {
+        var v = parseFloat(String(it.qt).replace(",", "."));
+        return acc + (isNaN(v) ? 0 : v);
+      }, 0);
+      return /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginTop: 10,
+          display: "flex",
+          alignItems: "center",
+          gap: 12
+        }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: addItem,
+        style: SC.btnAddItem
+      }, /*#__PURE__*/React.createElement(IcoPlus, {
+        w: 14
+      }), " ADICIONAR ITEM"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 13,
+          fontWeight: 700,
+          color: "#2a5298",
+          background: "#e8eeff",
+          borderRadius: 20,
+          padding: "4px 14px",
+          letterSpacing: 0.5
+        }
+      }, "QT. TOTAL: ", totalQt % 1 === 0 ? totalQt : totalQt.toLocaleString("pt-BR", {
+        maximumFractionDigits: 3
+      })));
+    }(), isLast && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 14,
+        background: "#fff",
+        borderRadius: 8,
+        border: "1.5px solid #c8ccd8",
+        overflow: "hidden"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: T.hdr,
+        color: "#fff",
+        padding: "8px 14px",
+        fontWeight: 700,
+        fontSize: 12,
+        letterSpacing: 0.4
+      }
+    }, "OBSERVA\xC7\xC3O GERAL DO MAPA"), /*#__PURE__*/React.createElement("textarea", {
+      value: mapa.obsGeral || "",
+      onChange: function onChange(e) {
+        return setObsGeral(e.target.value.toUpperCase());
+      },
+      maxLength: 5000,
+      placeholder: "OBSERVA\xC7\xD5ES GERAIS SOBRE ESTE MAPA DE COTA\xC7\xC3O...",
+      style: {
+        width: "100%",
+        minHeight: 100,
+        border: "none",
+        padding: "10px 14px",
+        fontSize: 13,
+        fontFamily: "'DM Sans',sans-serif",
+        textTransform: "uppercase",
+        resize: "vertical",
+        outline: "none",
+        color: "#1a1a2e",
+        background: "#fff"
+      }
+    }), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "right",
+        padding: "4px 14px 6px",
+        fontSize: 11,
+        color: "#aaa"
+      }
+    }, (mapa.obsGeral || "").length, "/5000")), !isLast && /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: "center",
+        padding: "6px 0",
+        fontSize: 11,
+        color: "#999",
+        letterSpacing: 1
+      }
+    }, "\u2500\u2500 CONTINUA NA PR\xD3XIMA FOLHA \u2500\u2500"));
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#dde0e8",
+      fontFamily: "'DM Sans',sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: SC.appBar
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: SC.backBtn
+  }, /*#__PURE__*/React.createElement(IcoBack, null), " MAPAS"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Syne',sans-serif",
+      fontWeight: 700,
+      fontSize: 15,
+      color: "#fff",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, mapa.obra || mapa.nome || "SEM OBRA"), mapa.responsavel && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#7a9cc8"
+    }
+  }, mapa.responsavel)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return abrirPDF(buildMapaHTML(mapa, clock));
+    },
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: "#c0392b",
+      color: "#fff",
+      gap: 5
+    })
+  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "relative"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setShowColPanel(function (p) {
+        return !p;
+      });
+    },
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: "#2a5298",
+      color: "#fff",
+      gap: 5,
+      position: "relative"
+    })
+  }, "\uD83D\uDC41 COLUNAS"), showColPanel && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: "absolute",
+      top: "110%",
+      right: 0,
+      background: "#fff",
+      borderRadius: 10,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+      padding: "14px 18px",
+      zIndex: 9999,
+      minWidth: 240,
+      maxHeight: 400,
+      overflowY: "auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 12,
+      color: "#1a1a2e",
+      marginBottom: 10,
+      letterSpacing: 0.5
+    }
+  }, "OCULTAR COLUNAS"), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 0",
+      borderBottom: "1px solid #f0f2f5",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !hiddenCols.resumo,
+    onChange: function onChange() {
+      return toggleCol("resumo");
+    },
+    style: {
+      width: 16,
+      height: 16
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: "#2a5298",
+      fontWeight: 600
+    }
+  }, "RESUMO")), fornecedores.map(function (f) {
+    return /*#__PURE__*/React.createElement("label", {
+      key: f.id,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "6px 0",
+        borderBottom: "1px solid #f0f2f5",
+        cursor: "pointer"
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: !hiddenCols[f.id],
+      onChange: function onChange() {
+        return toggleCol(f.id);
+      },
+      style: {
+        width: 16,
+        height: 16
+      }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 12,
+        color: "#333",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        maxWidth: 180
+      }
+    }, f.nome || "FORNECEDOR"));
+  }))), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setShowTheme(function (s) {
+        return !s;
+      });
+    },
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      gap: 5
+    })
+  }, "\uD83C\uDFA8 COR"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 600,
+      color: saved ? "#7fc97f" : "#f0c060",
+      minWidth: 72,
+      textAlign: "right"
+    }
+  }, saved ? "✓ SALVO" : "SALVANDO…"))), showTheme && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#162840",
+      padding: "10px 20px",
+      display: "flex",
+      gap: 8,
+      alignItems: "center",
+      flexWrap: "wrap",
+      borderBottom: "2px solid #f0a500"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#8aabce",
+      fontSize: 11,
+      fontWeight: 700
+    }
+  }, "COR:"), THEMES.map(function (t) {
+    return /*#__PURE__*/React.createElement("button", {
+      key: t.id,
+      onClick: function onClick() {
+        update(function (m) {
+          return _objectSpread(_objectSpread({}, m), {}, {
+            corTema: t.id
+          });
+        });
+        setShowTheme(false);
+      },
+      style: {
+        background: t.hdr,
+        border: mapa.corTema === t.id ? "3px solid #f0a500" : "2px solid transparent",
+        borderRadius: 7,
+        padding: "6px 14px",
+        fontSize: 11,
+        fontWeight: 700,
+        cursor: "pointer",
+        color: "#fff"
+      }
+    }, t.name);
+  })), /*#__PURE__*/React.createElement("div", {
+    ref: mapContainerRef,
+    style: {
+      padding: "14px 12px 60px"
+    }
+  }, chunks.map(function (chunk, ci) {
+    return renderChunk(chunk, ci, hiddenCols);
+  })));
+}
+
+// ─── Map Card ─────────────────────────────────────────────────────────────────
+function MapCard(_ref16) {
+  var _mapa$itens, _mapa$fornecedores;
+  var mapa = _ref16.mapa,
+    onOpen = _ref16.onOpen,
+    onDelete = _ref16.onDelete;
+  var _useState39 = useState(false),
+    _useState40 = _slicedToArray(_useState39, 2),
+    confirm = _useState40[0],
+    setConfirm = _useState40[1];
+  var T = getTheme(mapa.corTema);
+  return /*#__PURE__*/React.createElement("div", {
+    style: _objectSpread(_objectSpread({}, SC.card), {}, {
+      borderTop: "4px solid ".concat(T.hdr)
+    })
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: T.hdr,
+      opacity: 0.8
+    }
+  }, /*#__PURE__*/React.createElement(IcoClip, null)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Syne',sans-serif",
+      fontWeight: 700,
+      fontSize: 15,
+      color: "#0f1f3d",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, mapa.obra || "SEM OBRA"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#7a8aaa",
+      marginTop: 2,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    }
+  }, mapa.obra || "—")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      background: T.sub,
+      color: "#444",
+      borderRadius: 4,
+      padding: "2px 8px",
+      flexShrink: 0
+    }
+  }, "MP N\xBA ", mapa.numero || 1)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 7
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: SC.badge
+  }, ((_mapa$itens = mapa.itens) === null || _mapa$itens === void 0 ? void 0 : _mapa$itens.length) || 0, " ITENS"), /*#__PURE__*/React.createElement("span", {
+    style: SC.badge
+  }, ((_mapa$fornecedores = mapa.fornecedores) === null || _mapa$fornecedores === void 0 ? void 0 : _mapa$fornecedores.length) || 0, " FORN.")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#aab"
+    }
+  }, "CRIADO EM ", fmtDate(new Date(mapa.criadoEm)), mapa.responsavel && " \xB7 ".concat(mapa.responsavel)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginTop: 4
+    }
+  }, confirm ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: "#e57373"
+    }
+  }, "EXCLUIR?"), /*#__PURE__*/React.createElement("button", {
+    style: _objectSpread(_objectSpread({}, SC.btnSm), {}, {
+      background: "#e57373",
+      color: "#fff"
+    }),
+    onClick: function onClick() {
+      return onDelete(mapa.id);
+    }
+  }, "SIM"), /*#__PURE__*/React.createElement("button", {
+    style: _objectSpread(_objectSpread({}, SC.btnSm), {}, {
+      background: "#eee",
+      color: "#333"
+    }),
+    onClick: function onClick() {
+      return setConfirm(false);
+    }
+  }, "N\xC3O")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    style: SC.btnOpen,
+    onClick: function onClick() {
+      return onOpen(mapa);
+    }
+  }, "ABRIR ", /*#__PURE__*/React.createElement(IcoChev, null)), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return abrirPDF(buildMapaHTML(mapa));
+    },
+    style: _objectSpread(_objectSpread({}, SC.btnIco), {}, {
+      background: "#fdecea",
+      color: "#c0392b"
+    })
+  }, /*#__PURE__*/React.createElement(IcoPDF, null)), /*#__PURE__*/React.createElement("button", {
+    style: SC.btnIco,
+    onClick: function onClick() {
+      return setConfirm(true);
+    }
+  }, /*#__PURE__*/React.createElement(IcoTrash, null)))));
+}
+
+// ─── New Map Form ─────────────────────────────────────────────────────────────
+function NewMapForm(_ref17) {
+  var onSave = _ref17.onSave,
+    onClose = _ref17.onClose,
+    nextNumero = _ref17.nextNumero,
+    cadastros = _ref17.cadastros,
+    addCadastro = _ref17.addCadastro;
+  var _useState41 = useState({
+      nome: "",
+      responsavel: "",
+      obra: ""
+    }),
+    _useState42 = _slicedToArray(_useState41, 2),
+    form = _useState42[0],
+    setForm = _useState42[1];
+  var set = function set(k, v) {
+    return setForm(function (f) {
+      return _objectSpread(_objectSpread({}, f), {}, _defineProperty({}, k, v));
+    });
+  };
+  var valid = form.obra.trim().length > 0;
+  var handleSave = function handleSave() {
+    if (!valid) return;
+    if (form.obra) addCadastro("obras", form.obra);
+    onSave(_objectSpread(_objectSpread({}, emptyMap(nextNumero)), form));
+  };
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: SC.mHdr
+  }, /*#__PURE__*/React.createElement("span", {
+    style: SC.mTitle
+  }, "NOVO MAPA DE COTA\xC7\xC3O"), /*#__PURE__*/React.createElement("button", {
+    style: {
+      background: "none",
+      border: "none",
+      color: "#999",
+      cursor: "pointer"
+    },
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement(IcoClose, null))), /*#__PURE__*/React.createElement("div", {
+    style: SC.mBody
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#777",
+      background: "#f5f7fb",
+      borderRadius: 6,
+      padding: "7px 11px",
+      marginBottom: 6
+    }
+  }, "MP N\xBA: ", /*#__PURE__*/React.createElement("b", null, nextNumero), " \u2014 ATRIBU\xCDDO AUTOMATICAMENTE"), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "NOME DO MAPA ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#aaa",
+      fontWeight: 400
+    }
+  }, "(OPCIONAL)")), /*#__PURE__*/React.createElement("input", {
+    style: SC.inp,
+    placeholder: "EX: COTA\xC7\xC3O ESTRUTURA MET\xC1LICA",
+    value: form.nome,
+    onChange: function onChange(e) {
+      return set("nome", e.target.value.toUpperCase());
+    },
+    autoFocus: true
+  }), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "OBRA / PROJETO ", /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#e57373"
+    }
+  }, "*")), /*#__PURE__*/React.createElement(AutocompleteInput, {
+    value: form.obra,
+    onChange: function onChange(v) {
+      return set("obra", v);
+    },
+    suggestions: cadastros.obras || [],
+    placeholder: "EX: COMPLEXO DA POL\xCDCIA CIVIL",
+    xStyle: {
+      marginBottom: 2
+    },
+    inputStyle: {
+      border: "1.5px solid #dde1e9",
+      borderRadius: 8,
+      padding: "10px 12px",
+      fontSize: 13,
+      outline: "none"
+    }
+  }), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "RESPONS\xC1VEL"), /*#__PURE__*/React.createElement("input", {
+    style: SC.inp,
+    placeholder: "NOME DO COMPRADOR",
+    value: form.responsavel,
+    onChange: function onChange(e) {
+      return set("responsavel", e.target.value.toUpperCase());
+    },
+    onKeyDown: function onKeyDown(e) {
+      return e.key === "Enter" && handleSave();
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: SC.mFtr
+  }, /*#__PURE__*/React.createElement("button", {
+    style: SC.btnSec,
+    onClick: onClose
+  }, "CANCELAR"), /*#__PURE__*/React.createElement("button", {
+    style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
+      opacity: valid ? 1 : 0.4
+    }),
+    onClick: handleSave,
+    disabled: !valid
+  }, "CRIAR MAPA")));
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+function Login(_ref18) {
+  var onLogin = _ref18.onLogin;
+  var _useState43 = useState(""),
+    _useState44 = _slicedToArray(_useState43, 2),
+    user = _useState44[0],
+    setUser = _useState44[1];
+  var _useState45 = useState(""),
+    _useState46 = _slicedToArray(_useState45, 2),
+    pass = _useState46[0],
+    setPass = _useState46[1];
+  var _useState47 = useState(false),
+    _useState48 = _slicedToArray(_useState47, 2),
+    err = _useState48[0],
+    setErr = _useState48[1];
+  var submit = function submit() {
+    if (user.trim().toUpperCase() === "CLAUDIO" && pass === "7952") {
+      sessionStorage.setItem("mapacot_auth", "1");
+      onLogin();
+    } else {
+      setErr(true);
+      setTimeout(function () {
+        return setErr(false);
+      }, 2500);
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#0f1f3d",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 18,
+      padding: "40px 32px",
+      maxWidth: 360,
+      width: "100%",
+      boxShadow: "0 8px 40px rgba(0,0,0,0.3)",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#f0a500",
+      color: "#0f1f3d",
+      width: 64,
+      height: 64,
+      borderRadius: 16,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 22,
+      fontWeight: 900,
+      margin: "0 auto 20px",
+      fontFamily: "'Syne',sans-serif"
+    }
+  }, "MC"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Syne',sans-serif",
+      fontWeight: 800,
+      fontSize: 20,
+      color: "#0f1f3d",
+      marginBottom: 4
+    }
+  }, "MAPACOT"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#888",
+      marginBottom: 28,
+      letterSpacing: 0.5
+    }
+  }, "SISTEMA DE COTA\xC7\xC3O"), /*#__PURE__*/React.createElement("input", {
+    value: user,
+    onChange: function onChange(e) {
+      return setUser(e.target.value.toUpperCase());
+    },
+    onKeyDown: function onKeyDown(e) {
+      return e.key === "Enter" && submit();
+    },
+    placeholder: "USU\xC1RIO",
+    style: {
+      width: "100%",
+      padding: "12px 16px",
+      borderRadius: 10,
+      border: "1.5px solid #dde",
+      fontSize: 14,
+      marginBottom: 12,
+      outline: "none",
+      fontFamily: "inherit",
+      textTransform: "uppercase",
+      boxSizing: "border-box"
+    }
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: pass,
+    onChange: function onChange(e) {
+      return setPass(e.target.value);
+    },
+    onKeyDown: function onKeyDown(e) {
+      return e.key === "Enter" && submit();
+    },
+    placeholder: "SENHA",
+    style: {
+      width: "100%",
+      padding: "12px 16px",
+      borderRadius: 10,
+      border: "1.5px solid #dde",
+      fontSize: 14,
+      marginBottom: 16,
+      outline: "none",
+      fontFamily: "inherit",
+      boxSizing: "border-box"
+    }
+  }), err && /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#c0392b",
+      fontSize: 13,
+      marginBottom: 12,
+      fontWeight: 600
+    }
+  }, "USU\xC1RIO OU SENHA INCORRETOS"), /*#__PURE__*/React.createElement("button", {
+    onClick: submit,
+    style: {
+      width: "100%",
+      padding: "13px",
+      borderRadius: 10,
+      background: "#2a5298",
+      color: "#fff",
+      border: "none",
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "inherit",
+      letterSpacing: 0.5
+    }
+  }, "ENTRAR")));
+}
+function App() {
+  var _useState49 = useState([]),
+    _useState50 = _slicedToArray(_useState49, 2),
+    mapas = _useState50[0],
+    setMapas = _useState50[1];
+  var _useState51 = useState({
+      obras: [],
+      insumos: [],
+      unidades: DEFAULT_UNIDADES,
+      fornecedores: []
+    }),
+    _useState52 = _slicedToArray(_useState51, 2),
+    cadastros = _useState52[0],
+    setCadastros = _useState52[1];
+  var _useState53 = useState(true),
+    _useState54 = _slicedToArray(_useState53, 2),
+    loading = _useState54[0],
+    setLoading = _useState54[1];
+  var _useState55 = useState(false),
+    _useState56 = _slicedToArray(_useState55, 2),
+    showNew = _useState56[0],
+    setShowNew = _useState56[1];
+  var _useState57 = useState(false),
+    _useState58 = _slicedToArray(_useState57, 2),
+    showRep = _useState58[0],
+    setShowRep = _useState58[1];
+  var _useState59 = useState(false),
+    _useState60 = _slicedToArray(_useState59, 2),
+    showCad = _useState60[0],
+    setShowCad = _useState60[1];
+  var _useState61 = useState(null),
+    _useState62 = _slicedToArray(_useState61, 2),
+    current = _useState62[0],
+    setCurrent = _useState62[1];
+  var _useState63 = useState(""),
+    _useState64 = _slicedToArray(_useState63, 2),
+    search = _useState64[0],
+    setSearch = _useState64[1];
+
+  // Load all data
+  useEffect(function () {
+    _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee8() {
+      var mapasData, cad, insumos, _t, _t2, _t3;
+      return _regenerator().w(function (_context8) {
+        while (1) switch (_context8.p = _context8.n) {
+          case 0:
+            _context8.p = 0;
+            _context8.n = 1;
+            return sbGetMapas();
+          case 1:
+            mapasData = _context8.v;
+            if (mapasData.length) setMapas(mapasData);
+            _context8.n = 3;
+            break;
+          case 2:
+            _context8.p = 2;
+            _t = _context8.v;
+          case 3:
+            _context8.p = 3;
+            _context8.n = 4;
+            return sbGetCadastros();
+          case 4:
+            cad = _context8.v;
+            if (cad) setCadastros(function (prev) {
+              return {
+                obras: cad.obras || [],
+                insumos: [],
+                unidades: cad.unidades || DEFAULT_UNIDADES,
+                fornecedores: cad.fornecedores || []
+              };
+            });
+            _context8.n = 6;
+            break;
+          case 5:
+            _context8.p = 5;
+            _t2 = _context8.v;
+          case 6:
+            setLoading(false);
+            // Load insumos in background (separate row, large data)
+            _context8.p = 7;
+            _context8.n = 8;
+            return sbGetInsumos();
+          case 8:
+            insumos = _context8.v;
+            if (insumos.length) setCadastros(function (prev) {
+              return _objectSpread(_objectSpread({}, prev), {}, {
+                insumos: insumos
+              });
+            });
+            _context8.n = 10;
+            break;
+          case 9:
+            _context8.p = 9;
+            _t3 = _context8.v;
+          case 10:
+            return _context8.a(2);
+        }
+      }, _callee8, null, [[7, 9], [3, 5], [0, 2]]);
+    }))();
+  }, []);
+
+  // Persist cadastros
+  useEffect(function () {
+    if (!loading) sbSaveCadastros(cadastros).catch(function () {});
+  }, [cadastros, loading]);
+  var addCadastro = useCallback(function (tipo, valor) {
+    var v = normalize(valor);
+    if (!v) return;
+    setCadastros(function (prev) {
+      var lista = prev[tipo] || [];
+      if (lista.some(function (x) {
+        return normalize(x) === v;
+      })) return prev;
+      var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, [].concat(_toConsumableArray(lista), [v]).sort()));
+      if (tipo === "insumos") sbSaveInsumos(updated.insumos).catch(function () {});
+      return updated;
+    });
+  }, []);
+  var removeCadastro = useCallback(function (tipo, valor) {
+    setCadastros(function (prev) {
+      return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, (prev[tipo] || []).filter(function (x) {
+        return normalize(x) !== normalize(valor);
+      })));
+    });
+  }, []);
+  var editCadastro = useCallback(function (tipo, oldVal, newVal) {
+    var vOld = normalize(oldVal),
+      vNew = normalize(newVal);
+    if (!vNew || vOld === vNew) return;
+    setCadastros(function (prev) {
+      var lista = (prev[tipo] || []).map(function (x) {
+        return normalize(x) === vOld ? vNew : x;
+      });
+      return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, _toConsumableArray(new Set(lista)).sort()));
+    });
+  }, []);
+  var handleCreate = /*#__PURE__*/function () {
+    var _ref20 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(m) {
+      return _regenerator().w(function (_context9) {
+        while (1) switch (_context9.n) {
+          case 0:
+            setMapas(function (prev) {
+              return [m].concat(_toConsumableArray(prev));
+            });
+            sbSaveMapa(m).catch(function () {});
+            setShowNew(false);
+            setCurrent(m);
+          case 1:
+            return _context9.a(2);
+        }
+      }, _callee9);
+    }));
+    return function handleCreate(_x5) {
+      return _ref20.apply(this, arguments);
+    };
+  }();
+  var handleDelete = /*#__PURE__*/function () {
+    var _ref21 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0(id) {
+      return _regenerator().w(function (_context0) {
+        while (1) switch (_context0.n) {
+          case 0:
+            setMapas(function (prev) {
+              return prev.filter(function (m) {
+                return m.id !== id;
+              });
+            });
+            sbDeleteMapa(id).catch(function () {});
+          case 1:
+            return _context0.a(2);
+        }
+      }, _callee0);
+    }));
+    return function handleDelete(_x6) {
+      return _ref21.apply(this, arguments);
+    };
+  }();
+  var handleSave = /*#__PURE__*/function () {
+    var _ref22 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1(updated) {
+      return _regenerator().w(function (_context1) {
+        while (1) switch (_context1.n) {
+          case 0:
+            setMapas(function (prev) {
+              return prev.map(function (m) {
+                return m.id === updated.id ? updated : m;
+              });
+            });
+            sbSaveMapa(updated).catch(function () {});
+            setCurrent(updated);
+          case 1:
+            return _context1.a(2);
+        }
+      }, _callee1);
+    }));
+    return function handleSave(_x7) {
+      return _ref22.apply(this, arguments);
+    };
+  }();
+  var filtered = mapas.filter(function (m) {
+    return (m.nome + m.obra + m.responsavel).toLowerCase().includes(search.toLowerCase());
+  });
+  if (current) return /*#__PURE__*/React.createElement(MapEditor, {
+    mapa: current,
+    onBack: function onBack() {
+      return setCurrent(null);
+    },
+    onSave: handleSave,
+    cadastros: cadastros,
+    addCadastro: addCadastro
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      fontFamily: "'DM Sans',sans-serif",
+      background: "#f0f2f5"
+    }
+  }, /*#__PURE__*/React.createElement("header", {
+    style: SC.header
+  }, /*#__PURE__*/React.createElement("div", {
+    style: SC.headerIn
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: SC.logoMk
+  }, "MC"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Syne',sans-serif",
+      fontWeight: 700,
+      fontSize: 20,
+      color: "#fff",
+      lineHeight: 1.1
+    }
+  }, "MAPACOT"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 10,
+      color: "#7a9cc8",
+      letterSpacing: 1
+    }
+  }, "SISTEMA DE COTA\xC7\xC3O"))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
+      background: "rgba(255,255,255,0.1)",
+      color: "#fff"
+    }),
+    onClick: function onClick() {
+      return setShowCad(true);
+    }
+  }, /*#__PURE__*/React.createElement(IcoDb, null), " CADASTROS"), /*#__PURE__*/React.createElement("button", {
+    style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
+      background: "rgba(255,255,255,0.1)",
+      color: "#fff"
+    }),
+    onClick: function onClick() {
+      return setShowRep(true);
+    }
+  }, /*#__PURE__*/React.createElement(IcoReport, null), " RELAT\xD3RIOS"), /*#__PURE__*/React.createElement("button", {
+    style: SC.btnPri,
+    onClick: function onClick() {
+      return setShowNew(true);
+    }
+  }, /*#__PURE__*/React.createElement(IcoPlus, null), " NOVO MAPA")))), /*#__PURE__*/React.createElement("main", {
+    style: {
+      maxWidth: 1100,
+      margin: "0 auto",
+      padding: "26px 20px 60px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      marginBottom: 22
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1,
+      display: "flex",
+      alignItems: "center",
+      gap: 9,
+      background: "#fff",
+      border: "1.5px solid #dde1e9",
+      borderRadius: 10,
+      padding: "10px 14px",
+      color: "#888"
+    }
+  }, /*#__PURE__*/React.createElement(IcoSearch, null), /*#__PURE__*/React.createElement("input", {
+    style: {
+      flex: 1,
+      border: "none",
+      background: "transparent",
+      fontSize: 14,
+      color: "#1a1a2e",
+      fontFamily: "inherit",
+      textTransform: "uppercase"
+    },
+    placeholder: "BUSCAR MAPAS...",
+    value: search,
+    onChange: function onChange(e) {
+      return setSearch(e.target.value);
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#888"
+    }
+  }, filtered.length, " ", filtered.length === 1 ? "MAPA" : "MAPAS")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginBottom: 20,
+      flexWrap: "wrap"
+    }
+  }, [["🏢", "FORNECEDORES", "fornecedores"], ["🧱", "INSUMOS", "insumos"], ["📐", "UNIDADES", "unidades"], ["🏗️", "OBRAS", "obras"]].map(function (_ref23) {
+    var _ref24 = _slicedToArray(_ref23, 3),
+      ico = _ref24[0],
+      lbl = _ref24[1],
+      key = _ref24[2];
+    return /*#__PURE__*/React.createElement("button", {
+      key: key,
+      onClick: function onClick() {
+        return setShowCad(true);
+      },
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 7,
+        background: "#fff",
+        border: "1.5px solid #e4e8f0",
+        borderRadius: 8,
+        padding: "7px 14px",
+        fontSize: 12,
+        fontWeight: 600,
+        color: "#555",
+        cursor: "pointer"
+      }
+    }, ico, " ", lbl, ": ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#2a5298",
+        fontWeight: 700
+      }
+    }, (cadastros[key] || []).length));
+  })), loading ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      justifyContent: "center",
+      padding: 80
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: SC.spinner
+  })) : filtered.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      padding: "60px 20px",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 46
+    }
+  }, "\uD83D\uDCCB"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'Syne',sans-serif",
+      fontWeight: 700,
+      fontSize: 20,
+      color: "#0f1f3d"
+    }
+  }, mapas.length === 0 ? "NENHUM MAPA AINDA" : "NENHUM RESULTADO"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 14,
+      color: "#7a8aaa",
+      textAlign: "center"
+    }
+  }, mapas.length === 0 ? 'CLIQUE EM "NOVO MAPA" PARA COMEÇAR.' : "TENTE OUTRO TERMO."), mapas.length === 0 && /*#__PURE__*/React.createElement("button", {
+    style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
+      marginTop: 16
+    }),
+    onClick: function onClick() {
+      return setShowNew(true);
+    }
+  }, /*#__PURE__*/React.createElement(IcoPlus, null), " CRIAR PRIMEIRO MAPA")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
+      gap: 16
+    }
+  }, filtered.map(function (m) {
+    return /*#__PURE__*/React.createElement(MapCard, {
+      key: m.id,
+      mapa: m,
+      onOpen: setCurrent,
+      onDelete: handleDelete
+    });
+  }))), /*#__PURE__*/React.createElement(Modal, {
+    open: showNew,
+    onClose: function onClose() {
+      return setShowNew(false);
+    }
+  }, /*#__PURE__*/React.createElement(NewMapForm, {
+    onSave: handleCreate,
+    onClose: function onClose() {
+      return setShowNew(false);
+    },
+    nextNumero: mapas.length + 1,
+    cadastros: cadastros,
+    addCadastro: addCadastro
+  })), /*#__PURE__*/React.createElement(ReportsModal, {
+    open: showRep,
+    onClose: function onClose() {
+      return setShowRep(false);
+    },
+    mapas: mapas,
+    cadastros: cadastros
+  }), /*#__PURE__*/React.createElement(CadastrosModal, {
+    open: showCad,
+    onClose: function onClose() {
+      return setShowCad(false);
+    },
+    cadastros: cadastros,
+    onAdd: addCadastro,
+    onRemove: removeCadastro,
+    onEdit: editCadastro
+  }), /*#__PURE__*/React.createElement("style", null, "\n        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');\n        *{box-sizing:border-box;margin:0;padding:0;}\n        body{background:#f0f2f5;font-family:'DM Sans',sans-serif;}\n        input,textarea,button{text-transform:uppercase;font-family:inherit;}\n        input[type=date]{text-transform:none;}\n        input::placeholder{color:#bbb;text-transform:uppercase;}\n        input:focus{outline:none;}\n        button{cursor:pointer;}\n        @keyframes spin{to{transform:rotate(360deg)}}\n        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}\n      "));
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+var SC = {
+  header: {
+    background: "#0f1f3d",
+    borderBottom: "3px solid #f0a500",
+    position: "sticky",
+    top: 0,
+    zIndex: 20
+  },
+  headerIn: {
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: "13px 20px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  logoMk: {
+    width: 40,
+    height: 40,
+    background: "#f0a500",
+    borderRadius: 9,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontFamily: "'Syne',sans-serif",
+    fontWeight: 800,
+    fontSize: 15,
+    color: "#0f1f3d",
+    letterSpacing: 1
+  },
+  card: {
+    background: "#fff",
+    borderRadius: 12,
+    padding: "18px 18px 14px",
+    border: "1.5px solid #e8eaf0",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    animation: "fadeUp 0.3s ease"
+  },
+  badge: {
+    background: "#eef2fb",
+    color: "#1a56b0",
+    fontSize: 11,
+    fontWeight: 600,
+    padding: "3px 9px",
+    borderRadius: 20
+  },
+  btnOpen: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    background: "#0f1f3d",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: "9px 14px",
+    fontSize: 13,
+    fontWeight: 700
+  },
+  btnIco: {
+    background: "#f5f5f7",
+    border: "none",
+    borderRadius: 8,
+    padding: "9px 10px",
+    color: "#666",
+    display: "flex",
+    alignItems: "center"
+  },
+  btnSm: {
+    border: "none",
+    borderRadius: 5,
+    padding: "5px 10px",
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: "pointer"
+  },
+  btnPri: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#f0a500",
+    color: "#0f1f3d",
+    border: "none",
+    borderRadius: 9,
+    padding: "10px 18px",
+    fontSize: 13,
+    fontWeight: 700
+  },
+  btnSec: {
+    background: "#f0f2f5",
+    color: "#555",
+    border: "none",
+    borderRadius: 9,
+    padding: "10px 18px",
+    fontSize: 13,
+    fontWeight: 600
+  },
+  spinner: {
+    width: 32,
+    height: 32,
+    border: "3px solid #e0e4ed",
+    borderTop: "3px solid #1a56b0",
+    borderRadius: "50%",
+    animation: "spin 0.8s linear infinite"
+  },
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(10,20,40,0.55)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
+    padding: 20,
+    backdropFilter: "blur(2px)"
+  },
+  modal: {
+    background: "#fff",
+    borderRadius: 14,
+    width: "100%",
+    maxWidth: 480,
+    overflow: "hidden",
+    animation: "fadeUp 0.25s ease"
+  },
+  mHdr: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "18px 22px 14px",
+    borderBottom: "1px solid #eee"
+  },
+  mTitle: {
+    fontFamily: "'Syne',sans-serif",
+    fontWeight: 700,
+    fontSize: 16,
+    color: "#0f1f3d"
+  },
+  mBody: {
+    padding: "18px 22px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 4
+  },
+  mFtr: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 9,
+    padding: "14px 22px",
+    borderTop: "1px solid #eee"
+  },
+  lbl: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#555",
+    marginTop: 10,
+    marginBottom: 4,
+    letterSpacing: 0.4
+  },
+  inp: {
+    width: "100%",
+    border: "1.5px solid #dde1e9",
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: 13,
+    color: "#1a1a2e",
+    textTransform: "uppercase"
+  },
+  rDesc: {
+    fontSize: 12,
+    color: "#666",
+    background: "#f5f7fb",
+    borderRadius: 6,
+    padding: "8px 11px",
+    lineHeight: 1.6
+  },
+  appBar: {
+    background: "#0f1f3d",
+    borderBottom: "3px solid #f0a500",
+    padding: "11px 18px",
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    position: "sticky",
+    top: 0,
+    zIndex: 30
+  },
+  backBtn: {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    background: "rgba(255,255,255,0.1)",
+    border: "none",
+    color: "#fff",
+    borderRadius: 7,
+    padding: "7px 13px",
+    fontSize: 12,
+    fontWeight: 700
+  },
+  tableScroll: {
+    overflowX: "auto",
+    border: "1px solid #c8ccd8",
+    borderTop: "none"
+  },
+  table: {
+    borderCollapse: "collapse",
+    width: "100%",
+    minWidth: 680,
+    fontSize: 12
+  },
+  th: {
+    padding: "7px 9px",
+    fontFamily: "'DM Sans',sans-serif",
+    fontWeight: 700,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    border: "1px solid #b0b8cc",
+    whiteSpace: "nowrap"
+  },
+  td: {
+    padding: "6px 9px",
+    border: "1px solid #c8ccd8",
+    color: "#1a1a2e",
+    fontSize: 12,
+    verticalAlign: "middle"
+  },
+  btnAddItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    background: "#0f1f3d",
+    color: "#fff",
+    border: "none",
+    borderRadius: 8,
+    padding: "9px 18px",
+    fontSize: 12,
+    fontWeight: 700
+  }
+};
+function Root() {
+  var _React$useState = React.useState(function () {
+      return sessionStorage.getItem("mapacot_auth") === "1";
+    }),
+    _React$useState2 = _slicedToArray(_React$useState, 2),
+    auth = _React$useState2[0],
+    setAuth = _React$useState2[1];
+  if (!auth) return /*#__PURE__*/React.createElement(Login, {
+    onLogin: function onLogin() {
+      return setAuth(true);
+    }
+  });
+  return /*#__PURE__*/React.createElement(App, null);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Root, null));
+
+  </script>
+</body>
+</html>
