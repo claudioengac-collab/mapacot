@@ -651,8 +651,13 @@ function AutocompleteInput(_ref9) {
     hi = _useState4[0],
     setHi = _useState4[1];
   var ref = useRef();
-  var filtered = value.length > 0 ? (suggestions || []).filter(function (s) {
-    return normalize(s).includes(normalize(value)) && normalize(s) !== normalize(value);
+  var nv = normalize(value);
+  var filtered = nv.length > 0 ? (suggestions || []).filter(function (s) {
+    return normalize(s).includes(nv) && normalize(s) !== nv;
+  }).sort(function (a, b) {
+    var as = normalize(a).startsWith(nv);
+    var bs = normalize(b).startsWith(nv);
+    return as && !bs ? -1 : !as && bs ? 1 : 0;
   }).slice(0, 20) : [];
   var select = function select(s) {
     _onChange(s);
