@@ -627,7 +627,9 @@ function AutocompleteInput(_ref9) {
     maxLen = _ref9.maxLen,
     _ref9$inputStyle = _ref9.inputStyle,
     inputStyle = _ref9$inputStyle === void 0 ? {} : _ref9$inputStyle,
-    autoFocus = _ref9.autoFocus;
+    autoFocus = _ref9.autoFocus,
+    _ref9$showOnFocus = _ref9.showOnFocus,
+    showOnFocus = _ref9$showOnFocus === void 0 ? false : _ref9$showOnFocus;
   var _useState = useState(false),
     _useState2 = _slicedToArray(_useState, 2),
     open = _useState2[0],
@@ -644,7 +646,7 @@ function AutocompleteInput(_ref9) {
     var as = normalize(a).startsWith(nv);
     var bs = normalize(b).startsWith(nv);
     return as && !bs ? -1 : !as && bs ? 1 : 0;
-  }).slice(0, 100) : [];
+  }).slice(0, 100) : showOnFocus && open ? (suggestions || []).slice(0, 100) : [];
   var dropRef = useRef();
   var select = function select(s) {
     _onChange(s);
@@ -1557,6 +1559,7 @@ function ReportsModal(_ref12) {
     onChange: setObra,
     suggestions: cadastros.obras || [],
     placeholder: "BUSCAR OU DIGITAR OBRA...",
+    showOnFocus: true,
     xStyle: {
       marginBottom: 4
     },
@@ -2923,6 +2926,7 @@ function NewMapForm(_ref17) {
     },
     suggestions: cadastros.obras || [],
     placeholder: "EX: COMPLEXO DA POL\xCDCIA CIVIL",
+    showOnFocus: true,
     xStyle: {
       marginBottom: 2
     },
