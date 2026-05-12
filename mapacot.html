@@ -1204,7 +1204,7 @@ function CadastrosModal(_ref11) {
     if (tab === "insumos" && !b) return [];
     return (cadastros[tab] || []).filter(function (x) {
       return normalize(x).includes(b);
-    }).slice(0, 200);
+    }).slice(0, 500);
   }, [cadastros, tab, buscaDelay]);
   var handleAdd = function handleAdd() {
     var v = normalize(novo);
