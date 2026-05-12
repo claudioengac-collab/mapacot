@@ -744,8 +744,9 @@ function AutocompleteInput(_ref9) {
   }, filtered.map(function (s, i) {
     return /*#__PURE__*/React.createElement("div", {
       key: i,
-      onMouseDown: function onMouseDown() {
-        return select(s);
+      onMouseDown: function onMouseDown(e) {
+        e.preventDefault();
+        select(s);
       },
       style: {
         padding: "7px 11px",
@@ -1119,7 +1120,10 @@ function Modal(_ref10) {
   }, /*#__PURE__*/React.createElement("div", {
     style: _objectSpread(_objectSpread({}, SC.modal), {}, {
       maxWidth: maxWidth
-    })
+    }),
+    onClick: function onClick(e) {
+      return e.stopPropagation();
+    }
   }, children));
 }
 
