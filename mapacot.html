@@ -1144,15 +1144,27 @@ function CadastrosModal(_ref11) {
     _useState12 = _slicedToArray(_useState11, 2),
     busca = _useState12[0],
     setBusca = _useState12[1];
-  var _useState13 = useState(null),
+  var _useState13 = useState(""),
     _useState14 = _slicedToArray(_useState13, 2),
-    editIdx = _useState14[0],
-    setEditIdx = _useState14[1];
-  var _useState15 = useState(""),
+    buscaDelay = _useState14[0],
+    setBuscaDelay = _useState14[1];
+  var _useState15 = useState(null),
     _useState16 = _slicedToArray(_useState15, 2),
-    editVal = _useState16[0],
-    setEditVal = _useState16[1];
+    editIdx = _useState16[0],
+    setEditIdx = _useState16[1];
+  var _useState17 = useState(""),
+    _useState18 = _slicedToArray(_useState17, 2),
+    editVal = _useState18[0],
+    setEditVal = _useState18[1];
   var editRef = useRef();
+  var debRef = useRef();
+  var handleBusca = function handleBusca(v) {
+    setBusca(v);
+    clearTimeout(debRef.current);
+    debRef.current = setTimeout(function () {
+      return setBuscaDelay(v);
+    }, tab === "insumos" ? 300 : 0);
+  };
   var startEdit = function startEdit(item, idx) {
     setEditIdx(idx);
     setEditVal(item);
@@ -1187,9 +1199,13 @@ function CadastrosModal(_ref11) {
     label: "OBRAS",
     icon: "🏗️"
   }];
-  var lista = (cadastros[tab] || []).filter(function (x) {
-    return normalize(x).includes(normalize(busca));
-  });
+  var lista = React.useMemo(function () {
+    var b = normalize(buscaDelay);
+    if (tab === "insumos" && !b) return [];
+    return (cadastros[tab] || []).filter(function (x) {
+      return normalize(x).includes(b);
+    }).slice(0, 200);
+  }, [cadastros, tab, buscaDelay]);
   var handleAdd = function handleAdd() {
     var v = normalize(novo);
     if (!v) return;
@@ -1224,6 +1240,7 @@ function CadastrosModal(_ref11) {
       onClick: function onClick() {
         setTab(t.id);
         setBusca("");
+        setBuscaDelay("");
         setNovo("");
         cancelEdit();
       },
@@ -1298,7 +1315,7 @@ function CadastrosModal(_ref11) {
   }, /*#__PURE__*/React.createElement(IcoSearch, null), /*#__PURE__*/React.createElement("input", {
     value: busca,
     onChange: function onChange(e) {
-      return setBusca(e.target.value);
+      return handleBusca(e.target.value);
     },
     placeholder: "BUSCAR...",
     style: {
@@ -1312,7 +1329,8 @@ function CadastrosModal(_ref11) {
     }
   }), busca && /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      return setBusca("");
+      setBusca("");
+      setBuscaDelay("");
     },
     style: {
       background: "none",
@@ -1329,7 +1347,14 @@ function CadastrosModal(_ref11) {
       borderRadius: 8,
       background: "#fff"
     }
-  }, lista.length === 0 ? /*#__PURE__*/React.createElement("div", {
+  }, tab === "insumos" && !busca ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      padding: 32,
+      color: "#aaa",
+      fontSize: 13
+    }
+  }, "\u270F\uFE0F DIGITE PARA BUSCAR INSUMOS") : lista.length === 0 ? /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: "center",
       padding: 32,
@@ -1448,25 +1473,25 @@ function ReportsModal(_ref12) {
     onClose = _ref12.onClose,
     mapas = _ref12.mapas,
     cadastros = _ref12.cadastros;
-  var _useState17 = useState("periodo"),
-    _useState18 = _slicedToArray(_useState17, 2),
-    tab = _useState18[0],
-    setTab = _useState18[1];
-  var _useState19 = useState({
+  var _useState19 = useState("periodo"),
+    _useState20 = _slicedToArray(_useState19, 2),
+    tab = _useState20[0],
+    setTab = _useState20[1];
+  var _useState21 = useState({
       inicio: "",
       fim: ""
     }),
-    _useState20 = _slicedToArray(_useState19, 2),
-    periodo = _useState20[0],
-    setPeriodo = _useState20[1];
-  var _useState21 = useState(""),
     _useState22 = _slicedToArray(_useState21, 2),
-    obra = _useState22[0],
-    setObra = _useState22[1];
+    periodo = _useState22[0],
+    setPeriodo = _useState22[1];
   var _useState23 = useState(""),
     _useState24 = _slicedToArray(_useState23, 2),
-    insumo = _useState24[0],
-    setInsumo = _useState24[1];
+    obra = _useState24[0],
+    setObra = _useState24[1];
+  var _useState25 = useState(""),
+    _useState26 = _slicedToArray(_useState25, 2),
+    insumo = _useState26[0],
+    setInsumo = _useState26[1];
   return /*#__PURE__*/React.createElement(Modal, {
     open: open,
     onClose: onClose,
@@ -1647,38 +1672,38 @@ function MapEditor(_ref15) {
     onSave = _ref15.onSave,
     cadastros = _ref15.cadastros,
     addCadastro = _ref15.addCadastro;
-  var _useState25 = useState(init),
-    _useState26 = _slicedToArray(_useState25, 2),
-    mapa = _useState26[0],
-    setMapa = _useState26[1];
-  var _useState27 = useState(true),
+  var _useState27 = useState(init),
     _useState28 = _slicedToArray(_useState27, 2),
-    saved = _useState28[0],
-    setSaved = _useState28[1];
-  var _useState29 = useState(""),
+    mapa = _useState28[0],
+    setMapa = _useState28[1];
+  var _useState29 = useState(true),
     _useState30 = _slicedToArray(_useState29, 2),
-    filter = _useState30[0],
-    setFilter = _useState30[1];
-  var _useState31 = useState(false),
+    saved = _useState30[0],
+    setSaved = _useState30[1];
+  var _useState31 = useState(""),
     _useState32 = _slicedToArray(_useState31, 2),
-    showTheme = _useState32[0],
-    setShowTheme = _useState32[1];
-  var _useState33 = useState(new Date()),
+    filter = _useState32[0],
+    setFilter = _useState32[1];
+  var _useState33 = useState(false),
     _useState34 = _slicedToArray(_useState33, 2),
-    clock = _useState34[0],
-    setClock = _useState34[1];
+    showTheme = _useState34[0],
+    setShowTheme = _useState34[1];
+  var _useState35 = useState(new Date()),
+    _useState36 = _slicedToArray(_useState35, 2),
+    clock = _useState36[0],
+    setClock = _useState36[1];
   var saveTimer = useRef();
   var mapContainerRef = useRef();
-  var _useState35 = useState(false),
-    _useState36 = _slicedToArray(_useState35, 2),
-    showColPanel = _useState36[0],
-    setShowColPanel = _useState36[1];
-  var _useState37 = useState({
+  var _useState37 = useState(false),
+    _useState38 = _slicedToArray(_useState37, 2),
+    showColPanel = _useState38[0],
+    setShowColPanel = _useState38[1];
+  var _useState39 = useState({
       resumo: false
     }),
-    _useState38 = _slicedToArray(_useState37, 2),
-    hiddenCols = _useState38[0],
-    setHiddenCols = _useState38[1];
+    _useState40 = _slicedToArray(_useState39, 2),
+    hiddenCols = _useState40[0],
+    setHiddenCols = _useState40[1];
   var toggleCol = function toggleCol(key) {
     return setHiddenCols(function (prev) {
       return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, key, !prev[key]));
@@ -2727,10 +2752,10 @@ function MapCard(_ref16) {
   var mapa = _ref16.mapa,
     onOpen = _ref16.onOpen,
     onDelete = _ref16.onDelete;
-  var _useState39 = useState(false),
-    _useState40 = _slicedToArray(_useState39, 2),
-    confirm = _useState40[0],
-    setConfirm = _useState40[1];
+  var _useState41 = useState(false),
+    _useState42 = _slicedToArray(_useState41, 2),
+    confirm = _useState42[0],
+    setConfirm = _useState42[1];
   var T = getTheme(mapa.corTema);
   return /*#__PURE__*/React.createElement("div", {
     style: _objectSpread(_objectSpread({}, SC.card), {}, {
@@ -2856,14 +2881,14 @@ function NewMapForm(_ref17) {
     nextNumero = _ref17.nextNumero,
     cadastros = _ref17.cadastros,
     addCadastro = _ref17.addCadastro;
-  var _useState41 = useState({
+  var _useState43 = useState({
       nome: "",
       responsavel: "",
       obra: ""
     }),
-    _useState42 = _slicedToArray(_useState41, 2),
-    form = _useState42[0],
-    setForm = _useState42[1];
+    _useState44 = _slicedToArray(_useState43, 2),
+    form = _useState44[0],
+    setForm = _useState44[1];
   var set = function set(k, v) {
     return setForm(function (f) {
       return _objectSpread(_objectSpread({}, f), {}, _defineProperty({}, k, v));
@@ -2966,18 +2991,18 @@ function NewMapForm(_ref17) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 function Login(_ref18) {
   var onLogin = _ref18.onLogin;
-  var _useState43 = useState(""),
-    _useState44 = _slicedToArray(_useState43, 2),
-    user = _useState44[0],
-    setUser = _useState44[1];
   var _useState45 = useState(""),
     _useState46 = _slicedToArray(_useState45, 2),
-    pass = _useState46[0],
-    setPass = _useState46[1];
-  var _useState47 = useState(false),
+    user = _useState46[0],
+    setUser = _useState46[1];
+  var _useState47 = useState(""),
     _useState48 = _slicedToArray(_useState47, 2),
-    err = _useState48[0],
-    setErr = _useState48[1];
+    pass = _useState48[0],
+    setPass = _useState48[1];
+  var _useState49 = useState(false),
+    _useState50 = _slicedToArray(_useState49, 2),
+    err = _useState50[0],
+    setErr = _useState50[1];
   var submit = function submit() {
     if (user.trim().toUpperCase() === "CLAUDIO" && pass === "7952") {
       sessionStorage.setItem("mapacot_auth", "1");
@@ -3105,43 +3130,43 @@ function Login(_ref18) {
   }, "ENTRAR")));
 }
 function App() {
-  var _useState49 = useState([]),
-    _useState50 = _slicedToArray(_useState49, 2),
-    mapas = _useState50[0],
-    setMapas = _useState50[1];
-  var _useState51 = useState({
+  var _useState51 = useState([]),
+    _useState52 = _slicedToArray(_useState51, 2),
+    mapas = _useState52[0],
+    setMapas = _useState52[1];
+  var _useState53 = useState({
       obras: [],
       insumos: [],
       unidades: DEFAULT_UNIDADES,
       fornecedores: []
     }),
-    _useState52 = _slicedToArray(_useState51, 2),
-    cadastros = _useState52[0],
-    setCadastros = _useState52[1];
-  var _useState53 = useState(true),
     _useState54 = _slicedToArray(_useState53, 2),
-    loading = _useState54[0],
-    setLoading = _useState54[1];
-  var _useState55 = useState(false),
+    cadastros = _useState54[0],
+    setCadastros = _useState54[1];
+  var _useState55 = useState(true),
     _useState56 = _slicedToArray(_useState55, 2),
-    showNew = _useState56[0],
-    setShowNew = _useState56[1];
+    loading = _useState56[0],
+    setLoading = _useState56[1];
   var _useState57 = useState(false),
     _useState58 = _slicedToArray(_useState57, 2),
-    showRep = _useState58[0],
-    setShowRep = _useState58[1];
+    showNew = _useState58[0],
+    setShowNew = _useState58[1];
   var _useState59 = useState(false),
     _useState60 = _slicedToArray(_useState59, 2),
-    showCad = _useState60[0],
-    setShowCad = _useState60[1];
-  var _useState61 = useState(null),
+    showRep = _useState60[0],
+    setShowRep = _useState60[1];
+  var _useState61 = useState(false),
     _useState62 = _slicedToArray(_useState61, 2),
-    current = _useState62[0],
-    setCurrent = _useState62[1];
-  var _useState63 = useState(""),
+    showCad = _useState62[0],
+    setShowCad = _useState62[1];
+  var _useState63 = useState(null),
     _useState64 = _slicedToArray(_useState63, 2),
-    search = _useState64[0],
-    setSearch = _useState64[1];
+    current = _useState64[0],
+    setCurrent = _useState64[1];
+  var _useState65 = useState(""),
+    _useState66 = _slicedToArray(_useState65, 2),
+    search = _useState66[0],
+    setSearch = _useState66[1];
 
   // Load all data
   useEffect(function () {
