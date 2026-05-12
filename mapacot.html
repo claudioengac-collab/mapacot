@@ -733,8 +733,6 @@ function AutocompleteInput(_ref9) {
           });
           _onChange(match ? _blurVal : "");
           if (onCommit) onCommit(match ? _blurVal : "");
-        } else {
-          if (onCommit) onCommit(_blurVal);
         }
       }, 180);
     },
