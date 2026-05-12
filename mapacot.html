@@ -629,7 +629,8 @@ function AutocompleteInput(_ref9) {
     inputStyle = _ref9$inputStyle === void 0 ? {} : _ref9$inputStyle,
     autoFocus = _ref9.autoFocus,
     _ref9$showOnFocus = _ref9.showOnFocus,
-    showOnFocus = _ref9$showOnFocus === void 0 ? false : _ref9$showOnFocus;
+    showOnFocus = _ref9$showOnFocus === void 0 ? false : _ref9$showOnFocus,
+    strictMatch = _ref9.strictMatch;
   var _useState = useState(false),
     _useState2 = _slicedToArray(_useState, 2),
     open = _useState2[0],
@@ -672,7 +673,15 @@ function AutocompleteInput(_ref9) {
   var handleKey = function handleKey(e) {
     if (!open || !filtered.length) {
       if (e.key === "Enter" || e.key === "Tab") {
-        onCommit && onCommit(value);
+        if (strictMatch) {
+          var _match = value && (suggestions || []).some(function (s) {
+            return s.toUpperCase() === value.toUpperCase();
+          });
+          _onChange(_match ? value : "");
+          onCommit && onCommit(_match ? value : "");
+        } else {
+          onCommit && onCommit(value);
+        }
         setOpen(false);
       }
     } else if (e.key === "ArrowDown") {
@@ -714,9 +723,19 @@ function AutocompleteInput(_ref9) {
       return setOpen(true);
     },
     onBlur: function onBlur() {
+      var _blurVal = value;
       return setTimeout(function () {
         setOpen(false);
         setHi(-1);
+        if (strictMatch) {
+          var match = _blurVal && (suggestions || []).some(function (s) {
+            return s.toUpperCase() === _blurVal.toUpperCase();
+          });
+          _onChange(match ? _blurVal : "");
+          if (onCommit) onCommit(match ? _blurVal : "");
+        } else {
+          if (onCommit) onCommit(_blurVal);
+        }
       }, 180);
     },
     onKeyDown: handleKey,
@@ -778,7 +797,8 @@ function EC(_ref0) {
     _ref0$suggestions = _ref0.suggestions,
     suggestions = _ref0$suggestions === void 0 ? [] : _ref0$suggestions,
     colSpan = _ref0.colSpan,
-    numericOnly = _ref0.numericOnly;
+    numericOnly = _ref0.numericOnly,
+    strictMatch = _ref0.strictMatch;
   var _useState5 = useState(false),
     _useState6 = _slicedToArray(_useState5, 2),
     ed = _useState6[0],
@@ -812,6 +832,7 @@ function EC(_ref0) {
     onChange: setRaw,
     onCommit: commit,
     suggestions: suggestions,
+    strictMatch: strictMatch,
     maxLen: maxLen,
     autoFocus: true,
     inputStyle: {
@@ -1671,7 +1692,9 @@ function MapEditor(_ref15) {
     onBack = _ref15.onBack,
     onSave = _ref15.onSave,
     cadastros = _ref15.cadastros,
-    addCadastro = _ref15.addCadastro;
+    addCadastro = _ref15.addCadastro,
+    removeCadastro = _ref15.removeCadastro,
+    editCadastro = _ref15.editCadastro;
   var _useState27 = useState(init),
     _useState28 = _slicedToArray(_useState27, 2),
     mapa = _useState28[0],
@@ -1698,6 +1721,10 @@ function MapEditor(_ref15) {
     _useState38 = _slicedToArray(_useState37, 2),
     showColPanel = _useState38[0],
     setShowColPanel = _useState38[1];
+  var _useStateCad = useState(false),
+    _useStateCad2 = _slicedToArray(_useStateCad, 2),
+    showCadEditor = _useStateCad2[0],
+    setShowCadEditor = _useStateCad2[1];
   var _useState39 = useState({
       resumo: false
     }),
@@ -1731,6 +1758,14 @@ function MapEditor(_ref15) {
       return setSaved(true);
     }, 900);
   }, []);
+  var updateUI = function updateUI(fn) {
+    setMapa(function (prev) {
+      return fn(_objectSpread(_objectSpread({}, prev), {}, {
+        precos: _objectSpread({}, prev.precos),
+        rodape: _objectSpread({}, prev.rodape)
+      }));
+    });
+  };
   useEffect(function () {
     if (!saved) onSave(mapa);
   }, [saved, mapa]);
@@ -1761,8 +1796,6 @@ function MapEditor(_ref15) {
     });
   };
   var updItem = function updItem(id, f, v) {
-    if (f === "descricao" && v) addCadastro("insumos", v);
-    if (f === "unid" && v) addCadastro("unidades", v);
     update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
         itens: m.itens.map(function (i) {
@@ -1796,9 +1829,8 @@ function MapEditor(_ref15) {
       });
     });
   };
-  var updForn = function updForn(id, f, v) {
-    if (f === "nome" && v) addCadastro("fornecedores", v);
-    update(function (m) {
+  var updForn = function updForn(id, f, v, skipSave) {
+    (skipSave ? updateUI : update)(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
         fornecedores: m.fornecedores.map(function (x) {
           return x.id === id ? _objectSpread(_objectSpread({}, x), {}, _defineProperty({}, f, v)) : x;
@@ -2074,12 +2106,16 @@ function MapEditor(_ref15) {
       }, /*#__PURE__*/React.createElement(AutocompleteInput, {
         value: f.nome,
         onChange: function onChange(v) {
-          return updForn(f.id, "nome", v);
+          return updForn(f.id, "nome", v, true);
         },
         onCommit: function onCommit(v) {
-          if (v) addCadastro("fornecedores", v);
+          var fn = v && (cadastros.fornecedores || []).find(function (x) {
+            return x.toUpperCase() === v.toUpperCase();
+          });
+          updForn(f.id, "nome", fn || "");
         },
         suggestions: cadastros.fornecedores || [],
+        strictMatch: true,
         placeholder: "NOME DO FORNECEDOR",
         inputStyle: {
           flex: 1,
@@ -2210,6 +2246,7 @@ function MapEditor(_ref15) {
           });
           updItem(item.id, "unid", u || "");
         },
+        strictMatch: true,
         placeholder: "UN",
         align: "center",
         tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
@@ -2220,8 +2257,12 @@ function MapEditor(_ref15) {
       }), /*#__PURE__*/React.createElement(EC, {
         value: item.descricao,
         onChange: function onChange(v) {
-          return updItem(item.id, "descricao", v);
+          var d = (cadastros.insumos || []).find(function (x) {
+            return x.toUpperCase() === v.toUpperCase();
+          });
+          updItem(item.id, "descricao", d || "");
         },
+        strictMatch: true,
         placeholder: "DESCRI\xC7\xC3O DO INSUMO...",
         tdSt: SC.td,
         suggestions: cadastros.insumos || []
@@ -2541,7 +2582,7 @@ function MapEditor(_ref15) {
       }
     }, "\u2500\u2500 CONTINUA NA PR\xD3XIMA FOLHA \u2500\u2500"));
   };
-  return /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
       background: "#dde0e8",
@@ -2587,7 +2628,16 @@ function MapEditor(_ref15) {
       color: "#fff",
       gap: 5
     })
-  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return setShowCadEditor(true);
+    },
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: "#1a7a4a",
+      color: "#fff",
+      gap: 5
+    })
+  }, "\uD83D\uDCC2 CADASTROS"), /*#__PURE__*/React.createElement("div", {
     style: {
       position: "relative"
     }
@@ -2743,7 +2793,14 @@ function MapEditor(_ref15) {
     }
   }, chunks.map(function (chunk, ci) {
     return renderChunk(chunk, ci, hiddenCols);
-  })));
+  }))), showCadEditor && /*#__PURE__*/React.createElement(CadastrosModal, {
+    open: showCadEditor,
+    onClose: function onClose() { setShowCadEditor(false); },
+    cadastros: cadastros,
+    onAdd: addCadastro,
+    onRemove: removeCadastro || function(){},
+    onEdit: editCadastro || function(){}
+  }));
 }
 
 // ─── Map Card ─────────────────────────────────────────────────────────────────
@@ -3336,7 +3393,9 @@ function App() {
     },
     onSave: handleSave,
     cadastros: cadastros,
-    addCadastro: addCadastro
+    addCadastro: addCadastro,
+    removeCadastro: removeCadastro,
+    editCadastro: editCadastro
   });
   return /*#__PURE__*/React.createElement("div", {
     style: {
