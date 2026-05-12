@@ -1113,17 +1113,11 @@ function Modal(_ref10) {
   }, [open]);
   if (!open) return null;
   return /*#__PURE__*/React.createElement("div", {
-    style: SC.overlay,
-    onClick: function onClick(e) {
-      return e.target === e.currentTarget && onClose();
-    }
+    style: SC.overlay
   }, /*#__PURE__*/React.createElement("div", {
     style: _objectSpread(_objectSpread({}, SC.modal), {}, {
       maxWidth: maxWidth
-    }),
-    onClick: function onClick(e) {
-      return e.stopPropagation();
-    }
+    })
   }, children));
 }
 
@@ -3664,7 +3658,9 @@ var SC = {
     borderRadius: 14,
     width: "100%",
     maxWidth: 480,
-    overflow: "visible",
+    overflow: "hidden",
+    maxHeight: "90vh",
+    overflowY: "auto",
     animation: "fadeUp 0.25s ease"
   },
   mHdr: {
