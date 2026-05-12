@@ -576,44 +576,99 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapas, insumo) {
   var resultados = [];
   mapas.forEach(function (mapa) {
     (mapa.itens || []).forEach(function (item) {
-      if ((item.descricao || "").toUpperCase().includes(insumo.toUpperCase())) resultados.push({
-        mapa: mapa,
-        item: item
-      });
+      if ((item.descricao || "").toUpperCase().includes(insumo.toUpperCase()))
+        resultados.push({ mapa: mapa, item: item });
     });
   });
-  if (!resultados.length) {
-    alert("NENHUM INSUMO ENCONTRADO.");
-    return;
-  }
-  var allForns = _toConsumableArray(new Set(resultados.flatMap(function (_ref8) {
-    var mapa = _ref8.mapa;
-    return (mapa.fornecedores || []).map(function (f) {
-      return (f.nome || "").toUpperCase();
-    }).filter(Boolean);
-  }))).slice(0, 8);
-  var rows = resultados.map(function (r2, i) {
-    var mapa = r2.mapa,
-      item = r2.item;
-    var bg = i % 2 === 0 ? "#fff" : "#f5f7fc";
-    var resumo = calcResumo(item, mapa.fornecedores || [], mapa.precos || {});
-    var fornCells = allForns.map(function (fname) {
-      var f = (mapa.fornecedores || []).find(function (x) {
-        return (x.nome || "").toUpperCase() === fname;
-      });
-      if (!f) return "<td style=\"border:1px solid #ddd;padding:4px 6px;text-align:right;color:#ccc;\">\u2014</td>";
-      var v = parseMoney((mapa.precos || {})["".concat(item.id, "_").concat(f.id)]);
-      var isMin = resumo.vlUnit !== null && v !== null && v > 0 && v === resumo.vlUnit;
-      return "<td style=\"border:1px solid #ddd;padding:4px 6px;text-align:right;background:".concat(isMin ? "#b0e8b8" : "inherit", ";font-weight:").concat(isMin ? "bold" : "normal", ";\">").concat(v !== null ? fmtMoney(v) : "—", "</td>");
-    }).join("");
-    return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:center;\">").concat(mapa.numero || "—", "</td><td style=\"border:1px solid #ddd;padding:4px 6px;\">").concat((mapa.obra || "—").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:4px 6px;\">").concat(fmtDate(new Date(mapa.criadoEm)), "</td><td style=\"border:1px solid #ddd;padding:4px 6px;\">").concat((item.descricao || "").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ddd;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "—", "</td>").concat(fornCells, "</tr>");
-  }).join("");
-  var fornHdrs = allForns.map(function (f) {
-    return "<th style=\"border:1px solid #999;padding:5px 7px;background:#2a5298;color:#fff;\">".concat(f, "</th>");
-  }).join("");
-  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:9px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO POR INSUMO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">BUSCA: \"".concat(insumo.toUpperCase(), "\" \u2014 ").concat(resultados.length, " OCORR\xCANCIA(S)</div></div><table style=\"border-collapse:collapse;width:100%;font-size:10px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:44px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;min-width:110px;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;width:76px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;min-width:150px;\">DESCRI\xC7\xC3O</th><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">QT</th><th style=\"border:1px solid #999;padding:5px 7px;width:44px;\">UNID</th><th style=\"border:1px solid #999;padding:5px 7px;width:76px;background:#2a5298;color:#fff;\">MENOR</th>").concat(fornHdrs, "</tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
-};
+  if (!resultados.length) { alert("NENHUM INSUMO ENCONTRADO."); return; }
 
+  // Collect all unique supplier names across all results (max 12)
+  var allForns = Array.from(new Set(
+    resultados.flatMap(function(r) {
+      return (r.mapa.fornecedores || [])
+        .map(function(f){ return (f.nome||"").toUpperCase(); })
+        .filter(Boolean);
+    })
+  )).slice(0, 12);
+
+  // --- CSS ---
+  var css = [
+    "@page{size:A4 landscape;margin:6mm;}",
+    "body{font-family:Arial,sans-serif;font-size:10px;text-transform:uppercase;margin:0;}",
+    "@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}",
+    "table{border-collapse:collapse;width:100%;table-layout:fixed;}",
+    "th,td{border:1px solid #bbb;padding:4px 5px;overflow:hidden;word-break:break-word;}",
+    "th{background:#2a5298;color:#fff;text-align:center;font-size:9px;line-height:1.3;vertical-align:bottom;}",
+    "th.menor-h{background:#7b5e00;}",
+    "td.num{text-align:right;}",
+    "td.menor-cell{background:#fff8dc;text-align:center;border:2px solid #b8860b !important;}",
+    "td.menor-val{font-weight:bold;color:#7b5e00;font-size:11px;}",
+    "td.menor-forn{font-size:8px;color:#555;line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
+    "td.winner{background:#c8ecd2;font-weight:bold;text-align:right;}",
+    "tr.even td{background:#f5f7fc;}",
+    "tr.even td.menor-cell{background:#fff3c0;}",
+    "tr.even td.winner{background:#b8e6c4;}"
+  ].join("");
+
+  // --- Header row ---
+  var fornHdrs = allForns.map(function(f) {
+    return "<th style=\"width:65px;\">" + f + "</th>";
+  }).join("");
+
+  // --- Data rows ---
+  var rows = resultados.map(function(r2, i) {
+    var mapa = r2.mapa, item = r2.item;
+    var rowCls = i % 2 === 1 ? " class=\"even\"" : "";
+    var resumo = calcResumo(item, mapa.fornecedores || [], mapa.precos || {});
+    var menorForn = (resumo.forn || "").toUpperCase();
+
+    var fornCells = allForns.map(function(fname) {
+      var f = (mapa.fornecedores || []).find(function(x){
+        return (x.nome||"").toUpperCase() === fname;
+      });
+      if (!f) return "<td style=\"text-align:center;color:#ccc;width:65px;\">\u2014</td>";
+      var v = parseMoney((mapa.precos||{})[""+item.id+"_"+f.id]);
+      var isMin = resumo.vlUnit !== null && v !== null && v > 0 && v === resumo.vlUnit;
+      return "<td class=\"" + (isMin ? "winner" : "num") + "\" style=\"width:65px;\">"
+           + (v !== null && v > 0 ? fmtMoney(v) : "<span style=\"color:#ccc;\">\u2014</span>")
+           + "</td>";
+    }).join("");
+
+    return "<tr" + rowCls + ">"
+      + "<td style=\"text-align:center;width:28px;\">"  + (mapa.numero||"\u2014") + "</td>"
+      + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + (mapa.obra||"\u2014").toUpperCase() + "</td>"
+      + "<td style=\"text-align:center;width:58px;\">" + fmtDate(new Date(mapa.criadoEm)) + "</td>"
+      + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + (item.descricao||"").toUpperCase() + "</td>"
+      + "<td class=\"num\" style=\"width:34px;\">" + (item.qt||"") + "</td>"
+      + "<td style=\"text-align:center;width:28px;\">" + (item.unid||"") + "</td>"
+      + "<td class=\"menor-cell\" style=\"width:80px;\">"
+        + "<div class=\"menor-val\">" + (resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "\u2014") + "</div>"
+        + (menorForn ? "<div class=\"menor-forn\">" + menorForn + "</div>" : "")
+      + "</td>"
+      + fornCells
+      + "</tr>";
+  }).join("");
+
+  // --- Build HTML ---
+  var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>" + css + "</style></head><body>"
+    + "<div style=\"background:#1a3a5c;padding:9px 14px;border-radius:4px 4px 0 0;margin-bottom:0;\">"
+    + "<div style=\"font-size:13px;font-weight:bold;color:#fff;\">RELAT\xD3RIO POR INSUMO</div>"
+    + "<div style=\"font-size:10px;color:rgba(255,255,255,0.8);margin-top:2px;\">BUSCA: &ldquo;"
+    + insumo.toUpperCase() + "&rdquo; \u2014 " + resultados.length + " OCORR\xCANCIA(S)</div>"
+    + "</div>"
+    + "<table><thead><tr>"
+    + "<th style=\"width:28px;\">MP<br>N\xBA</th>"
+    + "<th style=\"width:95px;text-align:left;\">OBRA</th>"
+    + "<th style=\"width:58px;\">DATA</th>"
+    + "<th style=\"text-align:left;min-width:130px;\">DESCRI\xC7\xC3O</th>"
+    + "<th style=\"width:34px;\">QT</th>"
+    + "<th style=\"width:28px;\">UN</th>"
+    + "<th class=\"menor-h\" style=\"width:80px;\">MENOR<br><span style=\"font-size:8px;font-weight:400;opacity:.85;\">FORNECEDOR</span></th>"
+    + fornHdrs
+    + "</tr></thead><tbody>" + rows + "</tbody></table></body></html>";
+
+  abrirPDF(html);
+};
 // ─── AutocompleteInput ────────────────────────────────────────────────────────
 function AutocompleteInput(_ref9) {
   var value = _ref9.value,
