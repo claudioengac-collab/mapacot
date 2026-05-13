@@ -8,7 +8,9 @@
 <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;overflow-x:hidden;}
 body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4ff;min-height:100vh;}
+#root{width:100%;}
 input{text-transform:uppercase;}
 input[type=password]{text-transform:none;}
 </style>
@@ -3705,6 +3707,7 @@ var SC = {
     display: "flex",
     flexDirection: "column",
     gap: 10,
+    overflow: "hidden",
     animation: "fadeUp 0.3s ease"
   },
   badge: {
