@@ -12,6 +12,8 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4ff;min-height:100vh
 input{text-transform:uppercase;}
 input[type=password]{text-transform:none;}
 @media(max-width:640px){
+  .hdr-nav .hdr-lbl{display:none;}
+  .hdr-nav button{padding:7px 9px!important;}
   .rsp-appbar{flex-wrap:wrap!important;padding:8px 10px!important;gap:6px!important;}
   .rsp-appbar>button:first-child{order:1;}
   .rsp-appbar>div:nth-child(2){order:2;flex:1;min-width:0;}
@@ -3496,7 +3498,8 @@ function App() {
     style: {
       display: "flex",
       gap: 8
-    }
+    },
+    className: "hdr-nav"
   }, /*#__PURE__*/React.createElement("button", {
     style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
       background: "rgba(255,255,255,0.1)",
@@ -3505,7 +3508,8 @@ function App() {
     onClick: function onClick() {
       return setShowCad(true);
     }
-  }, /*#__PURE__*/React.createElement(IcoDb, null), " CADASTROS"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(IcoDb, null),
+     /*#__PURE__*/React.createElement("span",{className:"hdr-lbl"}," CADASTROS")), /*#__PURE__*/React.createElement("button", {
     style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
       background: "rgba(255,255,255,0.1)",
       color: "#fff"
@@ -3513,7 +3517,8 @@ function App() {
     onClick: function onClick() {
       return setShowRep(true);
     }
-  }, /*#__PURE__*/React.createElement(IcoReport, null), " RELAT\xD3RIOS"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(IcoReport, null),
+     /*#__PURE__*/React.createElement("span",{className:"hdr-lbl"}," RELAT\xD3RIOS")), /*#__PURE__*/React.createElement("button", {
     style: SC.btnPri,
     onClick: function onClick() {
       return setShowNew(true);
