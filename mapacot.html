@@ -2677,7 +2677,8 @@ function MapEditor(_ref15) {
       display: "flex",
       gap: 6,
       alignItems: "center",
-      flexWrap: "wrap"
+      flexWrap: "wrap",
+      flex: 1
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
@@ -2805,14 +2806,9 @@ function MapEditor(_ref15) {
       fontSize: 11,
       fontWeight: 600,
       color: saved ? "#7fc97f" : "#f0c060",
-      position: "absolute",
-      top: 8,
-      right: 12,
-      background: "rgba(15,31,61,0.95)",
-      padding: "3px 8px",
-      borderRadius: 6,
-      whiteSpace: "nowrap",
-      zIndex: 5
+      marginLeft: "auto",
+      flexShrink: 0,
+      whiteSpace: "nowrap"
     }
   }, saved ? "✓ SALVO" : "SALVANDO…"))), showTheme && /*#__PURE__*/React.createElement("div", {
     style: {
@@ -3860,7 +3856,7 @@ var SC = {
   appBar: {
     background: "#0f1f3d",
     borderBottom: "3px solid #f0a500",
-    padding: "11px 80px 11px 18px",
+    padding: "11px 18px",
     display: "flex",
     alignItems: "center",
     flexWrap: "wrap",
