@@ -962,7 +962,7 @@ function EC(_ref0) {
     value: detailValue || "",
     onChange: function onChange(e) {
       e.stopPropagation();
-      if (onDetailChange) onDetailChange(e.target.value);
+      if (onDetailChange) onDetailChange(e.target.value.toUpperCase());
     },
     onClick: function onClick(e) { e.stopPropagation(); },
     onFocus: function onFocus(e) { e.stopPropagation(); },
@@ -980,7 +980,7 @@ function EC(_ref0) {
       fontFamily: "inherit",
       resize: "none",
       minHeight: 22,
-      textTransform: "none",
+      textTransform: "uppercase",
       cursor: "text",
       display: "block",
       outline: "none"
@@ -2674,9 +2674,8 @@ function MapEditor(_ref15) {
         letterSpacing: 0.4
       }
     }, "OBSERVA\xC7\xC3O GERAL DO MAPA"), /*#__PURE__*/React.createElement("textarea", {
-      key: mapa.id + "_obs",
-      defaultValue: mapa.obsGeral || "",
-      onBlur: function onBlur(e) {
+      value: mapa.obsGeral || "",
+      onChange: function onChange(e) {
         return setObsGeral(e.target.value.toUpperCase());
       },
       maxLength: 5000,
