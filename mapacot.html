@@ -307,6 +307,7 @@ var emptyMap = function emptyMap() {
     itens: [],
     fornecedores: [],
     precos: {},
+    detalhes: {},
     rodape: {},
     corTema: "blue"
   };
@@ -334,19 +335,22 @@ var calcResumo = function calcResumo(item, fns, precos) {
     forn: null
   };
   var minVal = null,
-    minForn = null;
+    minForn = null,
+    minFornId = null;
   fns.forEach(function (f) {
     var v = parseMoney(precos["".concat(item.id, "_").concat(f.id)]);
     if (v !== null && v > 0 && (minVal === null || v < minVal)) {
       minVal = v;
       minForn = f.nome || "—";
+      minFornId = f.id;
     }
   });
   var qt = parseFloat(String(item.qt).replace(",", "."));
   return {
     vlUnit: minVal,
     vlTotal: minVal !== null && !isNaN(qt) && qt > 0 ? minVal * qt : null,
-    forn: minForn
+    forn: minForn,
+    minFornId: minFornId
   };
 };
 
@@ -401,6 +405,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var fns = mapa.fornecedores || [];
   var itens = mapa.itens || [];
   var precos = mapa.precos || {};
+  var detalhes = mapa.detalhes || {};
   var rodape = mapa.rodape || {};
   var totalBruto = function totalBruto(fid) {
     return itens.reduce(function (acc, item) {
@@ -473,9 +478,9 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         var key = "".concat(item.id, "_").concat(f.id);
         var unit = parseMoney(precos[key]);
         var isMin = r.vlUnit !== null && unit !== null && unit > 0 && unit === r.vlUnit;
-        return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "", "</td>");
+        return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
       }).join("");
-      var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
+      var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
       return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;\">\u21b3 " + item.detalhe + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
     }).join("");
     var rodapeRows = RODAPE_ROWS.map(function (row) {
@@ -1939,6 +1944,13 @@ function MapEditor(_ref15) {
       });
     });
   };
+  var setDetalheForn = function setDetalheForn(iid, fid, v) {
+    return update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        detalhes: _objectSpread(_objectSpread({}, m.detalhes || {}), {}, _defineProperty({}, "".concat(iid, "_").concat(fid), v))
+      });
+    });
+  };
   var setRodape = function setRodape(fid, f, v) {
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
@@ -1959,6 +1971,7 @@ function MapEditor(_ref15) {
   var itens = mapa.itens,
     fornecedores = mapa.fornecedores,
     precos = mapa.precos,
+    detalhes = mapa.detalhes || {},
     rodape = mapa.rodape;
   var rodapeResumo = rodape["__resumo__"] || {};
   var T = getTheme(mapa.corTema);
@@ -2370,7 +2383,20 @@ function MapEditor(_ref15) {
           background: "#f0f4ff",
           borderLeft: "2px solid #b8c8e8"
         })
-      }, resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : ""), /*#__PURE__*/React.createElement("td", {
+      }, resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "",
+      resumo.minFornId && (detalhes || {})[item.id + "_" + resumo.minFornId] ?
+        /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 9,
+            color: "#4a6888",
+            borderTop: "1px dotted #c0cce0",
+            marginTop: 2,
+            paddingTop: 2,
+            textAlign: "left",
+            fontWeight: 400
+          }
+        }, "\u21b3 " + (detalhes || {})[item.id + "_" + resumo.minFornId]) : null
+      ), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           textAlign: "right",
           fontWeight: 600,
@@ -2405,7 +2431,11 @@ function MapEditor(_ref15) {
             background: isMin ? T.best : bg,
             color: isMin ? "#1a6a1a" : undefined,
             fontWeight: isMin ? 700 : 400
-          })
+          }),
+          detailValue: (detalhes || {})[item.id + "_" + f.id] !== undefined ? (detalhes || {})[item.id + "_" + f.id] : "",
+          onDetailChange: function onDetailChange(v) {
+            return setDetalheForn(item.id, f.id, v);
+          }
         });
       }), emptyChunk && /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
