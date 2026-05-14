@@ -2674,8 +2674,9 @@ function MapEditor(_ref15) {
         letterSpacing: 0.4
       }
     }, "OBSERVA\xC7\xC3O GERAL DO MAPA"), /*#__PURE__*/React.createElement("textarea", {
-      value: mapa.obsGeral || "",
-      onChange: function onChange(e) {
+      key: mapa.id + "_obs",
+      defaultValue: mapa.obsGeral || "",
+      onBlur: function onBlur(e) {
         return setObsGeral(e.target.value.toUpperCase());
       },
       maxLength: 5000,
