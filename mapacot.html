@@ -3046,6 +3046,23 @@ function MapCard(_ref16) {
       return onOpen(mapa);
     }
   }, "ABRIR ", /*#__PURE__*/React.createElement(IcoChev, null)), /*#__PURE__*/React.createElement("button", {
+    title: "ABRIR EM NOVA ABA",
+    onClick: function onClick() {
+      var url = window.location.pathname + "?mapa=" + mapa.id;
+      window.open(url, "_blank");
+    },
+    style: {
+      background: "#e8f0fe",
+      border: "1.5px solid #c5d8f0",
+      borderRadius: 8,
+      padding: "6px 10px",
+      cursor: "pointer",
+      color: "#2a5298",
+      fontSize: 15,
+      display: "flex",
+      alignItems: "center"
+    }
+  }, "↗"), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return abrirPDF(buildMapaHTML(mapa));
     },
@@ -3371,7 +3388,15 @@ function App() {
             return sbGetMapas();
           case 1:
             mapasData = _context8.v;
-            if (mapasData.length) setMapas(mapasData);
+            if (mapasData.length) {
+              setMapas(mapasData);
+              var urlParams = new URLSearchParams(window.location.search);
+              var mapaId = urlParams.get("mapa");
+              if (mapaId) {
+                var mapaAlvo = mapasData.find(function(m){ return m.id === mapaId; });
+                if (mapaAlvo) setCurrent(mapaAlvo);
+              }
+            }
             _context8.n = 3;
             break;
           case 2:
