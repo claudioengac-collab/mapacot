@@ -2116,9 +2116,7 @@ function MapEditor(_ref15) {
         whiteSpace: "nowrap",
         marginLeft: "auto"
       }
-    }, "DATA: ", fmtDate(clock), "\xA0\xA0HORA: ", fmtHora(clock))), /*#__PURE__*/React.createElement("div", {
-      style: SC.tableScroll
-    }, /*#__PURE__*/React.createElement("table", {
+    }, "DATA: ", fmtDate(clock), "\xA0\xA0HORA: ", fmtHora(clock))), /*#__PURE__*/React.createElement(ScrollSyncTable, null, /*#__PURE__*/React.createElement("table", {
       style: SC.table
     }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       rowSpan: 3,
@@ -3827,6 +3825,74 @@ function App() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
+function ScrollSyncTable(props) {
+  var bodyRef = useRef(null);
+  var topRef = useRef(null);
+  var _ss = useState(0),
+    spacerW = _ss[0],
+    setSpacerW = _ss[1];
+  var _sv = useState(false),
+    showBar = _sv[0],
+    setShowBar = _sv[1];
+  var lockRef = useRef(false);
+  var measure = useCallback(function () {
+    var el = bodyRef.current;
+    if (!el) return;
+    setSpacerW(el.scrollWidth);
+    setShowBar(el.scrollWidth > el.clientWidth + 1);
+  }, []);
+  useEffect(function () {
+    measure();
+    var el = bodyRef.current;
+    var ro = null;
+    if (typeof ResizeObserver !== "undefined" && el) {
+      ro = new ResizeObserver(measure);
+      ro.observe(el);
+    }
+    window.addEventListener("resize", measure);
+    return function () {
+      window.removeEventListener("resize", measure);
+      if (ro) ro.disconnect();
+    };
+  }, [measure]);
+  var onTopScroll = function onTopScroll() {
+    if (lockRef.current) { lockRef.current = false; return; }
+    if (bodyRef.current && topRef.current) {
+      lockRef.current = true;
+      bodyRef.current.scrollLeft = topRef.current.scrollLeft;
+    }
+  };
+  var onBodyScroll = function onBodyScroll() {
+    if (lockRef.current) { lockRef.current = false; return; }
+    if (bodyRef.current && topRef.current) {
+      lockRef.current = true;
+      topRef.current.scrollLeft = bodyRef.current.scrollLeft;
+    }
+  };
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+    /*#__PURE__*/React.createElement("div", {
+      ref: topRef,
+      onScroll: onTopScroll,
+      "data-toptscroll": true,
+      style: {
+        overflowX: "auto",
+        overflowY: "hidden",
+        height: showBar ? 14 : 0,
+        border: showBar ? "1px solid #c8ccd8" : "none",
+        borderBottom: "none",
+        borderRadius: 0,
+        background: "#eef1f7"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { width: spacerW, height: 1 }
+    })),
+    /*#__PURE__*/React.createElement("div", {
+      ref: bodyRef,
+      onScroll: onBodyScroll,
+      style: SC.tableScroll
+    }, props.children)
+  );
+}
 var SC = {
   header: {
     background: "#0f1f3d",
