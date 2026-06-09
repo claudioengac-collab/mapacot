@@ -254,13 +254,22 @@ var sbSaveInsumos = /*#__PURE__*/function () {
   };
 }();
 // ─── Supabase — Orçamento ─────────────────────────────────────────────────────
-var sbGetOrcamentos = function sbGetOrcamentos() {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=like.orc_%&select=id,dados", { headers: SB })
+var sbGetOrcamentos = function sbGetOrcamentos(obras) {
+  // Busca todos os registros que começam com "orc"
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=like.orc*&select=id,dados", { headers: SB })
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){
       var m = {};
       (rows||[]).forEach(function(row){
-        if(row.id && row.dados) m[row.id.replace('orc_','')] = row.dados;
+        if(row.id && row.dados) {
+          // Mapear de volta para o nome da obra usando as obras disponíveis
+          if (obras && obras.length) {
+            var obra = obras.find(function(o){ return orcObraId(o) === row.id; });
+            if (obra) m[obra] = row.dados;
+          } else {
+            m[row.id] = row.dados;
+          }
+        }
       });
       return m;
     });
@@ -268,11 +277,11 @@ var sbGetOrcamentos = function sbGetOrcamentos() {
 var sbSaveOrcamento = function sbSaveOrcamento(obraId, dados) {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
     method: "POST", headers: SB,
-    body: JSON.stringify({ id: "orc_" + obraId, dados: dados, atualizado_em: new Date().toISOString() })
+    body: JSON.stringify({ id: orcObraId(obraId), dados: dados, atualizado_em: new Date().toISOString() })
   });
 };
 var sbDeleteOrcamento = function sbDeleteOrcamento(obraId) {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.orc_" + encodeURIComponent(obraId), { method: "DELETE", headers: SB });
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + orcObraId(obraId), { method: "DELETE", headers: SB });
 };
 var sbGetAssociacoes = function sbGetAssociacoes() {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=like.assoc_%&select=dados", { headers: SB })
@@ -287,6 +296,12 @@ var sbSaveAssociacao = function sbSaveAssociacao(assoc) {
 };
 var sbDeleteAssociacao = function sbDeleteAssociacao(id) {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.assoc_" + id, { method: "DELETE", headers: SB });
+};
+var orcObraId = function(nomeObra) {
+  return 'orc' + String(nomeObra || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
+};
+var orcObraId = function(nomeObra) {
+  return 'orc' + String(nomeObra || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
 };
 var orcSaldoDisponivel = function orcSaldoDisponivel(item) {
   return Math.max(0, (parseFloat(item.quantidade)||0) - (parseFloat(item.consumido)||0));
@@ -3809,9 +3824,9 @@ function App() {
 
   // Carregar orçamentos e associações em background
   React.useEffect(function() {
-    sbGetOrcamentos().then(function(m){ if(Object.keys(m).length) setOrcamentos(m); }).catch(function(){});
+    sbGetOrcamentos(cadastros.obras || []).then(function(m){ if(Object.keys(m).length) setOrcamentos(m); }).catch(function(){});
     sbGetAssociacoes().then(function(d){ if(d.length) setAssociacoes(d); }).catch(function(){});
-  }, []);
+  }, [cadastros.obras]);
 
   // Persist cadastros
   useEffect(function () {
