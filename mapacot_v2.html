@@ -255,24 +255,20 @@ var sbSaveInsumos = /*#__PURE__*/function () {
 }();
 // ─── Supabase — Orçamento ─────────────────────────────────────────────────────
 var sbGetOrcamentos = function sbGetOrcamentos(obras) {
-  // Busca todos os registros que começam com "orc"
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=like.orc*&select=id,dados", { headers: SB })
-    .then(function(r){ return r.ok ? r.json() : []; })
-    .then(function(rows){
-      var m = {};
-      (rows||[]).forEach(function(row){
-        if(row.id && row.dados) {
-          // Mapear de volta para o nome da obra usando as obras disponíveis
-          if (obras && obras.length) {
-            var obra = obras.find(function(o){ return orcObraId(o) === row.id; });
-            if (obra) m[obra] = row.dados;
-          } else {
-            m[row.id] = row.dados;
-          }
-        }
-      });
-      return m;
-    });
+  if (!obras || !obras.length) return Promise.resolve({});
+  // Buscar cada orçamento individualmente pelo ID exato
+  var promises = obras.map(function(obra) {
+    var id = orcObraId(obra);
+    return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=id,dados", { headers: SB })
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(rows){ return rows.length ? { obra: obra, dados: rows[0].dados } : null; })
+      .catch(function(){ return null; });
+  });
+  return Promise.all(promises).then(function(results) {
+    var m = {};
+    results.forEach(function(r){ if(r && r.dados) m[r.obra] = r.dados; });
+    return m;
+  });
 };
 var sbSaveOrcamento = function sbSaveOrcamento(obraId, dados) {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
@@ -284,18 +280,28 @@ var sbDeleteOrcamento = function sbDeleteOrcamento(obraId) {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + orcObraId(obraId), { method: "DELETE", headers: SB });
 };
 var sbGetAssociacoes = function sbGetAssociacoes() {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=like.assoc_%&select=dados", { headers: SB })
+  // Usar um registro agregado para todas as associações
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.associacoes_v2&select=dados", { headers: SB })
     .then(function(r){ return r.ok ? r.json() : []; })
-    .then(function(rows){ return (rows||[]).map(function(x){ return x.dados; }).filter(Boolean); });
+    .then(function(rows){
+      if (!rows.length || !rows[0].dados) return [];
+      return rows[0].dados.lista || [];
+    })
+    .catch(function(){ return []; });
 };
-var sbSaveAssociacao = function sbSaveAssociacao(assoc) {
+var sbSaveAssociacoes = function sbSaveAssociacoes(lista) {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
     method: "POST", headers: SB,
-    body: JSON.stringify({ id: "assoc_" + assoc.id, dados: assoc, atualizado_em: new Date().toISOString() })
+    body: JSON.stringify({ id: "associacoes_v2", dados: { lista: lista }, atualizado_em: new Date().toISOString() })
   });
 };
+var sbSaveAssociacao = function sbSaveAssociacao(assoc) {
+  // Não faz nada — salvo em batch pelo criarAssociacao
+  return Promise.resolve();
+};
 var sbDeleteAssociacao = function sbDeleteAssociacao(id) {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.assoc_" + id, { method: "DELETE", headers: SB });
+  // Não faz nada — removido em batch pelo removerAssociacao
+  return Promise.resolve();
 };
 var orcObraId = function(nomeObra) {
   return 'orc' + String(nomeObra || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
@@ -3827,7 +3833,9 @@ function App() {
 
   // Carregar orçamentos e associações em background
   React.useEffect(function() {
-    sbGetOrcamentos(cadastros.obras || []).then(function(m){ if(Object.keys(m).length) setOrcamentos(m); }).catch(function(){});
+    if (cadastros.obras && cadastros.obras.length) {
+      sbGetOrcamentos(cadastros.obras).then(function(m){ if(Object.keys(m).length) setOrcamentos(m); }).catch(function(){});
+    }
     sbGetAssociacoes().then(function(d){ if(d.length) setAssociacoes(d); }).catch(function(){});
   }, [cadastros.obras]);
 
@@ -3857,8 +3865,11 @@ function App() {
     });
     saveOrcamento(obraId, Object.assign({}, orc, { itens: novosItens }));
     var nova = Object.assign({}, assoc, { id: assoc.id || uid(), criadoEm: new Date().toISOString() });
-    setAssociacoes(function(prev){ return [].concat(_toConsumableArray(prev.filter(function(a){ return a.id !== nova.id; })), [nova]); });
-    sbSaveAssociacao(nova).catch(function(){});
+    setAssociacoes(function(prev) {
+      var novaLista = [].concat(_toConsumableArray(prev.filter(function(a){ return a.id !== nova.id; })), [nova]);
+      sbSaveAssociacoes(novaLista).catch(function(){});
+      return novaLista;
+    });
   }, [orcamentos, saveOrcamento]);
   var removerAssociacao = React.useCallback(function(assocId) {
     var assoc = associacoes.find(function(a){ return a.id === assocId; });
@@ -3873,8 +3884,11 @@ function App() {
       });
       saveOrcamento(assoc.obraId, Object.assign({}, orc, { itens: novosItens }));
     }
-    setAssociacoes(function(prev){ return prev.filter(function(a){ return a.id !== assocId; }); });
-    sbDeleteAssociacao(assocId).catch(function(){});
+    setAssociacoes(function(prev) {
+      var novaLista = prev.filter(function(a){ return a.id !== assocId; });
+      sbSaveAssociacoes(novaLista).catch(function(){});
+      return novaLista;
+    });
   }, [associacoes, orcamentos, saveOrcamento]);
 
   var addCadastro = useCallback(function (tipo, valor) {
