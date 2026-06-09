@@ -2713,17 +2713,7 @@ function MapEditor(_ref15) {
           padding: 2,
           display: "flex"
         }
-      }, /*#__PURE__*/React.createElement(IcoTrash, null)),
-    tab === "obras" && /*#__PURE__*/React.createElement("button", {
-      onClick: function onClick() { onImportarOrcamento && onImportarOrcamento(item); },
-      title: "IMPORTAR ORÇAMENTO",
-      style: { background: orcamentos[item] ? "#e8f6ee" : "#fff8e8", border: "none", borderRadius: 5, padding: "4px 7px", color: orcamentos[item] ? "#1a7843" : "#b87800", cursor: "pointer", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }
-    }, orcamentos[item] ? "✅ ORC." : "📎 ORC."),
-    tab === "obras" && orcamentos[item] && /*#__PURE__*/React.createElement("button", {
-      onClick: function onClick() { if(window.confirm("REMOVER ORÇAMENTO DE \"" + item + "\"?")) { onLimparOrcamento && onLimparOrcamento(item); } },
-      title: "REMOVER ORÇAMENTO",
-      style: { background: "#fdeaea", border: "none", borderRadius: 5, padding: "4px 7px", color: "#c0392b", cursor: "pointer", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }
-    }, "🗑 ORC.")));
+      }, /*#__PURE__*/React.createElement(IcoTrash, null))));
     }), /*#__PURE__*/React.createElement("tr", {
       style: {
         background: T.sub,
