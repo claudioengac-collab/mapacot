@@ -253,64 +253,47 @@ var sbSaveInsumos = /*#__PURE__*/function () {
     return _ref7.apply(this, arguments);
   };
 }();
-// ─── Supabase — Orçamento ─────────────────────────────────────────────────────
-var sbGetOrcamentos = function sbGetOrcamentos(obras) {
-  if (!obras || !obras.length) return Promise.resolve({});
-  // Buscar cada orçamento individualmente pelo ID exato
-  var promises = obras.map(function(obra) {
-    var id = orcObraId(obra);
-    return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=id,dados", { headers: SB })
-      .then(function(r){ return r.ok ? r.json() : []; })
-      .then(function(rows){ return rows.length ? { obra: obra, dados: rows[0].dados } : null; })
-      .catch(function(){ return null; });
-  });
-  return Promise.all(promises).then(function(results) {
-    var m = {};
-    results.forEach(function(r){ if(r && r.dados) m[r.obra] = r.dados; });
-    return m;
-  });
-};
-var sbSaveOrcamento = function sbSaveOrcamento(obraId, dados) {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
-    method: "POST", headers: SB,
-    body: JSON.stringify({ id: orcObraId(obraId), dados: dados, atualizado_em: new Date().toISOString() })
-  });
-};
-var sbDeleteOrcamento = function sbDeleteOrcamento(obraId) {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + orcObraId(obraId), { method: "DELETE", headers: SB });
-};
-var sbGetAssociacoes = function sbGetAssociacoes() {
-  // Usar um registro agregado para todas as associações
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.associacoes_v2&select=dados", { headers: SB })
-    .then(function(r){ return r.ok ? r.json() : []; })
-    .then(function(rows){
-      if (!rows.length || !rows[0].dados) return [];
-      return rows[0].dados.lista || [];
-    })
-    .catch(function(){ return []; });
-};
-var sbSaveAssociacoes = function sbSaveAssociacoes(lista) {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
-    method: "POST", headers: SB,
-    body: JSON.stringify({ id: "associacoes_v2", dados: { lista: lista }, atualizado_em: new Date().toISOString() })
-  });
-};
-var sbSaveAssociacao = function sbSaveAssociacao(assoc) {
-  // Não faz nada — salvo em batch pelo criarAssociacao
-  return Promise.resolve();
-};
-var sbDeleteAssociacao = function sbDeleteAssociacao(id) {
-  // Não faz nada — removido em batch pelo removerAssociacao
-  return Promise.resolve();
-};
+
+// ─── Supabase — Orçamento ────────────────────────────────────────────────────
 var orcObraId = function(nomeObra) {
+  // ID seguro: só letras e números, máx 40 chars
   return 'orc' + String(nomeObra || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
 };
-var orcObraId = function(nomeObra) {
-  return 'orc' + String(nomeObra || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
-};
-var orcSaldoDisponivel = function orcSaldoDisponivel(item) {
+var orcSaldoDisponivel = function(item) {
   return Math.max(0, (parseFloat(item.quantidade)||0) - (parseFloat(item.consumido)||0));
+};
+var sbSaveOrcamento = function(obraId, dados) {
+  var id = orcObraId(obraId);
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
+    method: "POST",
+    headers: SB,
+    body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
+  });
+};
+var sbDeleteOrcamento = function(obraId) {
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + orcObraId(obraId), {
+    method: "DELETE", headers: SB
+  });
+};
+var sbCarregarOrcamento = function(obraId) {
+  var id = orcObraId(obraId);
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=dados", { headers: SB })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){ return (rows && rows[0] && rows[0].dados) ? rows[0].dados : null; })
+    .catch(function(){ return null; });
+};
+var sbSaveAssociacoes = function(lista) {
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
+    method: "POST",
+    headers: SB,
+    body: JSON.stringify({ id: "assocv2", dados: { lista: lista }, atualizado_em: new Date().toISOString() })
+  });
+};
+var sbCarregarAssociacoes = function() {
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.assocv2&select=dados", { headers: SB })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){ return (rows && rows[0] && rows[0].dados && rows[0].dados.lista) ? rows[0].dados.lista : []; })
+    .catch(function(){ return []; });
 };
 
 var CHUNK_SIZE = 4;
@@ -462,6 +445,13 @@ var getTheme = function getTheme(id) {
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 var buildMapaHTML = function buildMapaHTML(mapa) {
   var now = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : new Date();
+  var orcamentosData = arguments.length > 2 ? arguments[2] : {};
+  var associacoesData = arguments.length > 3 ? arguments[3] : [];
+  var obraOrcPDF = mapa.obra ? (orcamentosData[mapa.obra]||null) : null;
+  var obraOrcItensPDF = obraOrcPDF ? (obraOrcPDF.itens||[]) : [];
+  var temOrcPDF = obraOrcItensPDF.length > 0;
+  var getAssocPDF = function(itemId){ return associacoesData.find(function(a){ return a.mapaId===mapa.id&&a.itemMapaId===itemId; })||null; };
+  var calcVlOrcPDF = function(assoc){ if(!assoc)return null; var oi=obraOrcItensPDF.find(function(it){return it.codigo===assoc.orcItemCodigo;}); return oi?(parseFloat(oi.valorUnitario)||0)*(parseFloat(assoc.fator)||1):null; };
   var T = getTheme(mapa.corTema);
   var fns = mapa.fornecedores || [];
   var itens = mapa.itens || [];
@@ -542,7 +532,16 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
       }).join("");
       var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
-      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;\">\u21b3 " + item.detalhe + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
+      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;\">\u21b3 " + item.detalhe + "</div>" : ""), "</td>") + (temOrcPDF && isFirst ? (function(){
+        var assoc=getAssocPDF(item.id); var vlo=calcVlOrcPDF(assoc);
+        var qt=parseFloat(String(item.qt).replace(",","."))||0;
+        var rr=calcResumo(item,fns,precos);
+        var diff=vlo!==null&&rr.vlUnit!==null?vlo-rr.vlUnit:null;
+        var total=diff!==null?diff*qt:null; var lucro=diff!==null?diff>=0:null;
+        var vc=assoc&&vlo!==null?"<div style=\"font-weight:700;color:#7a4400\">"+fmtMoney(vlo)+"</div>":"<span style=\"color:#ccc\">N/A</span>";
+        var rc=total!==null?"<div style=\"color:"+(lucro?"#186818":"#aa1c1c")+";font-weight:700\">&#9679; "+(lucro?"LUCRO":"PREJUIZO")+"</div><div style=\"font-size:8px;color:"+(lucro?"#186818":"#aa1c1c")+"\">"+(lucro?"+":"−")+Math.abs(diff).toFixed(2)+"/UN | "+(lucro?"+ ":"− ")+fmtMoney(Math.abs(total))+"</div>":"<span style=\"color:#ccc\">—</span>";
+        return "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#fffbee;border-left:2px solid #e0bf30;text-align:right\">"+vc+"</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#fffbee;border-right:2px solid #e0bf30;text-align:center\">"+rc+"</td>";
+      })() : "").concat(resumoCells).concat(fornCells, "</tr>");
     }).join("");
     var rodapeRows = RODAPE_ROWS.map(function (row) {
       var resumoCell = isFirst ? function () {
@@ -573,7 +572,8 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         var cellStyle = row.money ? "border:1px solid #ccc;padding:4px 6px;text-align:right;" : "border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;font-size:9px;";
         return "<td style=\"".concat(cellStyle, "\">").concat(r2[row.key] || "", "</td>");
       }).join("");
-      return "<tr><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;font-size:10px;\">".concat(row.label, "</td>").concat(resumoCell).concat(fornCells, "</tr>");
+      var orcRodPDF = temOrcPDF && isFirst ? '<td style="border:1px solid #ccc;padding:4px 6px;background:#fffbee;border-left:2px solid #e0bf30;text-align:center;color:#ccc">—</td><td style="border:1px solid #ccc;padding:4px 6px;background:#fffbee;border-right:2px solid #e0bf30;text-align:center;color:#ccc">—</td>' : "";
+      return "<tr><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;font-size:10px;\">".concat(row.label, "</td>") + orcRodPDF + "".concat(resumoCell).concat(fornCells, "</tr>");
     }).join("");
     var totalFornCells = chunk.map(function (f) {
       var t = totalBruto(f.id);
@@ -588,7 +588,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var resumaTotCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">".concat(resumoTotal > 0 ? fmtMoney(resumoTotal) : "—", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>") : "";
     return "<table style=\"border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;margin-bottom:0;\"><colgroup><col style=\"width:26px\"/><col style=\"width:30px\"/><col style=\"width:30px\"/><col style=\"width:15%\"/>".concat(isFirst ? "<col style=\"width:7%\"/><col style=\"width:8%\"/><col style=\"width:9%\"/>" : "", " ").concat(chunk.map(function () {
       return "<col style=\"width:".concat(isFirst ? emptyChunk ? 20 : Math.floor(41 / Math.max(chunk.length, 1)) : Math.floor(61 / Math.max(chunk.length, 1)), "%\"/>");
-    }).join(""), "</colgroup><thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(isFirst ? "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:".concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO</th>") : "").concat(fornHdrs, "</tr><tr>").concat(isFirst ? "".concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;"))) : "", " ").concat(fornSubHdrs, "</tr></thead><tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>").concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
+    }).join(""), "</colgroup><thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(isFirst ? "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:".concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO</th>") : "").concat(fornHdrs, "</tr><tr>").concat(temOrcPDF && isFirst ? "<th style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:#d48800;color:#fff;font-size:9px;\\">VL. OR\xC7ADO</th><th style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:#d48800;color:#fff;font-size:9px;\\">RESULTADO</th>" : "").concat(isFirst ? "".concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;"))) : "", " ").concat(fornSubHdrs, "</tr></thead><tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>") + (temOrcPDF && isFirst ? (function(){ var soma=itens.reduce(function(ac,it){ var a=getAssocPDF(it.id),vlo=calcVlOrcPDF(a),rr=calcResumo(it,fns,precos),qt=parseFloat(String(it.qt).replace(",","."))||0,diff=vlo!==null&&rr.vlUnit!==null?vlo-rr.vlUnit:null; return ac+(diff!==null?diff*qt:0); },0); var temR=itens.some(function(it){var a=getAssocPDF(it.id);return a&&calcVlOrcPDF(a)!==null;}); return '<td style="border:1px solid #ccc;padding:4px 6px;background:#fffbee;border-left:2px solid #e0bf30;text-align:center;color:#ccc">—</td><td style="border:1px solid #ccc;padding:4px 6px;background:#fffbee;border-right:2px solid #e0bf30;text-align:center;font-weight:700;color:' + (temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc") + '">' + (temR?'<div>'+(soma>=0?"LUCRO":"PREJUIZO")+'</div><div>'+(soma>=0?"+ ":"− ")+fmtMoney(Math.abs(soma))+'</div>':"—") + '</td>'; })() : "") + "".concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
   };
   var obsGeralHTML = mapa.obsGeral ? "<div style=\"margin-top:14px;border:1.5px solid ".concat(hdrColor, ";border-radius:4px;overflow:hidden;\"><div style=\"background:").concat(hdrColor, ";color:#fff;padding:7px 12px;font-weight:700;font-size:11px;letter-spacing:0.4px;\">OBSERVACAO GERAL DO MAPA</div><div style=\"padding:10px 12px;font-size:11px;white-space:pre-wrap;background:#fff;\">").concat((mapa.obsGeral || "").toUpperCase(), "</div></div>") : "";
   var pagesHTML = chunks.map(function (chunk, ci) {
@@ -614,7 +614,7 @@ var abrirPDF = function abrirPDF(html) {
 };
 
 // ─── Report PDFs ──────────────────────────────────────────────────────────────
-var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim) {
+var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim, orcamentos, associacoes) {
   var de = new Date(inicio + "T00:00:00"),
     ate = new Date(fim + "T23:59:59");
   var filtrados = mapas.filter(function (m) {
@@ -636,7 +636,7 @@ var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim) {
   }).join("");
   abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:10px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO DE MAPAS POR PER\xCDODO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">PER\xCDODO: ".concat(fmtDate(de), " A ").concat(fmtDate(ate), " \u2014 ").concat(filtrados.length, " MAPA(S)</div></div><table style=\"border-collapse:collapse;width:100%;font-size:11px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">NOME</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">RESPONS\xC1VEL</th><th style=\"border:1px solid #999;padding:5px 7px;width:80px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;width:55px;\">ITENS</th><th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">TOTAL RESUMO</th></tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
 };
-var gerarRelatorioObra = function gerarRelatorioObra(mapas, obra) {
+var gerarRelatorioObra = function gerarRelatorioObra(mapas, obra, orcamentos, associacoes) {
   var filtrados = mapas.filter(function (m) {
     return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
   });
@@ -646,7 +646,7 @@ var gerarRelatorioObra = function gerarRelatorioObra(mapas, obra) {
   }
   var now = new Date();
   abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>".concat(filtrados.map(function (m, i) {
-    var body = buildMapaHTML(m, now).replace(/[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*/, "");
+    var body = buildMapaHTML(m, now, orcamentos, associacoes).replace(/[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*/, "");
     return "<div style=\"".concat(i > 0 ? "page-break-before:always;" : "", "\">").concat(body, "</div>");
   }).join(""), "</body></html>"));
 };
@@ -1287,9 +1287,7 @@ function Modal(_ref10) {
     onClose = _ref10.onClose,
     children = _ref10.children,
     _ref10$maxWidth = _ref10.maxWidth,
-    maxWidth = _ref10$maxWidth === void 0 ? 480 : _ref10$maxWidth,
-    _ref10$zIndex = _ref10.zIndex,
-    modalZIndex = _ref10$zIndex === void 0 ? 100 : _ref10$zIndex;
+    maxWidth = _ref10$maxWidth === void 0 ? 480 : _ref10$maxWidth;
   useEffect(function () {
     document.body.style.overflow = open ? "hidden" : "";
     return function () {
@@ -1298,8 +1296,7 @@ function Modal(_ref10) {
   }, [open]);
   if (!open) return null;
   return /*#__PURE__*/React.createElement("div", {
-    onClick: function(e){ if(e.target === e.currentTarget && onClose) onClose(); },
-    style: _objectSpread(_objectSpread({}, SC.overlay), {}, { zIndex: modalZIndex })
+    style: SC.overlay
   }, /*#__PURE__*/React.createElement("div", {
     style: _objectSpread(_objectSpread({}, SC.modal), {}, {
       maxWidth: maxWidth
@@ -1646,15 +1643,15 @@ function CadastrosModal(_ref11) {
       }
     }, /*#__PURE__*/React.createElement(IcoTrash, null)),
     tab === "obras" && /*#__PURE__*/React.createElement("button", {
-      onClick: function onClick() { onImportarOrcamento && onImportarOrcamento(item); },
-      title: "IMPORTAR ORÇAMENTO",
+      onClick: function() { if (onImportarOrcamento) onImportarOrcamento(item); },
+      title: orcamentos[item] ? "REIMPORTAR OR\xc7AMENTO" : "IMPORTAR OR\xc7AMENTO",
       style: { background: orcamentos[item] ? "#e8f6ee" : "#fff8e8", border: "none", borderRadius: 5, padding: "4px 7px", color: orcamentos[item] ? "#1a7843" : "#b87800", cursor: "pointer", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }
-    }, orcamentos[item] ? "✅ ORC." : "📎 ORC."),
+    }, orcamentos[item] ? "\u2705 ORC." : "\ud83d\udcce ORC."),
     tab === "obras" && orcamentos[item] && /*#__PURE__*/React.createElement("button", {
-      onClick: function onClick() { if(window.confirm("REMOVER ORÇAMENTO DE \"" + item + "\"?")) { onLimparOrcamento && onLimparOrcamento(item); } },
-      title: "REMOVER ORÇAMENTO",
+      onClick: function() { if (window.confirm("REMOVER OR\xc7AMENTO DE \"" + item + "\"?")) { if (onLimparOrcamento) onLimparOrcamento(item); } },
+      title: "REMOVER OR\xc7AMENTO",
       style: { background: "#fdeaea", border: "none", borderRadius: 5, padding: "4px 7px", color: "#c0392b", cursor: "pointer", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }
-    }, "🗑 ORC.")));
+    }, "\ud83d\uddd1 ORC.")));
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
@@ -1665,14 +1662,16 @@ function CadastrosModal(_ref11) {
 }
 
 
-// ─── Modal Importar Orçamento ────────────────────────────────────────────────
+// ─── Modal Importar Orçamento ─────────────────────────────────────────────────
 function ModalImportarOrcamento(_ref_orc) {
-  var open = _ref_orc.open, onClose = _ref_orc.onClose, obra = _ref_orc.obra,
-    orcamentoAtual = _ref_orc.orcamentoAtual, onSalvar = _ref_orc.onSalvar,
-    zIndex = _ref_orc.zIndex || 200;
-  var _s1 = React.useState([]), preview = _slicedToArray(_s1, 2)[0], setPreview = _slicedToArray(_s1, 2)[1];
-  var _s2 = React.useState(""), erro = _slicedToArray(_s2, 2)[0], setErro = _slicedToArray(_s2, 2)[1];
-  var _s3 = React.useState(false), proc = _slicedToArray(_s3, 2)[0], setProc = _slicedToArray(_s3, 2)[1];
+  var open = _ref_orc.open,
+    onClose = _ref_orc.onClose,
+    obra = _ref_orc.obra,
+    orcamentoAtual = _ref_orc.orcamentoAtual,
+    onSalvar = _ref_orc.onSalvar;
+  var _s1 = React.useState([]), preview = _slicedToArray(_s1,2)[0], setPreview = _slicedToArray(_s1,2)[1];
+  var _s2 = React.useState(""), erro = _slicedToArray(_s2,2)[0], setErro = _slicedToArray(_s2,2)[1];
+  var _s3 = React.useState(false), proc = _slicedToArray(_s3,2)[0], setProc = _slicedToArray(_s3,2)[1];
 
   var handleArquivo = function(e) {
     var file = e.target.files[0]; if (!file) return;
@@ -1680,41 +1679,40 @@ function ModalImportarOrcamento(_ref_orc) {
     var reader = new FileReader();
     reader.onload = function(ev) {
       try {
-        var data = new Uint8Array(ev.target.result);
-        var wb = XLSX.read(data, { type: "array" });
+        var wb = XLSX.read(new Uint8Array(ev.target.result), { type: "array" });
         var sheet = wb.Sheets[wb.SheetNames[0]];
         var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-        var hi = -1, cd = -1, cu = -1, cq = -1, cv = -1, cc = -1;
-        for (var i = 0; i < Math.min(10, rows.length); i++) {
+        var hi=-1, cd=-1, cu=-1, cq=-1, cv=-1, cc=-1;
+        for (var i=0; i<Math.min(10,rows.length); i++) {
           var row = rows[i].map(function(c){ return String(c).toUpperCase().trim(); });
           var di = row.findIndex(function(c){ return c.includes("DESCRI"); });
           if (di >= 0) {
-            hi = i; cd = di;
-            cc = row.findIndex(function(c){ return c.includes("C\xD3D") || c === "CODIGO" || c === "C\xD3DIGO"; });
-            cu = row.findIndex(function(c){ return c === "UND" || c === "UN" || c.includes("UNID"); });
+            hi=i; cd=di;
+            cc = row.findIndex(function(c){ return c.includes("C\xD3D")||c==="CODIGO"||c==="C\xD3DIGO"; });
+            cu = row.findIndex(function(c){ return c==="UND"||c==="UN"||c.includes("UNID"); });
             cq = row.findIndex(function(c){ return c.includes("QUANT"); });
             cv = row.findIndex(function(c){ return c.includes("UNIT"); });
             break;
           }
         }
-        if (hi < 0) { setErro("Não foi possível identificar as colunas."); setProc(false); return; }
+        if (hi < 0) { setErro("N\xe3o foi poss\xedvel identificar as colunas."); setProc(false); return; }
         var itens = [];
-        for (var j = hi+1; j < rows.length; j++) {
+        for (var j=hi+1; j<rows.length; j++) {
           var r = rows[j];
           var desc = String(r[cd]||"").trim().toUpperCase();
           if (!desc) continue;
           itens.push({
-            codigo: cc >= 0 ? String(r[cc]||"").trim() : String(j),
+            codigo: cc>=0 ? String(r[cc]||"").trim() : String(j),
             descricao: desc,
-            unidade: cu >= 0 ? String(r[cu]||"UN").trim().toUpperCase() : "UN",
+            unidade: cu>=0 ? String(r[cu]||"UN").trim().toUpperCase() : "UN",
             quantidade: parseFloat(String(r[cq]||"0").replace(",","."))||0,
             valorUnitario: parseFloat(String(r[cv]||"0").replace(",","."))||0,
-            consumido: 0, excedente: 0
+            consumido: 0
           });
         }
         if (!itens.length) { setErro("Nenhum item encontrado."); setProc(false); return; }
         setPreview(itens); setProc(false);
-      } catch(err) { setErro("Erro: " + err.message); setProc(false); }
+      } catch(err) { setErro("Erro: "+err.message); setProc(false); }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -1724,50 +1722,53 @@ function ModalImportarOrcamento(_ref_orc) {
     var antigos = (orcamentoAtual && orcamentoAtual.itens) || [];
     var itensFinais = preview.map(function(novo) {
       var ant = antigos.find(function(a){ return a.codigo === novo.codigo; });
-      return ant ? Object.assign({}, novo, { consumido: ant.consumido||0, excedente: ant.excedente||0 }) : novo;
+      return ant ? Object.assign({}, novo, { consumido: ant.consumido||0 }) : novo;
     });
     onSalvar({ obra: obra, itens: itensFinais, importadoEm: new Date().toISOString() });
     setPreview([]); onClose();
   };
 
   if (!open) return null;
-  return /*#__PURE__*/React.createElement(Modal, { open: open, onClose: onClose, maxWidth: 680, zIndex: 99999 },
+  return /*#__PURE__*/React.createElement(Modal, { open: open, onClose: onClose, maxWidth: 680 },
     /*#__PURE__*/React.createElement("div", { style: SC.mHdr },
-      /*#__PURE__*/React.createElement("span", { style: SC.mTitle }, "📎 IMPORTAR ORÇAMENTO — ", obra),
-      /*#__PURE__*/React.createElement("button", { style: { background: "none", border: "none", color: "#999", cursor: "pointer" }, onClick: onClose }, /*#__PURE__*/React.createElement(IcoClose, null))),
-    /*#__PURE__*/React.createElement("div", { style: { padding: "16px 22px 20px", display: "flex", flexDirection: "column", gap: 14 } },
-      orcamentoAtual && /*#__PURE__*/React.createElement("div", { style: { background: "#e8f6ee", border: "1px solid #8ecba8", borderRadius: 7, padding: "8px 12px", fontSize: 12, color: "#1a5030" } },
-        "✅ Orçamento existente com ", (orcamentoAtual.itens||[]).length, " itens. Reimportar preserva saldos consumidos."),
-      /*#__PURE__*/React.createElement("div", { style: { background: "#f5f8ff", border: "2px dashed #b0c4e8", borderRadius: 8, padding: "20px", textAlign: "center" } },
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 13, color: "#2a5298", fontWeight: 700, marginBottom: 8 } }, "📂 SELECIONAR ARQUIVO EXCEL DO ORÇAMENTO"),
-        /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, color: "#888", marginBottom: 12 } }, "Formatos aceitos: .xlsx — O sistema detecta automaticamente as colunas de Descrição, Unidade, Quantidade e Valor Unitário"),
-        /*#__PURE__*/React.createElement("input", { type: "file", accept: ".xlsx,.xls", onChange: handleArquivo, style: { fontSize: 12 } })),
-      proc && /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", color: "#2a5298", fontSize: 13 } }, "⏳ Processando arquivo..."),
-      erro && /*#__PURE__*/React.createElement("div", { style: { background: "#fdeaea", border: "1px solid #e8a0a0", borderRadius: 7, padding: "8px 12px", fontSize: 12, color: "#b82222" } }, "❌ ", erro),
+      /*#__PURE__*/React.createElement("span", { style: SC.mTitle }, "\ud83d\udcce IMPORTAR OR\xc7AMENTO \u2014 ", obra),
+      /*#__PURE__*/React.createElement("button", { style:{background:"none",border:"none",color:"#999",cursor:"pointer"}, onClick: onClose },
+        /*#__PURE__*/React.createElement(IcoClose, null))),
+    /*#__PURE__*/React.createElement("div", { style:{padding:"16px 22px 20px",display:"flex",flexDirection:"column",gap:14} },
+      orcamentoAtual && /*#__PURE__*/React.createElement("div", { style:{background:"#e8f6ee",border:"1px solid #8ecba8",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#1a5030"} },
+        "\u2705 Or\xe7amento existente com ", (orcamentoAtual.itens||[]).length, " itens. Reimportar preserva saldos."),
+      /*#__PURE__*/React.createElement("div", { style:{background:"#f5f8ff",border:"2px dashed #b0c4e8",borderRadius:8,padding:"20px",textAlign:"center"} },
+        /*#__PURE__*/React.createElement("div", { style:{fontSize:13,color:"#2a5298",fontWeight:700,marginBottom:8} }, "\ud83d\udcc2 SELECIONAR ARQUIVO EXCEL DO OR\xc7AMENTO"),
+        /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"#888",marginBottom:12} }, "Formatos aceitos: .xlsx \u2014 O sistema detecta automaticamente as colunas de Descri\xe7\xe3o, Unidade, Quantidade e Valor Unit\xe1rio"),
+        /*#__PURE__*/React.createElement("input", { type:"file", accept:".xlsx,.xls", onChange:handleArquivo, style:{fontSize:12} })),
+      proc && /*#__PURE__*/React.createElement("div", { style:{textAlign:"center",color:"#2a5298",fontSize:13} }, "\u23f3 Processando arquivo..."),
+      erro && /*#__PURE__*/React.createElement("div", { style:{background:"#fdeaea",border:"1px solid #e8a0a0",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#b82222"} }, "\u274c ", erro),
       preview.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null,
-        /*#__PURE__*/React.createElement("div", { style: { background: "#e8f0ff", borderRadius: 7, padding: "8px 12px", fontSize: 12, color: "#1a3a8e", fontWeight: 700 } },
-          "✅ ", preview.length, " itens identificados. Confira e clique em SALVAR."),
-        /*#__PURE__*/React.createElement("div", { style: { maxHeight: 240, overflowY: "auto", border: "1px solid #e4e8f0", borderRadius: 8 } },
-          /*#__PURE__*/React.createElement("table", { style: { borderCollapse: "collapse", width: "100%", fontSize: 11 } },
-            /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null,
-              /*#__PURE__*/React.createElement("th", { style: { background: "#2a5298", color: "#fff", padding: "6px 8px", textAlign: "left" } }, "DESCRIÇÃO"),
-              /*#__PURE__*/React.createElement("th", { style: { background: "#2a5298", color: "#fff", padding: "6px 8px", width: 50 } }, "UND"),
-              /*#__PURE__*/React.createElement("th", { style: { background: "#2a5298", color: "#fff", padding: "6px 8px", width: 90, textAlign: "right" } }, "QUANTIDADE"),
-              /*#__PURE__*/React.createElement("th", { style: { background: "#2a5298", color: "#fff", padding: "6px 8px", width: 90, textAlign: "right" } }, "VL. UNIT."))),
+        /*#__PURE__*/React.createElement("div", { style:{background:"#e8f0ff",borderRadius:7,padding:"8px 12px",fontSize:12,color:"#1a3a8e",fontWeight:700} },
+          "\u2705 ", preview.length, " itens identificados. Confira e clique em SALVAR."),
+        /*#__PURE__*/React.createElement("div", { style:{maxHeight:220,overflowY:"auto",border:"1px solid #e4e8f0",borderRadius:8} },
+          /*#__PURE__*/React.createElement("table", { style:{borderCollapse:"collapse",width:"100%",fontSize:11} },
+            /*#__PURE__*/React.createElement("thead", null,
+              /*#__PURE__*/React.createElement("tr", null,
+                /*#__PURE__*/React.createElement("th", { style:{background:"#2a5298",color:"#fff",padding:"6px 8px",textAlign:"left"} }, "DESCRI\xc7\xc3O"),
+                /*#__PURE__*/React.createElement("th", { style:{background:"#2a5298",color:"#fff",padding:"6px 8px",width:50} }, "UND"),
+                /*#__PURE__*/React.createElement("th", { style:{background:"#2a5298",color:"#fff",padding:"6px 8px",width:90,textAlign:"right"} }, "QUANTIDADE"),
+                /*#__PURE__*/React.createElement("th", { style:{background:"#2a5298",color:"#fff",padding:"6px 8px",width:90,textAlign:"right"} }, "VL. UNIT."))),
             /*#__PURE__*/React.createElement("tbody", null,
-              preview.slice(0,50).map(function(it, i) {
-                return /*#__PURE__*/React.createElement("tr", { key: i, style: { background: i%2===0?"#fff":"#f5f8ff" } },
-                  /*#__PURE__*/React.createElement("td", { style: { padding: "5px 8px", borderBottom: "1px solid #eee" } }, it.descricao),
-                  /*#__PURE__*/React.createElement("td", { style: { padding: "5px 8px", borderBottom: "1px solid #eee", textAlign: "center" } }, it.unidade),
-                  /*#__PURE__*/React.createElement("td", { style: { padding: "5px 8px", borderBottom: "1px solid #eee", textAlign: "right" } }, it.quantidade.toLocaleString("pt-BR", { maximumFractionDigits: 3 })),
-                  /*#__PURE__*/React.createElement("td", { style: { padding: "5px 8px", borderBottom: "1px solid #eee", textAlign: "right" } }, it.valorUnitario.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })));
+              preview.slice(0,50).map(function(it,i) {
+                return /*#__PURE__*/React.createElement("tr", { key:i, style:{background:i%2===0?"#fff":"#f5f8ff"} },
+                  /*#__PURE__*/React.createElement("td", { style:{padding:"5px 8px",borderBottom:"1px solid #eee"} }, it.descricao),
+                  /*#__PURE__*/React.createElement("td", { style:{padding:"5px 8px",borderBottom:"1px solid #eee",textAlign:"center"} }, it.unidade),
+                  /*#__PURE__*/React.createElement("td", { style:{padding:"5px 8px",borderBottom:"1px solid #eee",textAlign:"right"} }, it.quantidade.toLocaleString("pt-BR",{maximumFractionDigits:3})),
+                  /*#__PURE__*/React.createElement("td", { style:{padding:"5px 8px",borderBottom:"1px solid #eee",textAlign:"right"} }, it.valorUnitario.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})));
               }),
-              preview.length > 50 && /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", { colSpan: 4, style: { padding: "8px", textAlign: "center", color: "#888" } }, "... e mais ", preview.length-50, " itens"))
+              preview.length > 50 && /*#__PURE__*/React.createElement("tr", null,
+                /*#__PURE__*/React.createElement("td", { colSpan:4, style:{padding:"8px",textAlign:"center",color:"#888"} }, "... e mais ", preview.length-50, " itens"))
             ))),
         /*#__PURE__*/React.createElement("button", {
           onClick: handleSalvar,
-          style: Object.assign({}, SC.btnPri, { fontSize: 13, padding: "10px 24px", alignSelf: "flex-end" })
-        }, "💾 SALVAR ORÇAMENTO — ", preview.length, " ITENS"))));
+          style: Object.assign({}, SC.btnPri, {fontSize:13,padding:"10px 24px",alignSelf:"flex-end"})
+        }, "\ud83d\udcbe SALVAR OR\xc7AMENTO \u2014 ", preview.length, " ITENS"))));
 }
 
 // ─── Reports Modal ────────────────────────────────────────────────────────────
@@ -1948,14 +1949,14 @@ function ReportsModal(_ref12) {
           alert("SELECIONE O PERÍODO.");
           return;
         }
-        gerarRelatorioPeriodo(mapas, periodo.inicio, periodo.fim);
+        gerarRelatorioPeriodo(mapas, periodo.inicio, periodo.fim, orcamentos, associacoes);
       }
       if (tab === "obra") {
         if (!obra.trim()) {
           alert("INFORME A OBRA.");
           return;
         }
-        gerarRelatorioObra(mapas, obra);
+        gerarRelatorioObra(mapas, obra, orcamentos, associacoes);
       }
       if (tab === "insumo") {
         if (!insumo.trim()) {
@@ -1979,10 +1980,10 @@ function MapEditor(_ref15) {
     editCadastro = _ref15.editCadastro,
     orcamentos = _ref15.orcamentos || {},
     associacoes = _ref15.associacoes || [],
-    onCriarAssociacao = _ref15.onCriarAssociacao || null,
-    onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
     onSaveOrcamento = _ref15.onSaveOrcamento || null,
-    onLimparOrcamento = _ref15.onLimparOrcamento || null;
+    onLimparOrcamento = _ref15.onLimparOrcamento || null,
+    onCriarAssociacao = _ref15.onCriarAssociacao || null,
+    onRemoverAssociacao = _ref15.onRemoverAssociacao || null;
   var _useState27 = useState(init),
     _useState28 = _slicedToArray(_useState27, 2),
     mapa = _useState28[0],
@@ -2006,15 +2007,22 @@ function MapEditor(_ref15) {
   var saveTimer = useRef();
   var mapContainerRef = useRef();
   // Estados do modal de associação
-  var _sIM = React.useState(null), itemAssociando = _slicedToArray(_sIM,2)[0], setItemAssociando = _slicedToArray(_sIM,2)[1];
+  var _sIA = React.useState(null), itemAssociando = _slicedToArray(_sIA,2)[0], setItemAssociando = _slicedToArray(_sIA,2)[1];
   var _sBu = React.useState(""), assocBusca = _slicedToArray(_sBu,2)[0], setAssocBusca = _slicedToArray(_sBu,2)[1];
-  var _sSel = React.useState(null), assocSel = _slicedToArray(_sSel,2)[0], setAssocSel = _slicedToArray(_sSel,2)[1];
-  var _sFat = React.useState("1"), assocFator = _slicedToArray(_sFat,2)[0], setAssocFator = _slicedToArray(_sFat,2)[1];
-  var _sExc = React.useState(false), assocExc = _slicedToArray(_sExc,2)[0], setAssocExc = _slicedToArray(_sExc,2)[1];
-  var _sJus = React.useState(""), assocJust = _slicedToArray(_sJus,2)[0], setAssocJust = _slicedToArray(_sJus,2)[1];
+  var _sSe = React.useState(null), assocSel = _slicedToArray(_sSe,2)[0], setAssocSel = _slicedToArray(_sSe,2)[1];
+  var _sFa = React.useState("1"), assocFator = _slicedToArray(_sFa,2)[0], setAssocFator = _slicedToArray(_sFa,2)[1];
+  var _sEx = React.useState(false), assocExc = _slicedToArray(_sEx,2)[0], setAssocExc = _slicedToArray(_sEx,2)[1];
+  var _sJu = React.useState(""), assocJust = _slicedToArray(_sJu,2)[0], setAssocJust = _slicedToArray(_sJu,2)[1];
   // Estados modal importação dentro do editor
-  var _sImpEd = React.useState(false), showImpEd = _slicedToArray(_sImpEd,2)[0], setShowImpEd = _slicedToArray(_sImpEd,2)[1];
-  var _sObraEd = React.useState(null), obraImpEd = _slicedToArray(_sObraEd,2)[0], setObraImpEd = _slicedToArray(_sObraEd,2)[1];
+  var _sIE = React.useState(false), showImpEd = _slicedToArray(_sIE,2)[0], setShowImpEd = _slicedToArray(_sIE,2)[1];
+  var _sOE = React.useState(null), obraImpEd = _slicedToArray(_sOE,2)[0], setObraImpEd = _slicedToArray(_sOE,2)[1];
+  // Carregar orçamento desta obra ao montar
+  React.useEffect(function() {
+    if (!init.obra || !onSaveOrcamento) return;
+    sbCarregarOrcamento(init.obra).then(function(dados) {
+      if (dados) onSaveOrcamento(init.obra, dados);
+    }).catch(function(){});
+  }, []);
   var _useState37 = useState(false),
     _useState38 = _slicedToArray(_useState37, 2),
     showColPanel = _useState38[0],
@@ -2167,24 +2175,22 @@ function MapEditor(_ref15) {
       });
     });
   };
-  // Helpers de orçamento
+  // ── Helpers de orçamento ──────────────────────────────────────────────────
   var obraOrc = mapa.obra ? (orcamentos[mapa.obra]||null) : null;
   var obraOrcItens = obraOrc ? (obraOrc.itens||[]) : [];
   var temOrcamento = obraOrcItens.length > 0;
-  console.log("[ORC] mapa.obra:", mapa.obra);
-  console.log("[ORC] chaves orcamentos:", Object.keys(orcamentos));
-  console.log("[ORC] temOrcamento:", temOrcamento, "| itens:", obraOrcItens.length);
-  var getAssocItem = function(iid){ return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null; };
+  var getAssocItem = function(iid) {
+    return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null;
+  };
   var calcVlOrc = function(assoc) {
     if (!assoc) return null;
     var oi = obraOrcItens.find(function(it){ return it.codigo===assoc.orcItemCodigo; });
-    if (!oi) return null;
-    return (parseFloat(oi.valorUnitario)||0) * (parseFloat(assoc.fator)||1);
+    return oi ? (parseFloat(oi.valorUnitario)||0) * (parseFloat(assoc.fator)||1) : null;
   };
   var calcRes = function(item, assoc) {
     if (!assoc) return null;
     var vlo = calcVlOrc(assoc); if (!vlo) return null;
-    var res = calcResumo(item, fornecedores, precos);
+    var res = calcResumo(item, mapa.fornecedores, mapa.precos);
     if (res.vlUnit === null) return null;
     var diff = vlo - res.vlUnit;
     var qt = parseFloat(String(item.qt).replace(",","."))||0;
@@ -2197,23 +2203,77 @@ function MapEditor(_ref15) {
     setAssocBusca(item.descricao||"");
     setAssocExc(false); setAssocJust("");
     if (ae) {
-      var oi = obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; });
-      setAssocSel(oi||null); setAssocFator(String(ae.fator||"1"));
+      setAssocSel(obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null);
+      setAssocFator(String(ae.fator||"1"));
     } else { setAssocSel(null); setAssocFator("1"); }
   };
   var confirmarAssoc = function() {
-    if (!itemAssociando||!assocSel||!onCriarAssociacao) return;
+    if (!itemAssociando || !assocSel || !onCriarAssociacao) return;
     var fator = parseFloat(assocFator)||1;
     var qt = parseFloat(String(itemAssociando.qt).replace(",","."))||0;
-    var qtOrc = qt * fator;
     var saldo = orcSaldoDisponivel(assocSel);
     var ae = getAssocItem(itemAssociando.id);
     if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
-    if (qtOrc > saldo && !assocExc) { setAssocExc(true); return; }
-    onCriarAssociacao({ id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
-      obraId: mapa.obra, orcItemCodigo: assocSel.codigo, orcItemDesc: assocSel.descricao,
-      fator: fator, unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
-      qtCompra: qt, excedente: Math.max(0,qtOrc-saldo), justificativa: assocJust });
+    if (qt*fator > saldo && !assocExc) { setAssocExc(true); return; }
+    onCriarAssociacao({
+      id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
+      obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
+      orcItemDesc: assocSel.descricao, fator: fator,
+      unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
+      qtCompra: qt, excedente: Math.max(0,qt*fator-saldo),
+      justificativa: assocJust
+    });
+    setItemAssociando(null);
+  };
+
+  // ── Helpers de orçamento ──────────────────────────────────────────────────
+  var obraOrc = mapa.obra ? (orcamentos[mapa.obra]||null) : null;
+  var obraOrcItens = obraOrc ? (obraOrc.itens||[]) : [];
+  var temOrcamento = obraOrcItens.length > 0;
+  var getAssocItem = function(iid) {
+    return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null;
+  };
+  var calcVlOrc = function(assoc) {
+    if (!assoc) return null;
+    var oi = obraOrcItens.find(function(it){ return it.codigo===assoc.orcItemCodigo; });
+    return oi ? (parseFloat(oi.valorUnitario)||0) * (parseFloat(assoc.fator)||1) : null;
+  };
+  var calcRes = function(item, assoc) {
+    if (!assoc) return null;
+    var vlo = calcVlOrc(assoc); if (!vlo) return null;
+    var res = calcResumo(item, mapa.fornecedores, mapa.precos);
+    if (res.vlUnit === null) return null;
+    var diff = vlo - res.vlUnit;
+    var qt = parseFloat(String(item.qt).replace(",","."))||0;
+    return { diff: diff, pct: (diff/vlo)*100, lucro: diff>=0, total: diff*qt };
+  };
+  var abrirAssoc = function(item) {
+    if (!temOrcamento) return;
+    var ae = getAssocItem(item.id);
+    setItemAssociando(item);
+    setAssocBusca(item.descricao||"");
+    setAssocExc(false); setAssocJust("");
+    if (ae) {
+      setAssocSel(obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null);
+      setAssocFator(String(ae.fator||"1"));
+    } else { setAssocSel(null); setAssocFator("1"); }
+  };
+  var confirmarAssoc = function() {
+    if (!itemAssociando || !assocSel || !onCriarAssociacao) return;
+    var fator = parseFloat(assocFator)||1;
+    var qt = parseFloat(String(itemAssociando.qt).replace(",","."))||0;
+    var saldo = orcSaldoDisponivel(assocSel);
+    var ae = getAssocItem(itemAssociando.id);
+    if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
+    if (qt*fator > saldo && !assocExc) { setAssocExc(true); return; }
+    onCriarAssociacao({
+      id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
+      obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
+      orcItemDesc: assocSel.descricao, fator: fator,
+      unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
+      qtCompra: qt, excedente: Math.max(0,qt*fator-saldo),
+      justificativa: assocJust
+    });
     setItemAssociando(null);
   };
 
@@ -2395,7 +2455,8 @@ function MapEditor(_ref15) {
       })
     }, "DESCRI\xC7\xC3O"),
     temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", {
-      colSpan: 2, style: _objectSpread(_objectSpread({}, thC), {}, { textAlign: "center", background: "#b87800", borderLeft: "2px solid rgba(255,255,255,0.3)", borderRight: "2px solid rgba(255,255,255,0.3)" })
+      colSpan: 2,
+      style: _objectSpread(_objectSpread({}, thC), {}, { textAlign:"center", background:"#b87800", borderLeft:"2px solid rgba(255,255,255,0.3)", borderRight:"2px solid rgba(255,255,255,0.3)" })
     }, "OR\xC7AMENTO"),
     showResumo && /*#__PURE__*/React.createElement("th", {
       colSpan: 3,
@@ -2442,8 +2503,8 @@ function MapEditor(_ref15) {
         color: "#444"
       }
     }))),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style: { background: "#d48800", color: "#fff", padding: "5px 8px", fontSize: 10, fontWeight: 600, textAlign: "center", borderLeft: "2px solid rgba(255,255,255,0.2)" } }, "VL. OR\xC7ADO"),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style: { background: "#d48800", color: "#fff", padding: "5px 8px", fontSize: 10, fontWeight: 600, textAlign: "center", borderRight: "2px solid rgba(255,255,255,0.2)" } }, "RESULTADO"),
+    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderLeft:"2px solid rgba(255,255,255,0.2)"} }, "VL. OR\xC7ADO"),
+    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.2)"} }, "RESULTADO"),
     showResumo && /*#__PURE__*/React.createElement("th", {
       colSpan: 3,
       style: _objectSpread(_objectSpread({}, thS), {}, {
@@ -2539,8 +2600,8 @@ function MapEditor(_ref15) {
     })))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       style: _objectSpread({}, thS)
     }),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style: { background: "#eca820", color: "#6a3800", padding: "4px 8px", fontSize: 10, textAlign: "center", borderLeft: "2px solid rgba(0,0,0,0.1)" } }, "por UNID. compra"),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style: { background: "#eca820", color: "#6a3800", padding: "4px 8px", fontSize: 10, textAlign: "center", borderRight: "2px solid rgba(0,0,0,0.1)" } }, "vs. melhor pre\xe7o"),
+    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderLeft:"2px solid rgba(0,0,0,0.1)"} }, "por UNID. compra"),
+    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderRight:"2px solid rgba(0,0,0,0.1)"} }, "vs. melhor pre\xe7o"),
     showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thS), {}, {
         textAlign: "right",
@@ -2628,7 +2689,7 @@ function MapEditor(_ref15) {
           });
           updItem(item.id, "descricao", d || "");
         },
-        onBlur: function onBlur() { if (temOrcamento && item.descricao) setTimeout(function(){ abrirAssoc(item); }, 120); },
+        onBlur: function() { if (temOrcamento && item.descricao) setTimeout(function(){ abrirAssoc(item); }, 150); },
         strictMatch: true,
         placeholder: "DESCRI\xC7\xC3O DO INSUMO...",
         tdSt: SC.td,
@@ -2645,19 +2706,19 @@ function MapEditor(_ref15) {
         return /*#__PURE__*/React.createElement(React.Fragment, null,
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
-            style: { background: "#fffbee", borderLeft: "2px solid #e0bf30", padding: "5px 8px", textAlign: "right", cursor: "pointer", minWidth: 110, verticalAlign: "middle" }
+            style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",padding:"5px 8px",textAlign:"right",cursor:"pointer",minWidth:110,verticalAlign:"middle"}
           }, assoc ? /*#__PURE__*/React.createElement(React.Fragment, null,
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: "#7a4400" } }, vlo !== null ? fmtMoney(vlo) : "—"),
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 9, color: "#aaa", marginTop: 1 } }, assoc.fator && assoc.fator != 1 ? "1 "+(assoc.unidMapa||"UN")+"="+assoc.fator+" "+(assoc.unidOrc||"") : "mesma unidade")
-          ) : /*#__PURE__*/React.createElement("span", { style: { fontSize: 10, color: "#bbb", fontStyle: "italic" } }, "Toque para associar")),
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:12,fontWeight:700,color:"#7a4400"}}, vlo!==null?fmtMoney(vlo):"—"),
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:"#aaa",marginTop:1}}, assoc.fator&&assoc.fator!=1?"1 "+(assoc.unidMapa||"UN")+"="+assoc.fator+" "+(assoc.unidOrc||""):"mesma unidade")
+          ) : /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb",fontStyle:"italic"}}, "Toque para associar")),
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
-            style: { background: "#fffbee", borderRight: "2px solid #e0bf30", padding: "5px 8px", textAlign: "center", cursor: "pointer", minWidth: 120, verticalAlign: "middle" }
+            style:{background:"#fffbee",borderRight:"2px solid #e0bf30",padding:"5px 8px",textAlign:"center",cursor:"pointer",minWidth:120,verticalAlign:"middle"}
           }, res ? /*#__PURE__*/React.createElement(React.Fragment, null,
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 11, fontWeight: 700, color: res.lucro ? "#186818" : "#aa1c1c" } }, res.lucro ? "\u25cf LUCRO" : "\u25cf PREJU\xcdZO"),
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 9, color: res.lucro ? "#186818" : "#aa1c1c" } }, (res.lucro?"+":"\u2212")+Math.abs(res.pct).toFixed(1)+"% \u00b7 "+fmtMoney(Math.abs(res.diff))+"/UN"),
-            /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: res.lucro?"#186818":"#aa1c1c", marginTop: 2, borderTop: "1px dotted "+(res.lucro?"#8ecba8":"#e8a0a0"), paddingTop: 2 } }, (res.lucro?"+ ":"\u2212 ")+fmtMoney(Math.abs(res.total))+" TOTAL")
-          ) : assoc && /*#__PURE__*/React.createElement("span", { style: { fontSize: 10, color: "#bbb" } }, "\u2014"))
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:11,fontWeight:700,color:res.lucro?"#186818":"#aa1c1c"}}, res.lucro?"\u25cf LUCRO":"\u25cf PREJU\xcdZO"),
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:res.lucro?"#186818":"#aa1c1c"}}, (res.lucro?"+":"\u2212")+Math.abs(res.pct).toFixed(1)+"% \u00b7 "+fmtMoney(Math.abs(res.diff))+"/UN"),
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:10,fontWeight:700,color:res.lucro?"#186818":"#aa1c1c",marginTop:2,borderTop:"1px dotted "+(res.lucro?"#8ecba8":"#e8a0a0"),paddingTop:2}}, (res.lucro?"+ ":"\u2212 ")+fmtMoney(Math.abs(res.total))+" TOTAL")
+          ) : assoc&&/*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb"}}, "\u2014"))
         );
       })(),
       showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
@@ -2762,14 +2823,14 @@ function MapEditor(_ref15) {
         var a=getAssocItem(it.id); var r=a?calcRes(it,a):null;
         return ac+(r?r.total:0);
       },0);
-      var temR = itens.some(function(it){ var a=getAssocItem(it.id); return a&&calcRes(it,a); });
+      var temR = itens.some(function(it){ return getAssocItem(it.id)&&calcRes(it,getAssocItem(it.id)); });
       return /*#__PURE__*/React.createElement(React.Fragment, null,
-        /*#__PURE__*/React.createElement("td", { style: { background:"#fffbee", borderLeft:"2px solid #e0bf30", textAlign:"center", color:"#ccc", padding:"6px 8px" } }, "—"),
-        /*#__PURE__*/React.createElement("td", { style: { background:"#fffbee", borderRight:"2px solid #e0bf30", textAlign:"center", fontWeight:700, padding:"6px 8px", color: temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc" } },
+        /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
+        /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",fontWeight:700,padding:"6px 8px",color:temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc"}},
           temR ? /*#__PURE__*/React.createElement(React.Fragment, null,
-            /*#__PURE__*/React.createElement("div", { style:{fontSize:10} }, soma>=0?"\u25cf LUCRO":"\u25cf PREJU\xcdZO"),
-            /*#__PURE__*/React.createElement("div", { style:{fontSize:11,fontWeight:800} }, (soma>=0?"+ ":"\u2212 ")+fmtMoney(Math.abs(soma)))
-          ) : "—")
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:10}}, soma>=0?"\u25cf LUCRO":"\u25cf PREJU\xcdZO"),
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:11,fontWeight:800}}, (soma>=0?"+ ":"\u2212 ")+fmtMoney(Math.abs(soma)))
+          ) : "\u2014")
       );
     })(),
     showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
@@ -2822,8 +2883,8 @@ function MapEditor(_ref15) {
           letterSpacing: 0.3
         })
       }, row.label),
-      temOrcamento && isFirst && /*#__PURE__*/React.createElement("td", { style: { background:"#fffbee", borderLeft:"2px solid #e0bf30", textAlign:"center", color:"#ccc", padding:"6px 8px" } }, "—"),
-      temOrcamento && isFirst && /*#__PURE__*/React.createElement("td", { style: { background:"#fffbee", borderRight:"2px solid #e0bf30", textAlign:"center", color:"#ccc", padding:"6px 8px" } }, "—"),
+      temOrcamento && isFirst && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
+      temOrcamento && isFirst && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
       showResumo && function (_rodapeResumo$row$key2) {
         var bg = "#e8eeff",
           bl = "2px solid #b8c8e8",
@@ -3053,7 +3114,7 @@ function MapEditor(_ref15) {
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      return abrirPDF(buildMapaHTML(mapa, clock));
+      return abrirPDF(buildMapaHTML(mapa, clock, orcamentos, associacoes));
     },
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       background: "#c0392b",
@@ -3226,67 +3287,59 @@ function MapEditor(_ref15) {
   }, chunks.map(function (chunk, ci) {
     return renderChunk(chunk, ci, hiddenCols);
   }))),
-  // Modal de associação
+  // Modal de associação de orçamento
   itemAssociando && /*#__PURE__*/React.createElement(Modal, { open: true, onClose: function(){ setItemAssociando(null); }, maxWidth: 600 },
-    /*#__PURE__*/React.createElement("div", { style: SC.mHdr },
-      /*#__PURE__*/React.createElement("span", { style: SC.mTitle }, "\ud83d\udd17 ASSOCIAR AO OR\xc7AMENTO"),
-      /*#__PURE__*/React.createElement("button", { style:{background:"none",border:"none",color:"#999",cursor:"pointer"}, onClick: function(){ setItemAssociando(null); } }, /*#__PURE__*/React.createElement(IcoClose, null))),
-    /*#__PURE__*/React.createElement("div", { style:{padding:"16px 22px 20px",display:"flex",flexDirection:"column",gap:12} },
-      /*#__PURE__*/React.createElement("div", { style:{background:"#f0f4ff",borderRadius:7,padding:"8px 12px",fontSize:12} },
+    /*#__PURE__*/React.createElement("div", {style:SC.mHdr},
+      /*#__PURE__*/React.createElement("span", {style:SC.mTitle}, "\ud83d\udd17 ASSOCIAR AO OR\xc7AMENTO"),
+      /*#__PURE__*/React.createElement("button", {style:{background:"none",border:"none",color:"#999",cursor:"pointer"},onClick:function(){setItemAssociando(null);}}, /*#__PURE__*/React.createElement(IcoClose, null))),
+    /*#__PURE__*/React.createElement("div", {style:{padding:"16px 22px 20px",display:"flex",flexDirection:"column",gap:12}},
+      /*#__PURE__*/React.createElement("div", {style:{background:"#f0f4ff",borderRadius:7,padding:"8px 12px",fontSize:12}},
         "Insumo: ", /*#__PURE__*/React.createElement("strong", null, itemAssociando.descricao), " | Qt: ", /*#__PURE__*/React.createElement("strong", null, itemAssociando.qt, " ", itemAssociando.unid)),
       !assocExc ? /*#__PURE__*/React.createElement(React.Fragment, null,
-        /*#__PURE__*/React.createElement("div", { style:{fontSize:12,fontWeight:700,color:"#333"} }, "Buscar item no or\xe7amento da obra ", mapa.obra, ":"),
-        /*#__PURE__*/React.createElement("input", { value: assocBusca, onChange: function(e){ setAssocBusca(e.target.value.toUpperCase()); }, placeholder: "BUSCAR NO OR\xc7AMENTO...", style:{border:"1.5px solid #dde1e9",borderRadius:8,padding:"9px 12px",fontSize:12,outline:"none",width:"100%",fontFamily:"inherit",textTransform:"uppercase"} }),
-        /*#__PURE__*/React.createElement("div", { style:{maxHeight:200,overflowY:"auto",border:"1px solid #e4e8f0",borderRadius:8} },
+        /*#__PURE__*/React.createElement("input", {value:assocBusca, onChange:function(e){setAssocBusca(e.target.value.toUpperCase());}, placeholder:"BUSCAR NO OR\xc7AMENTO...", style:{border:"1.5px solid #dde1e9",borderRadius:8,padding:"9px 12px",fontSize:12,outline:"none",width:"100%",fontFamily:"inherit",textTransform:"uppercase"}}),
+        /*#__PURE__*/React.createElement("div", {style:{maxHeight:200,overflowY:"auto",border:"1px solid #e4e8f0",borderRadius:8}},
           obraOrcItens.filter(function(it){ return !assocBusca||it.descricao.includes(assocBusca); }).slice(0,30).map(function(it){
-            var saldo = orcSaldoDisponivel(it);
-            var isSel = assocSel && assocSel.codigo===it.codigo;
-            return /*#__PURE__*/React.createElement("div", { key: it.codigo, onClick: function(){ setAssocSel(it); }, style:{padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f0f2f6",fontSize:11,background:isSel?"#e8f0ff":"transparent",borderLeft:isSel?"3px solid #2a5298":"3px solid transparent"} },
-              /*#__PURE__*/React.createElement("div", { style:{fontWeight:isSel?700:400} }, it.descricao),
-              /*#__PURE__*/React.createElement("div", { style:{fontSize:10,color:"#888",marginTop:2} },
+            var saldo=orcSaldoDisponivel(it); var isSel=assocSel&&assocSel.codigo===it.codigo;
+            return /*#__PURE__*/React.createElement("div", {key:it.codigo, onClick:function(){setAssocSel(it);}, style:{padding:"8px 12px",cursor:"pointer",borderBottom:"1px solid #f0f2f6",fontSize:11,background:isSel?"#e8f0ff":"transparent",borderLeft:isSel?"3px solid #2a5298":"3px solid transparent"}},
+              /*#__PURE__*/React.createElement("div", {style:{fontWeight:isSel?700:400}}, it.descricao),
+              /*#__PURE__*/React.createElement("div", {style:{fontSize:10,color:"#888",marginTop:2}},
                 it.unidade, " \u2022 Qtd: ", it.quantidade, " \u2022 Saldo: ",
-                /*#__PURE__*/React.createElement("strong", { style:{color:saldo>0?"#186818":"#aa1c1c"} }, saldo.toLocaleString("pt-BR",{maximumFractionDigits:3})),
+                /*#__PURE__*/React.createElement("strong", {style:{color:saldo>0?"#186818":"#aa1c1c"}}, saldo.toLocaleString("pt-BR",{maximumFractionDigits:3})),
                 " \u2022 R$ ", (it.valorUnitario||0).toLocaleString("pt-BR",{minimumFractionDigits:2}), "/", it.unidade));
-          })
-        ),
-        assocSel && /*#__PURE__*/React.createElement("div", { style:{background:"#fff8e8",border:"1px solid #e8d080",borderRadius:8,padding:"12px 14px",fontSize:12} },
-          /*#__PURE__*/React.createElement("div", { style:{fontWeight:700,color:"#7a4400",marginBottom:8} }, "\ud83d\udd04 CONVERS\xc3O DE UNIDADE"),
-          itemAssociando.unid !== assocSel.unidade ?
-            /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"#856404",marginBottom:8} }, "Voc\xea compra em ", /*#__PURE__*/React.createElement("strong",null,itemAssociando.unid), " mas o or\xe7amento usa ", /*#__PURE__*/React.createElement("strong",null,assocSel.unidade), ". Informe quantos ", assocSel.unidade, " equivalem a 1 ", itemAssociando.unid, ":") :
-            /*#__PURE__*/React.createElement("div", { style:{fontSize:11,color:"#186818",marginBottom:8} }, "\u2705 Mesma unidade (", itemAssociando.unid, "). Fator = 1"),
-          /*#__PURE__*/React.createElement("div", { style:{display:"flex",alignItems:"center",gap:8} },
-            /*#__PURE__*/React.createElement("span", { style:{fontSize:11} }, "1 ", itemAssociando.unid, " ="),
-            /*#__PURE__*/React.createElement("input", { type:"number", value:assocFator, min:"0.001", step:"0.001", onChange:function(e){ setAssocFator(e.target.value); }, style:{width:80,border:"1.5px solid #e0c060",borderRadius:6,padding:"5px 8px",fontSize:13,textAlign:"right",outline:"none"} }),
-            /*#__PURE__*/React.createElement("span", { style:{fontSize:11} }, assocSel.unidade, " no or\xe7amento"),
-            /*#__PURE__*/React.createElement("span", { style:{fontSize:10,color:"#888",marginLeft:"auto"} }, "Total: ", ((parseFloat(String(itemAssociando.qt).replace(",","."))||0)*(parseFloat(assocFator)||1)).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel.unidade))
-        ),
-        /*#__PURE__*/React.createElement("div", { style:{display:"flex",gap:8,marginTop:4} },
-          /*#__PURE__*/React.createElement("button", { onClick: confirmarAssoc, disabled: !assocSel, style: Object.assign({}, SC.btnPri, {opacity:assocSel?1:0.4}) }, "\u2705 CONFIRMAR ASSOCIA\xc7\xc3O"),
-          /*#__PURE__*/React.createElement("button", { onClick: function(){ setItemAssociando(null); }, style:{background:"#f0f4ff",border:"1.5px solid #2a5298",borderRadius:7,padding:"8px 16px",fontSize:12,fontWeight:700,color:"#2a5298",cursor:"pointer"} }, "\u23ed PULAR"),
-          getAssocItem(itemAssociando.id) && /*#__PURE__*/React.createElement("button", { onClick: function(){ var a=getAssocItem(itemAssociando.id); if(a&&onRemoverAssociacao){onRemoverAssociacao(a.id);setItemAssociando(null);} }, style:{background:"#fdeaea",border:"none",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#c0392b",cursor:"pointer",marginLeft:"auto"} }, "\ud83d\uddd1 REMOVER")
-        )
-      ) : /*#__PURE__*/React.createElement("div", { style:{background:"#fdeaea",border:"1.5px solid #e8a0a0",borderRadius:8,padding:16} },
-        /*#__PURE__*/React.createElement("div", { style:{fontWeight:700,color:"#aa1c1c",fontSize:13,marginBottom:8} }, "\u26a0\ufe0f SALDO INSUFICIENTE"),
-        /*#__PURE__*/React.createElement("div", { style:{fontSize:12,color:"#7a2020",marginBottom:12} },
-          "Voc\xea est\xe1 tentando apropriar mais do que o saldo dispon\xedvel.", /*#__PURE__*/React.createElement("br",null),
-          "Saldo dispon\xedvel: ", /*#__PURE__*/React.createElement("strong",null,orcSaldoDisponivel(assocSel).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel&&assocSel.unidade),
-          /*#__PURE__*/React.createElement("br",null), "Deseja registrar o excedente e informar uma justificativa?"),
-        /*#__PURE__*/React.createElement("textarea", { value:assocJust, onChange:function(e){setAssocJust(e.target.value.toUpperCase());}, placeholder:"JUSTIFICATIVA DO EXCEDENTE (obrigat\xf3rio)...", maxLength:500, style:{width:"100%",minHeight:70,border:"1.5px solid #e8a0a0",borderRadius:7,padding:"8px 10px",fontSize:12,fontFamily:"inherit",textTransform:"uppercase",outline:"none",resize:"vertical",marginBottom:10} }),
-        /*#__PURE__*/React.createElement("div", { style:{display:"flex",gap:8} },
-          /*#__PURE__*/React.createElement("button", { onClick:confirmarAssoc, disabled:!assocJust.trim(), style:Object.assign({},SC.btnPri,{background:"#c0392b",opacity:assocJust.trim()?1:0.4}) }, "\u26a0\ufe0f CONFIRMAR COM EXCEDENTE"),
-          /*#__PURE__*/React.createElement("button", { onClick:function(){setAssocExc(false);}, style:{background:"#f0f0f0",border:"none",borderRadius:7,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"} }, "VOLTAR")
-        )
+          })),
+        assocSel && /*#__PURE__*/React.createElement("div", {style:{background:"#fff8e8",border:"1px solid #e8d080",borderRadius:8,padding:"12px 14px",fontSize:12}},
+          /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,color:"#7a4400",marginBottom:8}}, "\ud83d\udd04 CONVERS\xc3O DE UNIDADE"),
+          itemAssociando.unid!==assocSel.unidade
+            ? /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:"#856404",marginBottom:8}}, "Voc\xea compra em ", /*#__PURE__*/React.createElement("strong",null,itemAssociando.unid), " mas o or\xe7amento usa ", /*#__PURE__*/React.createElement("strong",null,assocSel.unidade), ". Informe quantos ", assocSel.unidade, " equivalem a 1 ", itemAssociando.unid, ":")
+            : /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:"#186818",marginBottom:8}}, "\u2705 Mesma unidade. Fator = 1"),
+          /*#__PURE__*/React.createElement("div", {style:{display:"flex",alignItems:"center",gap:8}},
+            /*#__PURE__*/React.createElement("span", {style:{fontSize:11}}, "1 ", itemAssociando.unid, " ="),
+            /*#__PURE__*/React.createElement("input", {type:"number",value:assocFator,min:"0.001",step:"0.001",onChange:function(e){setAssocFator(e.target.value);},style:{width:80,border:"1.5px solid #e0c060",borderRadius:6,padding:"5px 8px",fontSize:13,textAlign:"right",outline:"none"}}),
+            /*#__PURE__*/React.createElement("span", {style:{fontSize:11}}, assocSel.unidade, " no or\xe7amento"),
+            /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#888",marginLeft:"auto"}}, "Total: ", ((parseFloat(String(itemAssociando.qt).replace(",","."))||0)*(parseFloat(assocFator)||1)).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel.unidade))),
+        /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:8,marginTop:4}},
+          /*#__PURE__*/React.createElement("button", {onClick:confirmarAssoc, disabled:!assocSel, style:Object.assign({},SC.btnPri,{opacity:assocSel?1:0.4})}, "\u2705 CONFIRMAR"),
+          /*#__PURE__*/React.createElement("button", {onClick:function(){setItemAssociando(null);}, style:{background:"#f0f4ff",border:"1.5px solid #2a5298",borderRadius:7,padding:"8px 16px",fontSize:12,fontWeight:700,color:"#2a5298",cursor:"pointer"}}, "\u23ed PULAR"),
+          getAssocItem(itemAssociando.id) && /*#__PURE__*/React.createElement("button", {onClick:function(){var a=getAssocItem(itemAssociando.id);if(a&&onRemoverAssociacao){onRemoverAssociacao(a.id);setItemAssociando(null);}},style:{background:"#fdeaea",border:"none",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#c0392b",cursor:"pointer",marginLeft:"auto"}}, "\ud83d\uddd1 REMOVER"))
+      ) : /*#__PURE__*/React.createElement("div", {style:{background:"#fdeaea",border:"1.5px solid #e8a0a0",borderRadius:8,padding:16}},
+        /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,color:"#aa1c1c",fontSize:13,marginBottom:8}}, "\u26a0\ufe0f SALDO INSUFICIENTE"),
+        /*#__PURE__*/React.createElement("div", {style:{fontSize:12,color:"#7a2020",marginBottom:12}},
+          "Saldo dispon\xedvel: ", /*#__PURE__*/React.createElement("strong",null,assocSel&&orcSaldoDisponivel(assocSel).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel&&assocSel.unidade),
+          /*#__PURE__*/React.createElement("br",null), "Informe uma justificativa para o excedente:"),
+        /*#__PURE__*/React.createElement("textarea", {value:assocJust,onChange:function(e){setAssocJust(e.target.value.toUpperCase());},placeholder:"JUSTIFICATIVA (obrigat\xf3rio)...",maxLength:500,style:{width:"100%",minHeight:70,border:"1.5px solid #e8a0a0",borderRadius:7,padding:"8px 10px",fontSize:12,fontFamily:"inherit",textTransform:"uppercase",outline:"none",resize:"vertical",marginBottom:10}}),
+        /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:8}},
+          /*#__PURE__*/React.createElement("button", {onClick:confirmarAssoc,disabled:!assocJust.trim(),style:Object.assign({},SC.btnPri,{background:"#c0392b",opacity:assocJust.trim()?1:0.4})}, "\u26a0\ufe0f CONFIRMAR COM EXCEDENTE"),
+          /*#__PURE__*/React.createElement("button", {onClick:function(){setAssocExc(false);},style:{background:"#f0f0f0",border:"none",borderRadius:7,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}, "VOLTAR"))
       )
     )
   ),
   // Modal importação dentro do editor
   showImpEd && /*#__PURE__*/React.createElement(ModalImportarOrcamento, {
     open: showImpEd,
-    zIndex: 200,
     onClose: function(){ setShowImpEd(false); setObraImpEd(null); },
     obra: obraImpEd,
-    orcamentoAtual: obraImpEd ? (orcamentos[obraImpEd]||null) : null,
-    onSalvar: function(dados){ onSaveOrcamento && onSaveOrcamento(obraImpEd,dados); setShowImpEd(false); }
+    orcamentoAtual: obraImpEd?(orcamentos[obraImpEd]||null):null,
+    onSalvar: function(dados){ if(onSaveOrcamento) onSaveOrcamento(obraImpEd,dados); setShowImpEd(false); }
   }),
   showCadEditor && /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCadEditor,
@@ -3296,7 +3349,7 @@ function MapEditor(_ref15) {
     onRemove: removeCadastro || function(){},
     onEdit: editCadastro || function(){},
     orcamentos: orcamentos,
-    onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 150); },
+    onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
     onLimparOrcamento: onLimparOrcamento
   }));
 }
@@ -3432,7 +3485,7 @@ function MapCard(_ref16) {
     }
   }, "↗"), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      return abrirPDF(buildMapaHTML(mapa));
+      return abrirPDF(buildMapaHTML(mapa, new Date(), orcamentos, associacoes));
     },
     style: _objectSpread(_objectSpread({}, SC.btnIco), {}, {
       background: "#fdecea",
@@ -3743,11 +3796,9 @@ function App() {
     _useStateInsumo2 = _slicedToArray(_useStateInsumo, 2),
     searchInsumo = _useStateInsumo2[0],
     setSearchInsumo = _useStateInsumo2[1];
-  // Flag para evitar sobrescrever cadastros antes de carregar
-  var _useStateCadOk = React.useState(false),
+  var _useStateCadOk = useState(false),
     cadastrosOk = _slicedToArray(_useStateCadOk, 2)[0],
     setCadastrosOk = _slicedToArray(_useStateCadOk, 2)[1];
-  // Estados de orçamento
   var _useStateOrc = React.useState({}),
     orcamentos = _slicedToArray(_useStateOrc, 2)[0],
     setOrcamentos = _slicedToArray(_useStateOrc, 2)[1];
@@ -3793,14 +3844,17 @@ function App() {
             return sbGetCadastros();
           case 4:
             cad = _context8.v;
-            if (cad) { setCadastros(function (prev) {
-              return {
-                obras: cad.obras || [],
-                insumos: [],
-                unidades: cad.unidades || DEFAULT_UNIDADES,
-                fornecedores: cad.fornecedores || []
-              };
-            }); setCadastrosOk(true); }
+            if (cad) {
+              setCadastros(function (prev) {
+                return {
+                  obras: cad.obras || [],
+                  insumos: [],
+                  unidades: cad.unidades || DEFAULT_UNIDADES,
+                  fornecedores: cad.fornecedores || []
+                };
+              });
+              setCadastrosOk(true);
+            }
             _context8.n = 6;
             break;
           case 5:
@@ -3831,63 +3885,63 @@ function App() {
     }))();
   }, []);
 
-  // Carregar orçamentos e associações em background
+  // Carregar associações em background
   React.useEffect(function() {
-    if (cadastros.obras && cadastros.obras.length) {
-      sbGetOrcamentos(cadastros.obras).then(function(m){ if(Object.keys(m).length) setOrcamentos(m); }).catch(function(){});
-    }
-    sbGetAssociacoes().then(function(d){ if(d.length) setAssociacoes(d); }).catch(function(){});
-  }, [cadastros.obras]);
+    sbCarregarAssociacoes().then(function(lista){ if(lista.length) setAssociacoes(lista); }).catch(function(){});
+  }, []);
 
   // Persist cadastros
   useEffect(function () {
     if (!loading && cadastrosOk) sbSaveCadastros(cadastros).catch(function () {});
   }, [cadastros, loading, cadastrosOk]);
 
-  // ── Funções de orçamento ──
+  // ── Funções de orçamento ──────────────────────────────────────────────────
   var saveOrcamento = React.useCallback(function(obraId, dados) {
     setOrcamentos(function(prev){ return Object.assign({}, prev, _defineProperty({}, obraId, dados)); });
     sbSaveOrcamento(obraId, dados).catch(function(){});
   }, []);
+
   var limparOrcamento = React.useCallback(function(obraId) {
     setOrcamentos(function(prev){ var n = Object.assign({}, prev); delete n[obraId]; return n; });
     sbDeleteOrcamento(obraId).catch(function(){});
   }, []);
+
   var criarAssociacao = React.useCallback(function(assoc) {
-    var obraId = assoc.obraId;
-    var orc = orcamentos[obraId];
-    if (!orc) return;
-    var qtEmOrc = (parseFloat(assoc.qtCompra)||0) * (parseFloat(assoc.fator)||1);
-    var novosItens = orc.itens.map(function(it) {
-      if (it.codigo !== assoc.orcItemCodigo) return it;
-      var novoC = (parseFloat(it.consumido)||0) + qtEmOrc;
-      return Object.assign({}, it, { consumido: novoC, excedente: Math.max(0, novoC - (parseFloat(it.quantidade)||0)) });
-    });
-    saveOrcamento(obraId, Object.assign({}, orc, { itens: novosItens }));
-    var nova = Object.assign({}, assoc, { id: assoc.id || uid(), criadoEm: new Date().toISOString() });
-    setAssociacoes(function(prev) {
-      var novaLista = [].concat(_toConsumableArray(prev.filter(function(a){ return a.id !== nova.id; })), [nova]);
-      sbSaveAssociacoes(novaLista).catch(function(){});
-      return novaLista;
-    });
-  }, [orcamentos, saveOrcamento]);
-  var removerAssociacao = React.useCallback(function(assocId) {
-    var assoc = associacoes.find(function(a){ return a.id === assocId; });
-    if (!assoc) return;
+    // Atualizar consumido no orçamento
     var orc = orcamentos[assoc.obraId];
     if (orc) {
-      var qtEmOrc = (parseFloat(assoc.qtCompra)||0) * (parseFloat(assoc.fator)||1);
+      var qtOrc = (parseFloat(assoc.qtCompra)||0) * (parseFloat(assoc.fator)||1);
       var novosItens = orc.itens.map(function(it) {
         if (it.codigo !== assoc.orcItemCodigo) return it;
-        var novoC = Math.max(0, (parseFloat(it.consumido)||0) - qtEmOrc);
-        return Object.assign({}, it, { consumido: novoC, excedente: Math.max(0, novoC - (parseFloat(it.quantidade)||0)) });
+        return Object.assign({}, it, { consumido: (parseFloat(it.consumido)||0) + qtOrc });
       });
       saveOrcamento(assoc.obraId, Object.assign({}, orc, { itens: novosItens }));
     }
     setAssociacoes(function(prev) {
-      var novaLista = prev.filter(function(a){ return a.id !== assocId; });
-      sbSaveAssociacoes(novaLista).catch(function(){});
-      return novaLista;
+      var nova = Object.assign({}, assoc, { criadoEm: new Date().toISOString() });
+      var lista = [].concat(prev.filter(function(a){ return a.id !== nova.id; }), [nova]);
+      sbSaveAssociacoes(lista).catch(function(){});
+      return lista;
+    });
+  }, [orcamentos, saveOrcamento]);
+
+  var removerAssociacao = React.useCallback(function(assocId) {
+    var assoc = associacoes.find(function(a){ return a.id === assocId; });
+    if (assoc) {
+      var orc = orcamentos[assoc.obraId];
+      if (orc) {
+        var qtOrc = (parseFloat(assoc.qtCompra)||0) * (parseFloat(assoc.fator)||1);
+        var novosItens = orc.itens.map(function(it) {
+          if (it.codigo !== assoc.orcItemCodigo) return it;
+          return Object.assign({}, it, { consumido: Math.max(0, (parseFloat(it.consumido)||0) - qtOrc) });
+        });
+        saveOrcamento(assoc.obraId, Object.assign({}, orc, { itens: novosItens }));
+      }
+    }
+    setAssociacoes(function(prev) {
+      var lista = prev.filter(function(a){ return a.id !== assocId; });
+      sbSaveAssociacoes(lista).catch(function(){});
+      return lista;
     });
   }, [associacoes, orcamentos, saveOrcamento]);
 
@@ -4000,10 +4054,10 @@ function App() {
     editCadastro: editCadastro,
     orcamentos: orcamentos,
     associacoes: associacoes,
-    onCriarAssociacao: criarAssociacao,
-    onRemoverAssociacao: removerAssociacao,
     onSaveOrcamento: saveOrcamento,
-    onLimparOrcamento: limparOrcamento
+    onLimparOrcamento: limparOrcamento,
+    onCriarAssociacao: criarAssociacao,
+    onRemoverAssociacao: removerAssociacao
   });
   return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4262,11 +4316,10 @@ function App() {
   }),
   showImportOrc && /*#__PURE__*/React.createElement(ModalImportarOrcamento, {
     open: showImportOrc,
-    zIndex: 200,
     onClose: function(){ setShowImportOrc(false); setObraImportando(null); },
     obra: obraImportando,
     orcamentoAtual: obraImportando ? (orcamentos[obraImportando]||null) : null,
-    onSalvar: function(dados){ saveOrcamento(obraImportando, dados); }
+    onSalvar: function(dados){ saveOrcamento(obraImportando, dados); setShowImportOrc(false); setObraImportando(null); }
   }),
   /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCad,
@@ -4276,7 +4329,7 @@ function App() {
     onRemove: removeCadastro,
     onEdit: editCadastro,
     orcamentos: orcamentos,
-    onImportarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraImportando(obra); setShowImportOrc(true); }, 150); },
+    onImportarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraImportando(obra); setShowImportOrc(true); }, 200); },
     onLimparOrcamento: limparOrcamento
   }), /*#__PURE__*/React.createElement("style", null, "\n        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');\n        *{box-sizing:border-box;margin:0;padding:0;}\n        body{background:#f0f2f5;font-family:'DM Sans',sans-serif;}\n        input,textarea,button{text-transform:uppercase;font-family:inherit;}\n        input[type=date]{text-transform:none;}\n        input::placeholder{color:#bbb;text-transform:uppercase;}\n        input:focus{outline:none;}\n        button{cursor:pointer;}\n        @keyframes spin{to{transform:rotate(360deg)}}\n        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}\n      "));
 }
