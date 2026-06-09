@@ -2165,6 +2165,9 @@ function MapEditor(_ref15) {
   var obraOrc = mapa.obra ? (orcamentos[mapa.obra]||null) : null;
   var obraOrcItens = obraOrc ? (obraOrc.itens||[]) : [];
   var temOrcamento = obraOrcItens.length > 0;
+  console.log("[ORC] mapa.obra:", mapa.obra);
+  console.log("[ORC] chaves orcamentos:", Object.keys(orcamentos));
+  console.log("[ORC] temOrcamento:", temOrcamento, "| itens:", obraOrcItens.length);
   var getAssocItem = function(iid){ return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null; };
   var calcVlOrc = function(assoc) {
     if (!assoc) return null;
