@@ -601,7 +601,8 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#f0f2f8;\">".concat(t > 0 ? fmtMoney(t) : "—", "</td>");
     }).join("");
     var fornHdrs = emptyChunk ? th("—", "background:".concat(hdrColor, ";color:#fff;")) : chunk.map(function (f) {
-      return th(f.nome || "FORNECEDOR", "background:".concat(hdrColor, ";color:#fff;"));
+      var extraForn = (temOrcamento && isFirst) ? "font-size:8px;word-wrap:break-word;white-space:normal;line-height:1.3;" : "";
+      return th(f.nome || "FORNECEDOR", "background:".concat(hdrColor, ";color:#fff;").concat(extraForn));
     }).join("");
     var fornSubHdrs = emptyChunk ? th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;")) : chunk.map(function () {
       return th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"));
