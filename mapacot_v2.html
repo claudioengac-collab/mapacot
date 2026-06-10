@@ -587,7 +587,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         }
         // demais linhas numéricas: sem bordas verticais internas
         var vs = "text-align:right;";
-        return "<td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:1px solid #ccc;border-right:none;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:none;padding:4px 6px;".concat(vs, "background:#eef2ff;color:#555;\">").concat(val, "</td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>");
+        return "<td style=\"border:1px solid #ccc;border-right:none;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;border-left:none;border-right:none;padding:4px 6px;".concat(vs, "background:#eef2ff;color:#555;\">").concat(val, "</td><td style=\"border:1px solid #ccc;border-left:none;padding:4px 6px;background:#eef2ff;\"></td>");
       }() : "";
       var fornCells = isFornPage ? chunk.map(function (f) {
         var r2 = rodape[f.id] || {};
@@ -626,8 +626,8 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var orcColgroup = (temOrcamento && isFirst) ? "<col style=\"width:13%\"/><col style=\"width:15%\"/>" : "";
     var orcHdr1 = (temOrcamento && isFirst) ? "<th colspan=\"2\" style=\"border:1px solid #b87800;padding:4px 5px;text-align:center;font-weight:700;background:#b87800;color:#fff;\">\xd3R\xc7AMENTO</th>" : "";
     var orcHdr2 = (temOrcamento && isFirst) ? th("VL. OR\xc7ADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") + th("RESULTADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") : "";
-    var colgroupFixas = "<col style=\"width:4%\"/><col style=\"width:5%\"/><col style=\"width:5%\"/><col style=\"width:".concat(isFirst ? "28%" : "22%", "\"/>");
-    var resumoCols = isFirst ? "<col style=\"width:10%\"/><col style=\"width:12%\"/><col style=\"width:8%\"/>" : "";
+    var colgroupFixas = "<col style=\"width:4%\"/><col style=\"width:5%\"/><col style=\"width:5%\"/><col style=\"width:".concat(isFirst ? "24%" : "22%", "\"/>");
+    var resumoCols = isFirst ? "<col style=\"width:10%\"/><col style=\"width:11%\"/><col style=\"width:16%\"/>" : "";
     var fornCols = isFornPage ? chunk.map(function() {
       return "<col style=\"width:".concat(Math.floor(61 / Math.max(chunk.length, 1)), "%\"/>");
     }).join("") : "";
