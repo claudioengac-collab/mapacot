@@ -796,7 +796,7 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapas, insumo) {
 };
 var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes) {
   var obraUp = (obra||"").toUpperCase();
-  var obraOrc = orcamentos[obra] || null;
+  var obraOrc = orcamentos[obra] ? (orcamentos[obra].itens || orcamentos[obra]) : null;
   if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
   var mapasFiltrados = mapas.filter(function(m){ return (m.obra||"").toUpperCase().includes(obraUp); });
   var now = new Date();
@@ -2166,7 +2166,7 @@ function ReportsModal(_ref12) {
     inputStyle: { border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none" }
   }), obra && /*#__PURE__*/React.createElement("div", {
     style: { fontSize: 11, color: orcamentos[obra] ? "#186818" : "#aa1c1c", marginTop: 4 }
-  }, orcamentos[obra] ? "\u2705 OR\xC7AMENTO IMPORTADO \u2014 " + (orcamentos[obra].length) + " ITENS" : "\u26a0 OBRA SEM OR\xC7AMENTO IMPORTADO"))), /*#__PURE__*/React.createElement("div", {
+  }, orcamentos[obra] ? "\u2705 OR\xC7AMENTO IMPORTADO \u2014 " + ((orcamentos[obra].itens || orcamentos[obra] || []).length) + " ITENS" : "\u26a0 OBRA SEM OR\xC7AMENTO IMPORTADO"))), /*#__PURE__*/React.createElement("div", {
     style: SC.mFtr
   }, /*#__PURE__*/React.createElement("button", {
     style: SC.btnSec,
