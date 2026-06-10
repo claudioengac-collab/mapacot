@@ -794,7 +794,174 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapas, insumo) {
 
   abrirPDF(html);
 };
-// ─── AutocompleteInput ────────────────────────────────────────────────────────
+var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes) {
+  var obraUp = (obra||"").toUpperCase();
+  var obraOrc = orcamentos[obra] || null;
+  if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
+  var mapasFiltrados = mapas.filter(function(m){ return (m.obra||"").toUpperCase().includes(obraUp); });
+  var now = new Date();
+  var css = [
+    "@page{size:A4 landscape;margin:8mm;}",
+    "body{font-family:Arial,sans-serif;font-size:10px;text-transform:uppercase;margin:0;padding:6px;background:#fff;}",
+    "@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}",
+    "table{border-collapse:collapse;width:100%;font-size:10px;}",
+    "th,td{border:1px solid #ccc;padding:5px 7px;}",
+    ".ok{background:#f0fff4;} .over{background:#fff0f0;} .warn{background:#fffbe6;} .add{background:#f0f4ff;}",
+    ".tot{background:#c5d8f0;font-weight:700;}",
+    ".tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;}"
+  ].join("");
+
+  // Para cada item do orçamento, calcular consumido e associações
+  var itensProcesados = obraOrc.map(function(orcItem) {
+    var assocItem = associacoes.filter(function(a){ return a.obraId===obra && a.orcItemCodigo===orcItem.codigo; });
+    var consumido = parseFloat(orcItem.consumido)||0;
+    var previsto = parseFloat(orcItem.quantidade)||0;
+    var saldo = previsto - consumido;
+    var excedentes = assocItem.filter(function(a){ return (parseFloat(a.excedente)||0)>0; });
+    // Melhor cotação associada
+    var vlCotado = null;
+    var vlTotalCotado = 0;
+    assocItem.forEach(function(a) {
+      var mapa = mapasFiltrados.find(function(m){ return m.id===a.mapaId; });
+      if (!mapa) return;
+      var item = (mapa.itens||[]).find(function(i){ return i.id===a.itemMapaId; });
+      if (!item) return;
+      var r = calcResumo(item, mapa.fornecedores||[], mapa.precos||{});
+      if (r.vlUnit !== null) {
+        var fator = parseFloat(a.fator)||1;
+        vlCotado = r.vlUnit / fator;
+        var qt = parseFloat(String(item.qt).replace(",","."))||0;
+        vlTotalCotado += r.vlTotal||0;
+      }
+    });
+    var vlOrc = parseFloat(orcItem.vl_unitario)||0;
+    var resultado = vlCotado !== null ? (vlOrc - vlCotado) * consumido : null;
+    return { orcItem:orcItem, consumido:consumido, previsto:previsto, saldo:saldo, excedentes:excedentes, vlCotado:vlCotado, vlTotalCotado:vlTotalCotado, resultado:resultado, vlOrc:vlOrc, adicionado:false };
+  });
+
+  // Itens adicionados nos mapas sem associação ao orçamento
+  var itensAdicionados = [];
+  mapasFiltrados.forEach(function(mapa) {
+    (mapa.itens||[]).forEach(function(item) {
+      var temAssoc = associacoes.some(function(a){ return a.mapaId===mapa.id && a.itemMapaId===item.id; });
+      if (!temAssoc) {
+        var r = calcResumo(item, mapa.fornecedores||[], mapa.precos||{});
+        itensAdicionados.push({ item:item, mapa:mapa, resumo:r });
+      }
+    });
+  });
+
+  // Totais
+  var totalOrcado = itensProcesados.reduce(function(ac,x){ return ac + x.vlOrc*(x.previsto||0); }, 0);
+  var totalCotado = itensProcesados.reduce(function(ac,x){ return ac + x.vlTotalCotado; }, 0)
+    + itensAdicionados.reduce(function(ac,x){ return ac + (x.resumo.vlTotal||0); }, 0);
+  var totalResultado = itensProcesados.reduce(function(ac,x){ return ac + (x.resultado||0); }, 0);
+
+  // Resumo cards
+  var cardStyle = "flex:1;padding:8px 12px;border-right:1px solid #e0e4ee;";
+  var resumoHTML = "<div style=\"display:flex;border-bottom:2px solid #c5d8f0;\">"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">MAPAS DA OBRA</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">"+mapasFiltrados.length+"</div></div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">ITENS NO OR\xC7AMENTO</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">"+obraOrc.length+"</div></div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. TOTAL OR\xC7ADO</div><div style=\"font-size:14px;font-weight:800;color:#2a5298;\">"+fmtMoney(totalOrcado)+"</div></div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. TOTAL COTADO</div><div style=\"font-size:14px;font-weight:800;color:#186818;\">"+fmtMoney(totalCotado)+"</div></div>"
+    + "<div style=\"flex:1;padding:8px 12px;\"><div style=\"font-size:8px;color:#888;\">RESULTADO GERAL</div><div style=\"font-size:13px;font-weight:800;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"+( totalResultado>=0?"\u25cf LUCRO ":"\u25cf PREJU\xcdZO ")+fmtMoney(Math.abs(totalResultado))+"</div></div>"
+    + "</div>";
+
+  // Linhas dos itens do orçamento
+  var rows = itensProcesados.map(function(x) {
+    var oi = x.orcItem;
+    var cls = x.saldo < 0 ? "over" : (x.vlCotado===null ? "warn" : "ok");
+    var sitTag = x.saldo < 0
+      ? "<span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">\u26a0 EXCEDENTE</span>"
+      : (x.vlCotado===null
+        ? "<span class=\"tag\" style=\"background:#fff3cd;color:#856404;\">\u23f3 PENDENTE</span>"
+        : "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u2713 OK</span>");
+    var resTag = x.resultado !== null
+      ? (x.resultado>=0
+        ? "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u25cf LUCRO +"+(Math.abs(x.resultado/x.vlOrc/x.consumido*100)||0).toFixed(1)+"%</span><div style=\"font-size:9px;color:#186818;\">+ "+fmtMoney(x.resultado)+"</div>"
+        : "<span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">\u25cf PREJU\xcdZO \u2212"+(Math.abs(x.resultado/(x.vlOrc||1)/x.consumido*100)||0).toFixed(1)+"%</span><div style=\"font-size:9px;color:#aa1c1c;\">\u2212 "+fmtMoney(Math.abs(x.resultado))+"</div>")
+      : "<span style=\"color:#aaa;font-size:9px;\">SEM COTA\xc7\xc3O</span>";
+    var row = "<tr class=\""+cls+"\">"
+      + "<td style=\"font-size:9px;color:#555;\">"+( oi.codigo||"\u2014")+"</td>"
+      + "<td style=\"text-align:left;\">"+( oi.descricao||"")+"</td>"
+      + "<td style=\"text-align:center;\">"+( oi.unidade||"")+"</td>"
+      + "<td style=\"text-align:right;\">"+( x.previsto||0)+"</td>"
+      + "<td style=\"text-align:right;"+(x.saldo<0?"font-weight:700;color:#aa1c1c;":"")+"\">"+(x.consumido||0)+"</td>"
+      + "<td style=\"text-align:right;font-weight:700;color:"+(x.saldo<0?"#aa1c1c":x.saldo===0?"#888":"#186818")+";\">"+x.saldo+"</td>"
+      + "<td style=\"text-align:right;\">"+fmtMoney(x.vlOrc)+"</td>"
+      + "<td style=\"text-align:right;"+(x.vlCotado!==null?(x.vlCotado<x.vlOrc?"color:#186818;font-weight:700;":"color:#aa1c1c;font-weight:700;"):"color:#aaa;")+"\">"+(x.vlCotado!==null?fmtMoney(x.vlCotado):"\u2014")+"</td>"
+      + "<td style=\"text-align:right;font-weight:700;\">"+( x.vlTotalCotado>0?fmtMoney(x.vlTotalCotado):"\u2014")+"</td>"
+      + "<td style=\"text-align:center;\">"+resTag+"</td>"
+      + "<td style=\"text-align:center;\">"+sitTag+"</td>"
+      + "</tr>";
+    // linha de justificativa se excedente
+    if (x.excedentes.length) {
+      row += "<tr style=\"background:#fff5f5;\"><td colspan=\"11\" style=\"font-size:9px;color:#aa1c1c;padding:3px 14px;border-top:none;\">"
+        + x.excedentes.map(function(e){ return "\u21b3 <strong>JUSTIFICATIVA EXCEDENTE (+"+(parseFloat(e.excedente)||0)+" "+( oi.unidade||"")+"): </strong>"+(e.justificativa||"S/J")+" \u2014 MP N\xBA "+( mapasFiltrados.find(function(m){return m.id===e.mapaId;})||{}).numero; }).join(" | ")
+        + "</td></tr>";
+    }
+    return row;
+  }).join("");
+
+  // Itens adicionados
+  var rowsAdd = itensAdicionados.map(function(x) {
+    return "<tr class=\"add\">"
+      + "<td style=\"font-size:9px;color:#888;\">\u2014</td>"
+      + "<td style=\"text-align:left;\">"+x.item.descricao+"<div style=\"font-size:8px;color:#4a6888;margin-top:2px;\">\u21b3 ITEM ADICIONADO \u2014 MP N\xBA "+x.mapa.numero+"</div></td>"
+      + "<td style=\"text-align:center;\">"+( x.item.unid||"")+"</td>"
+      + "<td style=\"text-align:right;color:#888;\">\u2014</td>"
+      + "<td style=\"text-align:right;\">"+( x.item.qt||"")+"</td>"
+      + "<td style=\"text-align:right;color:#888;\">\u2014</td>"
+      + "<td style=\"text-align:right;color:#888;\">\u2014</td>"
+      + "<td style=\"text-align:right;\">"+( x.resumo.vlUnit!==null?fmtMoney(x.resumo.vlUnit):"\u2014")+"</td>"
+      + "<td style=\"text-align:right;font-weight:700;\">"+( x.resumo.vlTotal!==null?fmtMoney(x.resumo.vlTotal):"\u2014")+"</td>"
+      + "<td style=\"text-align:center;color:#888;font-size:9px;\">N/A</td>"
+      + "<td style=\"text-align:center;\"><span class=\"tag\" style=\"background:#cce5ff;color:#004085;\">+ ADICIONADO</span></td>"
+      + "</tr>";
+  }).join("");
+
+  // Linha total
+  var rowTot = "<tr class=\"tot\">"
+    + "<td colspan=\"6\" style=\"text-align:right;\">TOTAIS</td>"
+    + "<td style=\"text-align:right;\">"+fmtMoney(totalOrcado)+"</td>"
+    + "<td style=\"text-align:right;\">\u2014</td>"
+    + "<td style=\"text-align:right;\">"+fmtMoney(totalCotado)+"</td>"
+    + "<td style=\"text-align:center;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"+(totalResultado>=0?"\u25cf LUCRO":"\u25cf PREJU\xcdZO")+" "+(totalResultado>=0?"+":"\u2212")+" "+fmtMoney(Math.abs(totalResultado))+"</td>"
+    + "<td></td></tr>";
+
+  var legenda = "<div style=\"display:flex;gap:10px;padding:6px 8px;background:#f8f9fb;border-top:1px solid #e0e4ee;flex-wrap:wrap;font-size:9px;\">"
+    + "<strong style=\"color:#888;\">LEGENDA:</strong>"
+    + "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u2713 OK</span> dentro do previsto &nbsp;"
+    + "<span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">\u26a0 EXCEDENTE</span> ultrapassou quantidade &nbsp;"
+    + "<span class=\"tag\" style=\"background:#fff3cd;color:#856404;\">\u23f3 PENDENTE</span> sem cota\xE7\xE3o &nbsp;"
+    + "<span class=\"tag\" style=\"background:#cce5ff;color:#004085;\">+ ADICIONADO</span> sem previs\xE3o no or\xE7amento"
+    + "</div>";
+
+  var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>"+css+"</style></head><body>"
+    + "<div style=\"background:#2a5298;padding:10px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:16px;\">"
+    + "<div style=\"font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;\">RELAT\xD3RIO DE OR\xC7AMENTO POR OBRA</div>"
+    + "<div style=\"font-size:11px;color:rgba(255,255,255,0.9);border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;flex:1;\">OBRA: "+obraUp+"</div>"
+    + "<div style=\"font-size:11px;color:rgba(255,255,255,0.9);border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;\">DATA: "+fmtDate(now)+"</div>"
+    + "</div>"
+    + resumoHTML
+    + "<table><thead><tr>"
+    + "<th style=\"width:8%;\">C\xD3DIGO</th>"
+    + "<th style=\"text-align:left;\">DESCRI\xC7\xC3O DO ITEM</th>"
+    + "<th style=\"width:5%;\">UNID.</th>"
+    + "<th style=\"width:7%;text-align:right;\">QT. PREVISTA</th>"
+    + "<th style=\"width:7%;text-align:right;\">QT. CONSUMIDA</th>"
+    + "<th style=\"width:6%;text-align:right;\">SALDO</th>"
+    + "<th style=\"width:9%;text-align:right;\">VL. UNIT. ORC.</th>"
+    + "<th style=\"width:9%;text-align:right;\">VL. UNIT. COTADO</th>"
+    + "<th style=\"width:9%;text-align:right;\">VL. TOTAL COTADO</th>"
+    + "<th style=\"width:10%;text-align:center;\">RESULTADO</th>"
+    + "<th style=\"width:8%;text-align:center;\">SITUA\xC7\xC3O</th>"
+    + "</tr></thead><tbody>"+rows+rowsAdd+rowTot+"</tbody></table>"
+    + legenda
+    + "</body></html>";
+
+  abrirPDF(html);
+};
 function AutocompleteInput(_ref9) {
   var value = _ref9.value,
     _onChange = _ref9.onChange,
@@ -1865,7 +2032,7 @@ function ReportsModal(_ref12) {
       borderBottom: "2px solid #e8eaf0",
       background: "#f8f9fb"
     }
-  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["insumo", "POR INSUMO"]].map(function (_ref13) {
+  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["insumo", "POR INSUMO"], ["orcamento", "ORÇAMENTO"]].map(function (_ref13) {
     var _ref14 = _slicedToArray(_ref13, 2),
       id = _ref14[0],
       lbl = _ref14[1];
@@ -1983,7 +2150,21 @@ function ReportsModal(_ref12) {
     return (m.itens || []).filter(function (i) {
       return (i.descricao || "").toUpperCase().includes(insumo.toUpperCase());
     });
-  }).length, " OCORR\xCANCIA(S)"))), /*#__PURE__*/React.createElement("div", {
+  }).length, " OCORR\xCANCIA(S)")), tab === "orcamento" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: SC.rDesc
+  }, "Exibe o controle de orçamento de uma obra: itens previstos x consumidos, saldos, excedentes e resultados."), /*#__PURE__*/React.createElement("label", {
+    style: SC.lbl
+  }, "OBRA"), /*#__PURE__*/React.createElement(AutocompleteInput, {
+    value: obra,
+    onChange: setObra,
+    suggestions: (cadastros.obras || []).filter(function(o){ return orcamentos[o]; }),
+    placeholder: "BUSCAR OBRA COM OR\xC7AMENTO...",
+    showOnFocus: true,
+    xStyle: { marginBottom: 4 },
+    inputStyle: { border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none" }
+  }), obra && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 11, color: orcamentos[obra] ? "#186818" : "#aa1c1c", marginTop: 4 }
+  }, orcamentos[obra] ? "\u2705 OR\xC7AMENTO IMPORTADO \u2014 " + (orcamentos[obra].length) + " ITENS" : "\u26a0 OBRA SEM OR\xC7AMENTO IMPORTADO"))), /*#__PURE__*/React.createElement("div", {
     style: SC.mFtr
   }, /*#__PURE__*/React.createElement("button", {
     style: SC.btnSec,
@@ -2011,6 +2192,13 @@ function ReportsModal(_ref12) {
           return;
         }
         gerarRelatorioInsumo(mapas, insumo);
+      }
+      if (tab === "orcamento") {
+        if (!obra.trim()) {
+          alert("INFORME A OBRA.");
+          return;
+        }
+        gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes);
       }
     }
   }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
