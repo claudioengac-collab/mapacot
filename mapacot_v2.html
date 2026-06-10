@@ -480,8 +480,9 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var r = calcResumo(item, fns, precos);
     return acc + (r.vlTotal || 0);
   }, 0);
-  var chunks = [];
-  for (var i = 0; i < Math.max(fns.length, 1); i += CHUNK_SIZE) chunks.push(fns.slice(i, i + CHUNK_SIZE));
+  var fornChunks = [];
+  for (var i = 0; i < Math.max(fns.length, 1); i += CHUNK_SIZE) fornChunks.push(fns.slice(i, i + CHUNK_SIZE));
+  var chunks = [[]].concat(fornChunks);
   var hdrColor = T.hdr;
   var subColor = T.sub;
   var bestColor = T.best;
@@ -539,16 +540,17 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   };
   var renderChunk = function renderChunk(chunk, ci) {
     var isFirst = ci === 0;
+    var isFornPage = ci > 0;
     var emptyChunk = chunk.length === 0;
     var itemRows = itens.map(function (item, idx) {
       var r = calcResumo(item, fns, precos);
       var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
-      var fornCells = chunk.map(function (f) {
+      var fornCells = isFornPage ? chunk.map(function (f) {
         var key = "".concat(item.id, "_").concat(f.id);
         var unit = parseMoney(precos[key]);
         var isMin = r.vlUnit !== null && unit !== null && unit > 0 && unit === r.vlUnit;
         return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
-      }).join("");
+      }).join("") : "";
       var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
       var orcCells = (temOrcamento && isFirst) ? (function() {
         var assoc = getAssocPDF(item.id);
@@ -574,39 +576,41 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
           var imp = parseMoney(rr.impostos) || 0;
           var fret = parseMoney(rr.frete) || 0;
           var vl = resumoTotal - desc + imp + fret;
-          val = vl > 0 ? fmtMoney(vl) : "—";
+          val = vl > 0 ? fmtMoney(vl) : "\u2014";
         } else {
           var raw = rr[row.key] || "";
           val = row.money ? raw ? fmtMoney(parseMoney(raw)) || raw : "" : raw;
         }
+        // CONTATO e OBSERVAÇÕES: colspan=3 sem bordas internas
         if (!row.money && !row.computed) {
           return "<td colspan=\"3\" style=\"border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;font-size:9px;background:#eef2ff;color:#555;\">".concat(val, "</td>");
         }
-        var vs = row.money || row.computed ? "text-align:right;" : "text-align:left;";
-        return "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;padding:4px 6px;".concat(vs, "background:#eef2ff;color:#555;\">").concat(val, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>");
+        // demais linhas numéricas: sem bordas verticais internas
+        var vs = "text-align:right;";
+        return "<td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:1px solid #ccc;border-right:none;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:none;padding:4px 6px;".concat(vs, "background:#eef2ff;color:#555;\">").concat(val, "</td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>");
       }() : "";
-      var fornCells = chunk.map(function (f) {
+      var fornCells = isFornPage ? chunk.map(function (f) {
         var r2 = rodape[f.id] || {};
         if (row.computed) {
           var vl = calcVL(f.id);
-          return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;color:#1a56b0;\">".concat(vl > 0 ? fmtMoney(vl) : "—", "</td>");
+          return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;color:#1a56b0;\">".concat(vl > 0 ? fmtMoney(vl) : "\u2014", "</td>");
         }
         var cellStyle = row.money ? "border:1px solid #ccc;padding:4px 6px;text-align:right;" : "border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;font-size:9px;";
         return "<td style=\"".concat(cellStyle, "\">").concat(r2[row.key] || "", "</td>");
-      }).join("");
+      }).join("") : "";
       return "<tr><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;font-size:10px;\">".concat(row.label, "</td>").concat((temOrcamento && isFirst) ? "<td style=\"border:1px solid #e0bf30;padding:4px 6px;text-align:center;background:#fffbee;border-left:2px solid #e0bf30;color:#ccc;\">\u2014</td><td style=\"border:1px solid #e0bf30;padding:4px 6px;text-align:center;background:#fffbee;border-right:2px solid #e0bf30;color:#ccc;\">\u2014</td>" : "").concat(resumoCell).concat(fornCells, "</tr>");
     }).join("");
-    var totalFornCells = chunk.map(function (f) {
+    var totalFornCells = isFornPage ? chunk.map(function (f) {
       var t = totalBruto(f.id);
-      return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#f0f2f8;\">".concat(t > 0 ? fmtMoney(t) : "—", "</td>");
-    }).join("");
-    var fornHdrs = emptyChunk ? th("—", "background:".concat(hdrColor, ";color:#fff;")) : chunk.map(function (f) {
+      return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#f0f2f8;\">".concat(t > 0 ? fmtMoney(t) : "\u2014", "</td>");
+    }).join("") : "";
+    var fornHdrs = isFornPage ? (emptyChunk ? th("\u2014", "background:".concat(hdrColor, ";color:#fff;")) : chunk.map(function (f) {
       return th(f.nome || "FORNECEDOR", "background:".concat(hdrColor, ";color:#fff;"));
-    }).join("");
-    var fornSubHdrs = emptyChunk ? th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;")) : chunk.map(function () {
+    }).join("")) : "";
+    var fornSubHdrs = isFornPage ? (emptyChunk ? th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;")) : chunk.map(function () {
       return th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"));
-    }).join("");
-    var resumaTotCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">".concat(resumoTotal > 0 ? fmtMoney(resumoTotal) : "—", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>") : "";
+    }).join("")) : "";
+    var resumaTotCells = isFirst ? "<td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:1px solid #ccc;border-right:none;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:none;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">".concat(resumoTotal > 0 ? fmtMoney(resumoTotal) : "\u2014", "</td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>") : "";
     var orcTotCells = (temOrcamento && isFirst) ? (function() {
       var soma = itens.reduce(function(ac, it) {
         var a = getAssocPDF(it.id); var r2 = a ? calcResPDF(it, a) : null;
@@ -619,16 +623,19 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       return "<td style=\"border:1px solid #e0bf30;padding:6px 8px;text-align:center;background:#fffbee;border-left:2px solid #e0bf30;color:#ccc;\">\u2014</td>" +
              "<td style=\"border:1px solid #e0bf30;padding:6px 8px;text-align:center;font-weight:700;background:#fffbee;border-right:2px solid #e0bf30;color:" + (temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc") + ";\">" + resHtml + "</td>";
     })() : "";
-    var orcColgroup = (temOrcamento && isFirst) ? "<col style=\"width:8%\"/><col style=\"width:9%\"/>" : "";
+    var orcColgroup = (temOrcamento && isFirst) ? "<col style=\"width:13%\"/><col style=\"width:15%\"/>" : "";
     var orcHdr1 = (temOrcamento && isFirst) ? "<th colspan=\"2\" style=\"border:1px solid #b87800;padding:4px 5px;text-align:center;font-weight:700;background:#b87800;color:#fff;\">\xd3R\xc7AMENTO</th>" : "";
     var orcHdr2 = (temOrcamento && isFirst) ? th("VL. OR\xc7ADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") + th("RESULTADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") : "";
-    var colgroupFixas = (temOrcamento && isFirst)
-      ? "<col style=\"width:2%\"/><col style=\"width:3%\"/><col style=\"width:3%\"/><col style=\"width:11%\"/>"
-      : "<col style=\"width:26px\"/><col style=\"width:30px\"/><col style=\"width:30px\"/><col style=\"width:15%\"/>";
-    var resumoCols = isFirst ? (temOrcamento ? "<col style=\"width:6%\"/><col style=\"width:7%\"/><col style=\"width:7%\"/>" : "<col style=\"width:7%\"/><col style=\"width:8%\"/><col style=\"width:9%\"/>") : "";
-    return "<table style=\"border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;margin-bottom:0;\"><colgroup>".concat(colgroupFixas).concat(orcColgroup).concat(resumoCols, " ").concat(chunk.map(function () {
-      return "<col style=\"width:".concat(isFirst ? emptyChunk ? 20 : Math.floor((temOrcamento ? 28 : 41) / Math.max(chunk.length, 1)) : Math.floor(61 / Math.max(chunk.length, 1)), "%\"/>");
-    }).join(""), "</colgroup><thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(orcHdr1).concat(isFirst ? "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:".concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO</th>") : "").concat(fornHdrs, "</tr><tr>").concat(orcHdr2).concat(isFirst ? "".concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;"))) : "", " ").concat(fornSubHdrs, "</tr></thead><tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>").concat(orcTotCells).concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
+    var colgroupFixas = "<col style=\"width:4%\"/><col style=\"width:5%\"/><col style=\"width:5%\"/><col style=\"width:".concat(isFirst ? "28%" : "22%", "\"/>");
+    var resumoCols = isFirst ? "<col style=\"width:10%\"/><col style=\"width:12%\"/><col style=\"width:8%\"/>" : "";
+    var fornCols = isFornPage ? chunk.map(function() {
+      return "<col style=\"width:".concat(Math.floor(61 / Math.max(chunk.length, 1)), "%\"/>");
+    }).join("") : "";
+    // cabeçalho pg1: 2 linhas; pg seguintes: 3 linhas com faixa FORNECEDORES
+    var theadHtml = isFirst
+      ? "<thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:".concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(orcHdr1, "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:").concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO</th></tr><tr>").concat(orcHdr2).concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;")), "</tr></thead>")
+      : "<thead><tr><th rowspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:".concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th><th colspan=\"").concat(chunk.length || 1, "\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;font-size:11px;letter-spacing:0.5px;background:").concat(hdrColor, ";color:#fff;\">FORNECEDORES</th></tr><tr>").concat(fornHdrs, "</tr><tr>").concat(fornSubHdrs, "</tr></thead>");
+    return "<table style=\"border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;margin-bottom:0;\"><colgroup>".concat(colgroupFixas).concat(orcColgroup).concat(resumoCols).concat(fornCols, "</colgroup>").concat(theadHtml, "<tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>").concat(orcTotCells).concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
   };
   var obsGeralHTML = mapa.obsGeral ? "<div style=\"margin-top:14px;border:1.5px solid ".concat(hdrColor, ";border-radius:4px;overflow:hidden;\"><div style=\"background:").concat(hdrColor, ";color:#fff;padding:7px 12px;font-weight:700;font-size:11px;letter-spacing:0.4px;\">OBSERVACAO GERAL DO MAPA</div><div style=\"padding:10px 12px;font-size:11px;white-space:pre-wrap;background:#fff;\">").concat((mapa.obsGeral || "").toUpperCase(), "</div></div>") : "";
   var pagesHTML = chunks.map(function (chunk, ci) {
