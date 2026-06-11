@@ -2294,7 +2294,18 @@ function ReportsModal(_ref12) {
           alert("INFORME A OBRA.");
           return;
         }
-        gerarRelatorioOrcamento(mapasRef.current, obra, orcRef.current, assocRef.current);
+        // Buscar dados frescos do banco antes de gerar
+        Promise.all([
+          sbCarregarAssociacoes(),
+          sbCarregarOrcamento(obra)
+        ]).then(function(results) {
+          var assocFrescas = results[0] && results[0].length ? results[0] : assocRef.current;
+          var orcFresco = results[1] ? _defineProperty({}, obra, results[1]) : orcRef.current;
+          var orcMerged = Object.assign({}, orcRef.current, orcFresco);
+          gerarRelatorioOrcamento(mapasRef.current, obra, orcMerged, assocFrescas);
+        }).catch(function() {
+          gerarRelatorioOrcamento(mapasRef.current, obra, orcRef.current, assocRef.current);
+        });
       }
     }
   }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
