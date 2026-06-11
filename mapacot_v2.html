@@ -4259,6 +4259,18 @@ function App() {
     sbCarregarAssociacoes().then(function(lista){ if(lista.length) setAssociacoes(lista); }).catch(function(){});
   }, []);
 
+  // Carregar orçamentos de todas as obras em background
+  React.useEffect(function() {
+    if (!cadastros.obras || !cadastros.obras.length) return;
+    cadastros.obras.forEach(function(obra) {
+      sbCarregarOrcamento(obra).then(function(dados) {
+        if (dados) setOrcamentos(function(prev) {
+          return Object.assign({}, prev, _defineProperty({}, obra, dados));
+        });
+      }).catch(function(){});
+    });
+  }, [cadastros.obras]);
+
   // Persist cadastros
   useEffect(function () {
     if (!loading && cadastrosOk) sbSaveCadastros(cadastros).catch(function () {});
