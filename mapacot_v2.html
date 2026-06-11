@@ -2080,6 +2080,13 @@ function ReportsModal(_ref12) {
     cadastros = _ref12.cadastros,
     orcamentos = _ref12.orcamentos || {},
     associacoes = _ref12.associacoes || [];
+  // Refs para garantir valores sempre atualizados no onClick
+  var assocRef = React.useRef(associacoes);
+  var orcRef = React.useRef(orcamentos);
+  var mapasRef = React.useRef(mapas);
+  React.useEffect(function(){ assocRef.current = associacoes; }, [associacoes]);
+  React.useEffect(function(){ orcRef.current = orcamentos; }, [orcamentos]);
+  React.useEffect(function(){ mapasRef.current = mapas; }, [mapas]);
   var _useState19 = useState("periodo"),
     _useState20 = _slicedToArray(_useState19, 2),
     tab = _useState20[0],
@@ -2266,28 +2273,28 @@ function ReportsModal(_ref12) {
           alert("SELECIONE O PERÍODO.");
           return;
         }
-        gerarRelatorioPeriodo(mapas, periodo.inicio, periodo.fim, orcamentos, associacoes);
+        gerarRelatorioPeriodo(mapasRef.current, periodo.inicio, periodo.fim, orcRef.current, assocRef.current);
       }
       if (tab === "obra") {
         if (!obra.trim()) {
           alert("INFORME A OBRA.");
           return;
         }
-        gerarRelatorioObra(mapas, obra, orcamentos, associacoes);
+        gerarRelatorioObra(mapasRef.current, obra, orcRef.current, assocRef.current);
       }
       if (tab === "insumo") {
         if (!insumo.trim()) {
           alert("INFORME O INSUMO.");
           return;
         }
-        gerarRelatorioInsumo(mapas, insumo);
+        gerarRelatorioInsumo(mapasRef.current, insumo);
       }
       if (tab === "orcamento") {
         if (!obra.trim()) {
           alert("INFORME A OBRA.");
           return;
         }
-        gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes);
+        gerarRelatorioOrcamento(mapasRef.current, obra, orcRef.current, assocRef.current);
       }
     }
   }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
