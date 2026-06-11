@@ -269,6 +269,19 @@ var sbSaveOrcamento = function(obraId, dados) {
     method: "POST",
     headers: SB,
     body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
+  }).then(function(r) {
+    if (!r.ok) {
+      return r.text().then(function(txt) {
+        console.error("[MAPACOT] Erro ao salvar orcamento:", r.status, txt);
+        // Tentar PATCH se POST falhou
+        return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id), {
+          method: "PATCH",
+          headers: SB,
+          body: JSON.stringify({ dados: dados, atualizado_em: new Date().toISOString() })
+        });
+      });
+    }
+    return r;
   });
 };
 var sbDeleteOrcamento = function(obraId) {
