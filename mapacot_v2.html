@@ -3548,7 +3548,7 @@ function MapEditor(_ref15) {
       marginBottom: 10,
       letterSpacing: 0.5
     }
-  }, "EXIBIR COLUNAS"), /*#__PURE__*/React.createElement("label", {
+  }, "OCULTAR COLUNAS"), /*#__PURE__*/React.createElement("label", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -3559,7 +3559,7 @@ function MapEditor(_ref15) {
     }
   }, /*#__PURE__*/React.createElement("input", {
     type: "checkbox",
-    checked: !hiddenCols.resumo,
+    checked: !!hiddenCols.resumo,
     onChange: function onChange() {
       return toggleCol("resumo");
     },
@@ -3577,7 +3577,7 @@ function MapEditor(_ref15) {
     style: { display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid #f0f2f5", cursor:"pointer" }
   }, /*#__PURE__*/React.createElement("input", {
       type: "checkbox",
-      checked: !hiddenCols.orcamento,
+      checked: !!hiddenCols.orcamento,
       onChange: function(){ return toggleCol("orcamento"); },
       style: { width:16, height:16 }
     }), /*#__PURE__*/React.createElement("span", {
@@ -3595,7 +3595,7 @@ function MapEditor(_ref15) {
       }
     }, /*#__PURE__*/React.createElement("input", {
       type: "checkbox",
-      checked: !hiddenCols[f.id],
+      checked: !!hiddenCols[f.id],
       onChange: function onChange() {
         return toggleCol(f.id);
       },
