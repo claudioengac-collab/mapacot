@@ -856,18 +856,22 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
 
   // Totais
   var totalOrcado = itensProcesados.reduce(function(ac,x){ return ac + x.vlOrc*(x.previsto||0); }, 0);
-  var totalCotado = itensProcesados.reduce(function(ac,x){ return ac + x.vlTotalCotado; }, 0)
-    + itensAdicionados.reduce(function(ac,x){ return ac + (x.resumo.vlTotal||0); }, 0);
-  var totalResultado = itensProcesados.reduce(function(ac,x){ return ac + (x.resultado||0); }, 0);
+  var totalCotadoOrc = itensProcesados.reduce(function(ac,x){ return ac + x.vlTotalCotado; }, 0);
+  var totalAdicionado = itensAdicionados.reduce(function(ac,x){ return ac + (x.resumo.vlTotal||0); }, 0);
+  var totalCotado = totalCotadoOrc + totalAdicionado;
+  var totalResultadoOrc = itensProcesados.reduce(function(ac,x){ return ac + (x.resultado||0); }, 0);
+  var totalResultado = totalResultadoOrc - totalAdicionado;
 
   // Resumo cards
   var cardStyle = "flex:1;padding:8px 12px;border-right:1px solid #e0e4ee;";
-  var resumoHTML = "<div style=\"display:flex;border-bottom:2px solid #c5d8f0;\">"
-    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">MAPAS DA OBRA</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">"+mapasFiltrados.length+"</div></div>"
-    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">ITENS NO OR\xC7AMENTO</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">"+obraOrc.length+"</div></div>"
-    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. TOTAL OR\xC7ADO</div><div style=\"font-size:14px;font-weight:800;color:#2a5298;\">"+fmtMoney(totalOrcado)+"</div></div>"
-    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. TOTAL COTADO</div><div style=\"font-size:14px;font-weight:800;color:#186818;\">"+fmtMoney(totalCotado)+"</div></div>"
-    + "<div style=\"flex:1;padding:8px 12px;\"><div style=\"font-size:8px;color:#888;\">RESULTADO GERAL</div><div style=\"font-size:13px;font-weight:800;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"+( totalResultado>=0?"\u25cf LUCRO ":"\u25cf PREJU\xcdZO ")+fmtMoney(Math.abs(totalResultado))+"</div></div>"
+  var resumoHTML = "<div style=\"display:flex;flex-wrap:wrap;border-bottom:2px solid #c5d8f0;\">"    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">MAPAS DA OBRA</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">" +mapasFiltrados.length+"</div></div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">ITENS NO OR\xC7AMENTO</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">" +obraOrc.length+"</div></div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. TOTAL OR\xC7ADO</div><div style=\"font-size:14px;font-weight:800;color:#2a5298;\">" +fmtMoney(totalOrcado)+"</div></div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. COTADO (ORC.)</div><div style=\"font-size:13px;font-weight:800;color:#186818;\">" +fmtMoney(totalCotadoOrc)+"</div></div>"
+    + "<div style=\""+cardStyle+";border-left:3px solid #aa1c1c;\"><div style=\"font-size:8px;color:#aa1c1c;font-weight:700;\">VL. ADICIONADO (\u2212)</div><div style=\"font-size:13px;font-weight:800;color:#aa1c1c;\">\u2212 " +fmtMoney(totalAdicionado)+"</div><div style=\"font-size:8px;color:#888;\">custo extra fora do or\xE7amento</div></div>"
+    + "<div style=\"flex:1;padding:8px 12px;background:"+(totalResultado>=0?"#f0fff4":"#fff5f5")+";\"><div style=\"font-size:8px;color:#888;\">RESULTADO GERAL</div><div style=\"font-size:13px;font-weight:800;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"+( totalResultado>=0?"\u25cf LUCRO ":"\u25cf PREJU\xcdZO ")+fmtMoney(Math.abs(totalResultado))+"</div>"
+    + (totalAdicionado>0?"<div style=\"font-size:8px;color:#aa1c1c;\">incl. \u2212"+fmtMoney(totalAdicionado)+" adicionados</div>":"")
+    + "</div>"
     + "</div>";
 
   // Linhas dos itens do orçamento
@@ -924,12 +928,33 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
   }).join("");
 
   // Linha total
-  var rowTot = "<tr class=\"tot\">"
-    + "<td colspan=\"6\" style=\"text-align:right;\">TOTAIS</td>"
-    + "<td style=\"text-align:right;\">"+fmtMoney(totalOrcado)+"</td>"
+  // Subtotal itens orçamento
+  var rowSubOrc = "<tr style=\"background:#e8f0fb;font-weight:700;\">"
+    + "<td colspan=\"6\" style=\"text-align:right;color:#2a5298;\">SUBTOTAL ITENS OR\xC7AMENTO</td>"
+    + "<td style=\"text-align:right;\">" +fmtMoney(totalOrcado)+"</td>"
     + "<td style=\"text-align:right;\">\u2014</td>"
-    + "<td style=\"text-align:right;\">"+fmtMoney(totalCotado)+"</td>"
-    + "<td style=\"text-align:center;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"+(totalResultado>=0?"\u25cf LUCRO":"\u25cf PREJU\xcdZO")+" "+(totalResultado>=0?"+":"\u2212")+" "+fmtMoney(Math.abs(totalResultado))+"</td>"
+    + "<td style=\"text-align:right;color:#186818;\">" +fmtMoney(totalCotadoOrc)+"</td>"
+    + "<td style=\"text-align:center;color:"+(totalResultadoOrc>=0?"#186818":"#aa1c1c")+";\">"
+    + (totalResultadoOrc>=0?"\u25cf LUCRO +":"\u25cf PREJU\xcdZO \u2212")+fmtMoney(Math.abs(totalResultadoOrc))+"</td>"
+    + "<td></td></tr>";
+  // Linha itens adicionados (custo extra)
+  var rowAddTot = totalAdicionado > 0
+    ? "<tr style=\"background:#fff0f0;font-weight:700;border-top:2px solid #f8d7da;\">"
+      + "<td colspan=\"6\" style=\"text-align:right;color:#aa1c1c;\">+ ADICIONADO (CUSTO EXTRA N\xC3O PREVISTO)</td>"
+      + "<td style=\"text-align:right;color:#888;\">\u2014</td>"
+      + "<td style=\"text-align:right;color:#888;\">\u2014</td>"
+      + "<td style=\"text-align:right;color:#aa1c1c;font-weight:700;\">\u2212 " +fmtMoney(totalAdicionado)+"</td>"
+      + "<td style=\"text-align:center;color:#aa1c1c;font-weight:700;\">\u2212 " +fmtMoney(totalAdicionado)+"</td>"
+      + "<td style=\"text-align:center;\"><span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">CUSTO EXTRA</span></td></tr>"
+    : "";
+  // Linha total geral
+  var rowTot = "<tr class=\"tot\" style=\"border-top:3px solid #2a5298;\">"
+    + "<td colspan=\"6\" style=\"text-align:right;\">TOTAL GERAL</td>"
+    + "<td style=\"text-align:right;\">" +fmtMoney(totalOrcado)+"</td>"
+    + "<td style=\"text-align:right;\">\u2014</td>"
+    + "<td style=\"text-align:right;\">" +fmtMoney(totalCotado)+"</td>"
+    + "<td style=\"text-align:center;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";font-size:11px;\">"
+    + (totalResultado>=0?"\u25cf LUCRO +":"\u25cf PREJU\xcdZO \u2212")+fmtMoney(Math.abs(totalResultado))+"</td>"
     + "<td></td></tr>";
 
   var legenda = "<div style=\"display:flex;gap:10px;padding:6px 8px;background:#f8f9fb;border-top:1px solid #e0e4ee;flex-wrap:wrap;font-size:9px;\">"
@@ -959,7 +984,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
     + "<th style=\"width:9%;text-align:right;\">VL. TOTAL COTADO</th>"
     + "<th style=\"width:10%;text-align:center;\">RESULTADO</th>"
     + "<th style=\"width:8%;text-align:center;\">SITUA\xC7\xC3O</th>"
-    + "</tr></thead><tbody>"+rows+rowsAdd+rowTot+"</tbody></table>"
+    + "</tr></thead><tbody>"+rows+rowsAdd+rowSubOrc+rowAddTot+rowTot+"</tbody></table>"
     + legenda
     + "</body></html>";
 
