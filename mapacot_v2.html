@@ -813,7 +813,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
 
   // Para cada item do orçamento, calcular consumido e associações
   var itensProcesados = obraOrc.map(function(orcItem) {
-    var assocItem = associacoes.filter(function(a){ return a.obraId===obra && a.orcItemCodigo===orcItem.codigo; });
+    var assocItem = associacoes.filter(function(a){ return (a.obraId||"").toUpperCase()===(obra||"").toUpperCase() && a.orcItemCodigo===orcItem.codigo; });
     // Recalcular consumido pelas associações (mais confiável que o valor salvo)
     var consumidoCalc = assocItem.reduce(function(ac,a){ return ac + (parseFloat(a.qtCompra)||0)*(parseFloat(a.fator)||1); }, 0);
     var consumido = consumidoCalc > 0 ? consumidoCalc : (parseFloat(orcItem.consumido)||0);
@@ -824,7 +824,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
     var vlCotado = null;
     var vlTotalCotado = 0;
     assocItem.forEach(function(a) {
-      var mapa = mapasFiltrados.find(function(m){ return m.id===a.mapaId; });
+      var mapa = mapas.find(function(m){ return m.id===a.mapaId; });
       if (!mapa) return;
       var item = (mapa.itens||[]).find(function(i){ return i.id===a.itemMapaId; });
       if (!item) return;
@@ -863,13 +863,23 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
   var totalResultado = totalResultadoOrc - totalAdicionado;
 
   // Resumo cards
+  var saldoOrcamento = totalOrcado - totalAdicionado - totalCotadoOrc;
   var cardStyle = "flex:1;padding:8px 12px;border-right:1px solid #e0e4ee;";
-  var resumoHTML = "<div style=\"display:flex;flex-wrap:wrap;border-bottom:2px solid #c5d8f0;\">"    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">MAPAS DA OBRA</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">" +mapasFiltrados.length+"</div></div>"
+  var resumoHTML = "<div style=\"display:flex;flex-wrap:wrap;border-bottom:1px solid #e0e4ee;\">"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">MAPAS DA OBRA</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">" +mapasFiltrados.length+"</div></div>"
     + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">ITENS NO OR\xC7AMENTO</div><div style=\"font-size:16px;font-weight:800;color:#2a5298;\">" +obraOrc.length+"</div></div>"
-    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. TOTAL OR\xC7ADO</div><div style=\"font-size:14px;font-weight:800;color:#2a5298;\">" +fmtMoney(totalOrcado)+"</div></div>"
-    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. COTADO (ORC.)</div><div style=\"font-size:13px;font-weight:800;color:#186818;\">" +fmtMoney(totalCotadoOrc)+"</div></div>"
-    + "<div style=\""+cardStyle+";border-left:3px solid #aa1c1c;\"><div style=\"font-size:8px;color:#aa1c1c;font-weight:700;\">VL. ADICIONADO (\u2212)</div><div style=\"font-size:13px;font-weight:800;color:#aa1c1c;\">\u2212 " +fmtMoney(totalAdicionado)+"</div><div style=\"font-size:8px;color:#888;\">custo extra fora do or\xE7amento</div></div>"
-    + "<div style=\"flex:1;padding:8px 12px;background:"+(totalResultado>=0?"#f0fff4":"#fff5f5")+";\"><div style=\"font-size:8px;color:#888;\">RESULTADO GERAL</div><div style=\"font-size:13px;font-weight:800;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"+( totalResultado>=0?"\u25cf LUCRO ":"\u25cf PREJU\xcdZO ")+fmtMoney(Math.abs(totalResultado))+"</div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. TOTAL OR\xC7ADO</div><div style=\"font-size:14px;font-weight:800;color:#2a5298;\">" +fmtMoney(totalOrcado)+"</div><div style=\"font-size:8px;color:#888;\">valor previsto original</div></div>"
+    + "<div style=\""+cardStyle+";border-left:3px solid #aa1c1c;background:#fff8f8;\"><div style=\"font-size:8px;color:#aa1c1c;font-weight:700;\">VL. ADICIONADO (\u2212)</div><div style=\"font-size:13px;font-weight:800;color:#aa1c1c;\">\u2212 " +fmtMoney(totalAdicionado)+"</div><div style=\"font-size:8px;color:#888;\">custo extra n\xE3o previsto</div></div>"
+    + "<div style=\""+cardStyle+"\"><div style=\"font-size:8px;color:#888;\">VL. COTADO (ORC.)</div><div style=\"font-size:13px;font-weight:800;color:#186818;\">" +fmtMoney(totalCotadoOrc)+"</div><div style=\"font-size:8px;color:#888;\">compras realizadas</div></div>"
+    + "<div style=\""+cardStyle+";background:"+(saldoOrcamento>=0?"#f0fff4":"#fff5f5")+";border-left:3px solid "+(saldoOrcamento>=0?"#186818":"#aa1c1c")+";\">"
+    + "<div style=\"font-size:8px;color:#888;\">SALDO DISPON\xcdVEL</div>"
+    + "<div style=\"font-size:13px;font-weight:800;color:"+(saldoOrcamento>=0?"#186818":"#aa1c1c")+";\">"+fmtMoney(saldoOrcamento)+"</div>"
+    + "<div style=\"font-size:8px;color:#888;\">or\xE7ado \u2212 adicionado \u2212 cotado</div>"
+    + "</div>"
+    + "<div style=\"flex:1;padding:8px 12px;background:"+(totalResultado>=0?"#f0fff4":"#fff5f5")+";border-left:3px solid "+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"
+    + "<div style=\"font-size:8px;color:#888;\">RESULTADO GERAL</div>"
+    + "<div style=\"font-size:13px;font-weight:800;color:"+(totalResultado>=0?"#186818":"#aa1c1c")+";\">"
+    + ( totalResultado>=0?"\u25cf LUCRO ":"\u25cf PREJU\xcdZO ")+fmtMoney(Math.abs(totalResultado))+"</div>"
     + (totalAdicionado>0?"<div style=\"font-size:8px;color:#aa1c1c;\">incl. \u2212"+fmtMoney(totalAdicionado)+" adicionados</div>":"")
     + "</div>"
     + "</div>";
