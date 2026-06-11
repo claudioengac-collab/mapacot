@@ -4706,6 +4706,7 @@ function App() {
     cadastros: cadastros,
     addCadastro: addCadastro
   })), /*#__PURE__*/React.createElement(ReportsModal, {
+    key: showRep ? "rep-open" : "rep-closed",
     open: showRep,
     onClose: function onClose() {
       return setShowRep(false);
