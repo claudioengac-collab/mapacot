@@ -856,7 +856,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
       }
     });
     var vlOrc = parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0;
-    var resultado = vlCotado !== null ? (vlOrc - vlCotado) * consumido : null;
+    var resultado = vlCotado !== null ? (vlOrc * previsto) - (vlCotado * consumido) : null;
     return { orcItem:orcItem, consumido:consumido, previsto:previsto, saldo:saldo, excedentes:excedentes, vlCotado:vlCotado, vlTotalCotado:vlTotalCotado, resultado:resultado, vlOrc:vlOrc, adicionado:false };
   });
 
