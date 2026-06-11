@@ -2634,7 +2634,7 @@ function MapEditor(_ref15) {
     var isFirst = ci === 0,
       isLast = ci === chunks.length - 1;
     var showResumo = isFirst && !hiddenCols.resumo;
-    var showOrcamento = showOrcamento && !hiddenCols.orcamento;
+    var showOrcamento = temOrcamento && isFirst && !hiddenCols.orcamento;
     var visibleChunk = chunk.filter(function (f) {
       return !hiddenCols[f.id];
     });
