@@ -552,7 +552,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
       }).join("") : "";
       var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
-      var orcCells = (temOrcamento && isFirst) ? (function() {
+      var orcCells = (showOrcamento) ? (function() {
         var assoc = getAssocPDF(item.id);
         var vlo = calcVlOrcPDF(assoc);
         var res = assoc ? calcResPDF(item, assoc) : null;
@@ -598,7 +598,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         var cellStyle = row.money ? "border:1px solid #ccc;padding:4px 6px;text-align:right;" : "border:1px solid #ccc;padding:4px 6px;text-align:left;word-wrap:break-word;overflow-wrap:break-word;white-space:normal;font-size:9px;";
         return "<td style=\"".concat(cellStyle, "\">").concat(r2[row.key] || "", "</td>");
       }).join("") : "";
-      return "<tr><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;font-size:10px;\">".concat(row.label, "</td>").concat((temOrcamento && isFirst) ? "<td style=\"border:1px solid #e0bf30;padding:4px 6px;text-align:center;background:#fffbee;border-left:2px solid #e0bf30;color:#ccc;\">\u2014</td><td style=\"border:1px solid #e0bf30;padding:4px 6px;text-align:center;background:#fffbee;border-right:2px solid #e0bf30;color:#ccc;\">\u2014</td>" : "").concat(resumoCell).concat(fornCells, "</tr>");
+      return "<tr><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;font-size:10px;\">".concat(row.label, "</td>").concat((showOrcamento) ? "<td style=\"border:1px solid #e0bf30;padding:4px 6px;text-align:center;background:#fffbee;border-left:2px solid #e0bf30;color:#ccc;\">\u2014</td><td style=\"border:1px solid #e0bf30;padding:4px 6px;text-align:center;background:#fffbee;border-right:2px solid #e0bf30;color:#ccc;\">\u2014</td>" : "").concat(resumoCell).concat(fornCells, "</tr>");
     }).join("");
     var totalFornCells = isFornPage ? chunk.map(function (f) {
       var t = totalBruto(f.id);
@@ -611,7 +611,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       return th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"));
     }).join("")) : "";
     var resumaTotCells = isFirst ? "<td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:1px solid #ccc;border-right:none;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:none;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">".concat(resumoTotal > 0 ? fmtMoney(resumoTotal) : "\u2014", "</td><td style=\"border-top:1px solid #ccc;border-bottom:1px solid #ccc;border-left:none;border-right:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>") : "";
-    var orcTotCells = (temOrcamento && isFirst) ? (function() {
+    var orcTotCells = (showOrcamento) ? (function() {
       var soma = itens.reduce(function(ac, it) {
         var a = getAssocPDF(it.id); var r2 = a ? calcResPDF(it, a) : null;
         return ac + (r2 ? r2.total : 0);
@@ -623,9 +623,9 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       return "<td style=\"border:1px solid #e0bf30;padding:6px 8px;text-align:center;background:#fffbee;border-left:2px solid #e0bf30;color:#ccc;\">\u2014</td>" +
              "<td style=\"border:1px solid #e0bf30;padding:6px 8px;text-align:center;font-weight:700;background:#fffbee;border-right:2px solid #e0bf30;color:" + (temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc") + ";\">" + resHtml + "</td>";
     })() : "";
-    var orcColgroup = (temOrcamento && isFirst) ? "<col style=\"width:13%\"/><col style=\"width:15%\"/>" : "";
-    var orcHdr1 = (temOrcamento && isFirst) ? "<th colspan=\"2\" style=\"border:1px solid #b87800;padding:4px 5px;text-align:center;font-weight:700;background:#b87800;color:#fff;\">\xd3R\xc7AMENTO</th>" : "";
-    var orcHdr2 = (temOrcamento && isFirst) ? th("VL. OR\xc7ADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") + th("RESULTADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") : "";
+    var orcColgroup = (showOrcamento) ? "<col style=\"width:13%\"/><col style=\"width:15%\"/>" : "";
+    var orcHdr1 = (showOrcamento) ? "<th colspan=\"2\" style=\"border:1px solid #b87800;padding:4px 5px;text-align:center;font-weight:700;background:#b87800;color:#fff;\">\xd3R\xc7AMENTO</th>" : "";
+    var orcHdr2 = (showOrcamento) ? th("VL. OR\xc7ADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") + th("RESULTADO", "background:#d48800;color:#fff;text-align:center;font-size:9px;border:1px solid #b87800;") : "";
     var colgroupFixas = "<col style=\"width:4%\"/><col style=\"width:5%\"/><col style=\"width:5%\"/><col style=\"width:".concat(isFirst ? "24%" : "22%", "\"/>");
     var resumoCols = isFirst ? "<col style=\"width:10%\"/><col style=\"width:11%\"/><col style=\"width:16%\"/>" : "";
     var fornCols = isFornPage ? chunk.map(function() {
@@ -2307,7 +2307,8 @@ function MapEditor(_ref15) {
     showCadEditor = _useStateCad2[0],
     setShowCadEditor = _useStateCad2[1];
   var _useState39 = useState({
-      resumo: false
+      resumo: false,
+      orcamento: false
     }),
     _useState40 = _slicedToArray(_useState39, 2),
     hiddenCols = _useState40[0],
@@ -2633,6 +2634,7 @@ function MapEditor(_ref15) {
     var isFirst = ci === 0,
       isLast = ci === chunks.length - 1;
     var showResumo = isFirst && !hiddenCols.resumo;
+    var showOrcamento = showOrcamento && !hiddenCols.orcamento;
     var visibleChunk = chunk.filter(function (f) {
       return !hiddenCols[f.id];
     });
@@ -2732,7 +2734,7 @@ function MapEditor(_ref15) {
         paddingLeft: 10
       })
     }, "DESCRI\xC7\xC3O"),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", {
+    showOrcamento && /*#__PURE__*/React.createElement("th", {
       colSpan: 2,
       style: _objectSpread(_objectSpread({}, thC), {}, { textAlign:"center", background:"#b87800", borderLeft:"2px solid rgba(255,255,255,0.3)", borderRight:"2px solid rgba(255,255,255,0.3)" })
     }, "OR\xC7AMENTO"),
@@ -2781,8 +2783,8 @@ function MapEditor(_ref15) {
         color: "#444"
       }
     }))),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderLeft:"2px solid rgba(255,255,255,0.2)"} }, "VL. OR\xC7ADO"),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.2)"} }, "RESULTADO"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderLeft:"2px solid rgba(255,255,255,0.2)"} }, "VL. OR\xC7ADO"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.2)"} }, "RESULTADO"),
     showResumo && /*#__PURE__*/React.createElement("th", {
       colSpan: 3,
       style: _objectSpread(_objectSpread({}, thS), {}, {
@@ -2878,8 +2880,8 @@ function MapEditor(_ref15) {
     })))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       style: _objectSpread({}, thS)
     }),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderLeft:"2px solid rgba(0,0,0,0.1)"} }, "por UNID. compra"),
-    temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderRight:"2px solid rgba(0,0,0,0.1)"} }, "vs. melhor pre\xe7o"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderLeft:"2px solid rgba(0,0,0,0.1)"} }, "por UNID. compra"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderRight:"2px solid rgba(0,0,0,0.1)"} }, "vs. melhor pre\xe7o"),
     showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thS), {}, {
         textAlign: "right",
@@ -2983,7 +2985,7 @@ function MapEditor(_ref15) {
           updItem(item.id, "detalhe", v);
         }
       }),
-      temOrcamento && isFirst && (function() {
+      showOrcamento && (function() {
         var assoc = getAssocItem(item.id);
         var vlo = calcVlOrc(assoc);
         var res = assoc ? calcRes(item, assoc) : null;
@@ -3102,7 +3104,7 @@ function MapEditor(_ref15) {
         fontSize: 12
       })
     }, "TOTAL"),
-    temOrcamento && isFirst && (function(){
+    showOrcamento && (function(){
       var soma = itens.reduce(function(ac,it){
         var a=getAssocItem(it.id); var r=a?calcRes(it,a):null;
         return ac+(r?r.total:0);
@@ -3167,8 +3169,8 @@ function MapEditor(_ref15) {
           letterSpacing: 0.3
         })
       }, row.label),
-      temOrcamento && isFirst && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
-      temOrcamento && isFirst && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
+      showOrcamento && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
+      showOrcamento && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
       showResumo && function (_rodapeResumo$row$key2) {
         var bg = "#e8eeff",
           bl = "2px solid #b8c8e8",
@@ -3477,7 +3479,32 @@ function MapEditor(_ref15) {
       color: "#2a5298",
       fontWeight: 600
     }
-  }, "RESUMO")), fornecedores.map(function (f) {
+  }, "RESUMO")), /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      padding: "6px 0",
+      borderBottom: "1px solid #f0f2f5",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !hiddenCols.orcamento,
+    onChange: function onChange() {
+      return toggleCol("orcamento");
+    },
+    style: {
+      width: 16,
+      height: 16
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: "#b87800",
+      fontWeight: 600
+    }
+  }, "OR\xC7AMENTO")), fornecedores.map(function (f) {
     return /*#__PURE__*/React.createElement("label", {
       key: f.id,
       style: {
