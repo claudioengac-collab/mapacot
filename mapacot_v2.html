@@ -2536,7 +2536,12 @@ function MapEditor(_ref15) {
     var saldo = orcSaldoDisponivel(assocSel);
     var ae = getAssocItem(itemAssociando.id);
     if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
-    if (qt*fator > saldo && !assocExc) { setAssocExc(true); return; }
+    // Se o item era "adicionado" (comprado=true sem associação prévia),
+    // a quantidade já estava fora do orçamento — ao vincular agora é uma migração,
+    // não uma compra nova. Somar ao saldo para não bloquear como excedente.
+    var eraAdicionado = itemAssociando.comprado && !ae;
+    var saldoEfetivo = eraAdicionado ? saldo + qt*fator : saldo;
+    if (qt*fator > saldoEfetivo && !assocExc) { setAssocExc(true); return; }
     onCriarAssociacao({
       id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
       obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
@@ -2587,7 +2592,9 @@ function MapEditor(_ref15) {
     var saldo = orcSaldoDisponivel(assocSel);
     var ae = getAssocItem(itemAssociando.id);
     if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
-    if (qt*fator > saldo && !assocExc) { setAssocExc(true); return; }
+    var eraAdicionado = itemAssociando.comprado && !ae;
+    var saldoEfetivo = eraAdicionado ? saldo + qt*fator : saldo;
+    if (qt*fator > saldoEfetivo && !assocExc) { setAssocExc(true); return; }
     onCriarAssociacao({
       id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
       obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
