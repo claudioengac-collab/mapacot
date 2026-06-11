@@ -271,14 +271,10 @@ var sbSaveOrcamento = function(obraId, dados) {
     body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
   }).then(function(r) {
     if (!r.ok) {
-      return r.text().then(function(txt) {
-        console.error("[MAPACOT] Erro ao salvar orcamento:", r.status, txt);
-        // Tentar PATCH se POST falhou
-        return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id), {
-          method: "PATCH",
-          headers: SB,
-          body: JSON.stringify({ dados: dados, atualizado_em: new Date().toISOString() })
-        });
+      return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id), {
+        method: "PATCH",
+        headers: SB,
+        body: JSON.stringify({ dados: dados, atualizado_em: new Date().toISOString() })
       });
     }
     return r;
@@ -827,7 +823,16 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
 
   // Para cada item do orçamento, calcular consumido e associações
   var itensProcesados = obraOrc.map(function(orcItem) {
-    var assocItem = associacoes.filter(function(a){ return (a.obraId||"").toUpperCase()===(obra||"").toUpperCase() && (a.orcItemCodigo===orcItem.codigo || a.orcItemCodigo===String(parseInt(orcItem.codigo||"0",10)) || orcItem.codigo===String(parseInt(a.orcItemCodigo||"0",10))); });
+    // Filtrar associações: usar mapaId dos mapas da obra (mais confiável que comparar nome da obra)
+    var mapaIdsObra = mapasFiltrados.map(function(m){ return m.id; });
+    var codigoNorm = String(parseInt(orcItem.codigo||"0",10));
+    var assocItem = associacoes.filter(function(a){
+      var mapaOk = mapaIdsObra.indexOf(a.mapaId) >= 0;
+      var codOk = a.orcItemCodigo===orcItem.codigo
+        || a.orcItemCodigo===codigoNorm
+        || orcItem.codigo===String(parseInt(a.orcItemCodigo||"0",10));
+      return mapaOk && codOk;
+    });
     // Recalcular consumido pelas associações (mais confiável que o valor salvo no banco)
     var consumidoCalc = assocItem.reduce(function(ac,a){ return ac + (parseFloat(a.qtCompra)||0)*(parseFloat(a.fator)||1); }, 0);
     var consumido = consumidoCalc > 0 ? consumidoCalc : (parseFloat(orcItem.consumido)||0);
@@ -860,8 +865,8 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
   mapasFiltrados.forEach(function(mapa) {
     (mapa.itens||[]).forEach(function(item) {
       if (!item.comprado) return;
-      // Verificar em TODAS as associações (não filtrar por obra aqui — o mapaId é suficiente)
-      var temAssoc = associacoes.some(function(a){ return (a.mapaId===mapa.id || !a.mapaId) && a.itemMapaId===item.id; });
+      // Verificar se este item tem associação — usar mapaId + itemMapaId (mais confiável)
+      var temAssoc = associacoes.some(function(a){ return a.mapaId===mapa.id && a.itemMapaId===item.id; });
       if (!temAssoc) {
         var r = calcResumo(item, mapa.fornecedores||[], mapa.precos||{});
         itensAdicionados.push({ item:item, mapa:mapa, resumo:r });
