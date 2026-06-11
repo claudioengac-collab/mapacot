@@ -814,7 +814,9 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
   // Para cada item do orçamento, calcular consumido e associações
   var itensProcesados = obraOrc.map(function(orcItem) {
     var assocItem = associacoes.filter(function(a){ return a.obraId===obra && a.orcItemCodigo===orcItem.codigo; });
-    var consumido = parseFloat(orcItem.consumido)||0;
+    // Recalcular consumido pelas associações (mais confiável que o valor salvo)
+    var consumidoCalc = assocItem.reduce(function(ac,a){ return ac + (parseFloat(a.qtCompra)||0)*(parseFloat(a.fator)||1); }, 0);
+    var consumido = consumidoCalc > 0 ? consumidoCalc : (parseFloat(orcItem.consumido)||0);
     var previsto = parseFloat(orcItem.quantidade)||0;
     var saldo = previsto - consumido;
     var excedentes = assocItem.filter(function(a){ return (parseFloat(a.excedente)||0)>0; });
