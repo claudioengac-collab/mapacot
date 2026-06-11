@@ -2315,6 +2315,7 @@ function MapEditor(_ref15) {
   var _sFa = React.useState("1"), assocFator = _slicedToArray(_sFa,2)[0], setAssocFator = _slicedToArray(_sFa,2)[1];
   var _sEx = React.useState(false), assocExc = _slicedToArray(_sEx,2)[0], setAssocExc = _slicedToArray(_sEx,2)[1];
   var _sJu = React.useState(""), assocJust = _slicedToArray(_sJu,2)[0], setAssocJust = _slicedToArray(_sJu,2)[1];
+  var _sSug = React.useState(null), assocSug = _slicedToArray(_sSug,2)[0], setAssocSug = _slicedToArray(_sSug,2)[1];
   // Estados modal importação dentro do editor
   var _sIE = React.useState(false), showImpEd = _slicedToArray(_sIE,2)[0], setShowImpEd = _slicedToArray(_sIE,2)[1];
   var _sOE = React.useState(null), obraImpEd = _slicedToArray(_sOE,2)[0], setObraImpEd = _slicedToArray(_sOE,2)[1];
@@ -2507,7 +2508,26 @@ function MapEditor(_ref15) {
     if (ae) {
       setAssocSel(obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null);
       setAssocFator(String(ae.fator||"1"));
-    } else { setAssocSel(null); setAssocFator("1"); }
+    } else {
+      setAssocSel(null); setAssocFator("1");
+      var descItem = (item.descricao||"").toUpperCase();
+      var palavras = descItem.split(/\s+/).filter(function(p){ return p.length > 3; });
+      if (palavras.length > 0 && associacoes && associacoes.length > 0) {
+        var contagem = {};
+        associacoes.forEach(function(a) {
+          if (!a.orcItemCodigo) return;
+          var descA = (a.orcItemDesc||"").toUpperCase();
+          var match = palavras.some(function(p){ return descA.includes(p); });
+          if (match) { contagem[a.orcItemCodigo] = (contagem[a.orcItemCodigo]||0) + 1; }
+        });
+        var melhorCod = null, melhorQt = 0;
+        Object.keys(contagem).forEach(function(cod) {
+          if (contagem[cod] > melhorQt) { melhorQt = contagem[cod]; melhorCod = cod; }
+        });
+        var itemSug = melhorCod ? obraOrcItens.find(function(it){ return it.codigo === melhorCod; }) : null;
+        setAssocSug(itemSug || null);
+      } else { setAssocSug(null); }
+    }
   };
   var confirmarAssoc = function() {
     if (!itemAssociando || !assocSel || !onCriarAssociacao) return;
@@ -3607,6 +3627,22 @@ function MapEditor(_ref15) {
       /*#__PURE__*/React.createElement("div", {style:{background:"#f0f4ff",borderRadius:7,padding:"8px 12px",fontSize:12}},
         "Insumo: ", /*#__PURE__*/React.createElement("strong", null, itemAssociando.descricao), " | Qt: ", /*#__PURE__*/React.createElement("strong", null, itemAssociando.qt, " ", itemAssociando.unid)),
       !assocExc ? /*#__PURE__*/React.createElement(React.Fragment, null,
+        assocSug && /*#__PURE__*/React.createElement("div", {style:{background:"#fffbe6",border:"1.5px solid #e0c060",borderRadius:8,padding:"10px 14px",marginBottom:4,fontSize:12}},
+          /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,color:"#7a4400",fontSize:11,marginBottom:6}},
+            "\ud83d\udca1 SUGEST\xc3O BASEADA EM ASSOCIA\xc7\xd5ES ANTERIORES"),
+          /*#__PURE__*/React.createElement("div", {style:{color:"#1a2a4a",fontSize:12,marginBottom:8}},
+            /*#__PURE__*/React.createElement("strong", null, assocSug.codigo), " \u2014 ", assocSug.descricao,
+            /*#__PURE__*/React.createElement("span", {style:{color:"#888",fontSize:10,marginLeft:8}},
+              assocSug.unidade, " \u2022 R$ ", (assocSug.valorUnitario||0).toLocaleString("pt-BR",{minimumFractionDigits:2}), "/", assocSug.unidade)),
+          /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:8}},
+            /*#__PURE__*/React.createElement("button", {
+              onClick: function(){ setAssocSel(assocSug); setAssocFator("1"); setAssocSug(null); },
+              style:{background:"#2a5298",color:"#fff",border:"none",borderRadius:6,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer"}
+            }, "\u2705 USAR ESTA"),
+            /*#__PURE__*/React.createElement("button", {
+              onClick: function(){ setAssocSug(null); },
+              style:{background:"#f0f0f0",border:"none",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer",color:"#555"}
+            }, "IGNORAR"))),
         /*#__PURE__*/React.createElement("input", {value:assocBusca, onChange:function(e){setAssocBusca(e.target.value.toUpperCase());}, placeholder:"BUSCAR NO OR\xc7AMENTO...", style:{border:"1.5px solid #dde1e9",borderRadius:8,padding:"9px 12px",fontSize:12,outline:"none",width:"100%",fontFamily:"inherit",textTransform:"uppercase"}}),
         /*#__PURE__*/React.createElement("div", {style:{maxHeight:200,overflowY:"auto",border:"1px solid #e4e8f0",borderRadius:8}},
           obraOrcItens.filter(function(it){ return !assocBusca||it.descricao.includes(assocBusca); }).slice(0,30).map(function(it){
