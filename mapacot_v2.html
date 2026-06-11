@@ -24,6 +24,19 @@ input[type=password]{text-transform:none;}
   .rsp-appbar>div:nth-child(3) button{padding:5px 8px!important;font-size:10px!important;gap:2px!important;flex:1;justify-content:center;}
   .rsp-appbar>div:nth-child(3) span{font-size:10px!important;margin-left:auto;flex-shrink:0;white-space:nowrap;}
 }
+
+/* Barra de rolagem dupla */
+.scroll-top-bar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 12px;
+  background: #f0f2f5;
+  border: 1px solid #c8ccd8;
+  border-bottom: none;
+}
+.scroll-top-bar-inner {
+  height: 1px;
+}
 </style>
 </head>
 <body>
@@ -2796,7 +2809,20 @@ function MapEditor(_ref15) {
         whiteSpace: "nowrap",
         marginLeft: "auto"
       }
-    }, "DATA: ", fmtDate(clock), "\xA0\xA0HORA: ", fmtHora(clock))), /*#__PURE__*/React.createElement("div", {
+    }, "DATA: ", fmtDate(clock), "\xA0\xA0HORA: ", fmtHora(clock))),
+    /*#__PURE__*/React.createElement("div", {
+      className: "scroll-top-bar",
+      ref: function(el) {
+        if (!el || el._bound) return;
+        var next = el.nextSibling;
+        if (!next) return;
+        el._bound = true;
+        el.addEventListener("scroll", function(){ next.scrollLeft = el.scrollLeft; });
+        next.addEventListener("scroll", function(){ el.scrollLeft = next.scrollLeft; });
+        setInterval(function(){ var i=el.firstChild; if(i) i.style.width=next.scrollWidth+"px"; }, 300);
+      }
+    }, /*#__PURE__*/React.createElement("div", {className:"scroll-top-bar-inner"})),
+    /*#__PURE__*/React.createElement("div", {
       style: SC.tableScroll
     }, /*#__PURE__*/React.createElement("table", {
       style: SC.table
@@ -3191,7 +3217,7 @@ function MapEditor(_ref15) {
         borderTop: "2px solid rgba(0,0,0,0.1)"
       }
     }, /*#__PURE__*/React.createElement("td", {
-      colSpan: 5 + (showOrcamento ? 2 : 0),
+      colSpan: 5 + (showOrcamento ? 2 : 0) + (showResumo ? 3 : 0) + Math.max(visibleChunk.length, 1),
       style: _objectSpread(_objectSpread({}, SC.td), {}, {
         fontWeight: 700,
         paddingLeft: 10,
@@ -3255,7 +3281,7 @@ function MapEditor(_ref15) {
           borderTop: ri === 0 ? "1px solid #d8dce8" : undefined
         }
       }, /*#__PURE__*/React.createElement("td", {
-        colSpan: 5 + (showOrcamento ? 2 : 0),
+        colSpan: 5 + (showOrcamento ? 2 : 0) + (showResumo ? 3 : 0) + Math.max(visibleChunk.length, 1),
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           fontWeight: 600,
           fontSize: 11,
@@ -3548,7 +3574,7 @@ function MapEditor(_ref15) {
       marginBottom: 10,
       letterSpacing: 0.5
     }
-  }, "OCULTAR COLUNAS"), /*#__PURE__*/React.createElement("label", {
+  }, "EXIBIR COLUNAS"), /*#__PURE__*/React.createElement("label", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -5015,6 +5041,25 @@ function Root() {
   });
   return /*#__PURE__*/React.createElement(App, null);
 }
+// Sincronizar barras de scroll duplas
+document.addEventListener('DOMContentLoaded', function() {
+  setInterval(function() {
+    var scrollDivs = document.querySelectorAll('.scroll-top-bar');
+    var tableDivs = document.querySelectorAll('[data-scroll-sync]');
+    scrollDivs.forEach(function(topBar, i) {
+      var tableDiv = tableDivs[i];
+      if (!topBar || !tableDiv) return;
+      if (!topBar._synced) {
+        topBar._synced = true;
+        topBar.addEventListener('scroll', function() { tableDiv.scrollLeft = topBar.scrollLeft; });
+        tableDiv.addEventListener('scroll', function() { topBar.scrollLeft = tableDiv.scrollLeft; });
+      }
+      var inner = topBar.querySelector('.scroll-top-bar-inner');
+      if (inner) inner.style.width = tableDiv.scrollWidth + 'px';
+    });
+  }, 500);
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Root, null));
 </script>
 </body>
