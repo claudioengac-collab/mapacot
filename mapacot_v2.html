@@ -3537,18 +3537,16 @@ function MapEditor(_ref15) {
       color: "#2a5298",
       fontWeight: 600
     }
-  }, "RESUMO")), /*#__PURE__*/React.createElement("label", {
+  }, "RESUMO")), temOrcamento && /*#__PURE__*/React.createElement("label", {
     style: { display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid #f0f2f5", cursor:"pointer" }
-  },
-  /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    checked: !hiddenCols.orcamento,
-    onChange: function(){ return toggleCol("orcamento"); },
-    style: { width:16, height:16 }
-  }),
-  /*#__PURE__*/React.createElement("span", {
-    style: { fontSize:13, color:"#b87800", fontWeight:600 }
-  }, "OR\xc7AMENTO")), fornecedores.map(function (f) {
+  }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: !hiddenCols.orcamento,
+      onChange: function(){ return toggleCol("orcamento"); },
+      style: { width:16, height:16 }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: { fontSize:13, color:"#b87800", fontWeight:600 }
+    }, "OR\xc7AMENTO")), fornecedores.map(function (f) {
     return /*#__PURE__*/React.createElement("label", {
       key: f.id,
       style: {
