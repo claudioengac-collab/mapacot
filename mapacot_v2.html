@@ -2253,22 +2253,6 @@ function MapEditor(_ref15) {
   var saveTimer = useRef();
   var mapContainerRef = useRef();
   var tableRef = useRef();
-  useEffect(function() {
-    var mirror = mapContainerRef.current;
-    var table = tableRef.current;
-    if (!mirror || !table) return;
-    var inner = mirror.firstChild;
-    var syncMirror = function() { table.scrollLeft = mirror.scrollLeft; };
-    var syncTable = function() { mirror.scrollLeft = table.scrollLeft; };
-    mirror.addEventListener("scroll", syncMirror);
-    table.addEventListener("scroll", syncTable);
-    var t = setInterval(function() { if(inner) inner.style.width = table.scrollWidth + "px"; }, 200);
-    return function() {
-      mirror.removeEventListener("scroll", syncMirror);
-      table.removeEventListener("scroll", syncTable);
-      clearInterval(t);
-    };
-  }, []);
   // Estados do modal de associação
   var _sIA = React.useState(null), itemAssociando = _slicedToArray(_sIA,2)[0], setItemAssociando = _slicedToArray(_sIA,2)[1];
   var _sBu = React.useState(""), assocBusca = _slicedToArray(_sBu,2)[0], setAssocBusca = _slicedToArray(_sBu,2)[1];
@@ -2697,12 +2681,10 @@ function MapEditor(_ref15) {
       }
     }, "DATA: ", fmtDate(clock), "\xA0\xA0HORA: ", fmtHora(clock))),
     /*#__PURE__*/React.createElement("div", {
-      className: "scroll-mirror",
-      ref: mapContainerRef
+      className: "scroll-mirror"
     }, /*#__PURE__*/React.createElement("div", {className:"scroll-mirror-inner"})),
     /*#__PURE__*/React.createElement("div", {
-      style: SC.tableScroll,
-      ref: tableRef
+      style: SC.tableScroll
     }, /*#__PURE__*/React.createElement("table", {
       style: SC.table
     }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
@@ -4907,6 +4889,26 @@ function Root() {
   });
   return /*#__PURE__*/React.createElement(App, null);
 }
+// Sincronizar barras de rolagem duplas para TODOS os mapas
+setInterval(function() {
+  var mirrors = document.querySelectorAll('.scroll-mirror');
+  mirrors.forEach(function(mirror) {
+    if (mirror._sync) return;
+    var table = mirror.nextSibling;
+    if (!table) return;
+    mirror._sync = true;
+    var inner = mirror.querySelector('.scroll-mirror-inner');
+    mirror.addEventListener('scroll', function() { table.scrollLeft = mirror.scrollLeft; });
+    table.addEventListener('scroll', function() { mirror.scrollLeft = table.scrollLeft; });
+  });
+  // Atualizar largura dos inner divs
+  document.querySelectorAll('.scroll-mirror').forEach(function(mirror) {
+    var table = mirror.nextSibling;
+    var inner = mirror.querySelector('.scroll-mirror-inner');
+    if (table && inner) inner.style.width = table.scrollWidth + 'px';
+  });
+}, 300);
+
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Root, null));
 </script>
 </body>
