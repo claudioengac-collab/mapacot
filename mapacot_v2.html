@@ -755,11 +755,10 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
   ].join("");
 
   // Para cada item do orçamento, calcular consumido e associações
-  var itensProcesados = obraOrc.map(function(orcItem) {
+  var itensProcesados = obraOrc.map(function(orcItem, idxOrcItem) {
     // Filtrar associações: usar mapaId dos mapas da obra (mais confiável que comparar nome da obra)
     var mapaIdsObra = mapasFiltrados.map(function(m){ return m.id; });
     var codigoNorm = String(parseInt(orcItem.codigo||"0",10));
-    var idxOrcItem = obraOrc.indexOf(orcItem);
     var assocItem = associacoes.filter(function(a){
       var mapaOk = mapaIdsObra.indexOf(a.mapaId) >= 0;
       var codOk = a.orcItemCodigo===orcItem.codigo
