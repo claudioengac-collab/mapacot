@@ -753,7 +753,9 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
     var consumidoCalc = assocItem.reduce(function(ac,a){
       var mapa = mapasFiltrados.find(function(m){ return m.id === a.mapaId; });
       var itemMapa = mapa ? (mapa.itens||[]).find(function(it){ return it.id === a.itemMapaId; }) : null;
-      var qtAtual = itemMapa ? (parseFloat(String(itemMapa.qt).replace(",","."))||0) : (parseFloat(a.qtCompra)||0);
+      var qtMapa = itemMapa ? (parseFloat(String(itemMapa.qt).replace(",","."))||0) : 0;
+      var qtSalva = parseFloat(String(a.qtCompra).replace(",","."))||0;
+      var qtAtual = (qtSalva > 0 && qtSalva < qtMapa) ? qtSalva : (qtMapa || qtSalva);
       return ac + qtAtual * (parseFloat(a.fator)||1);
     }, 0);
     var consumido = consumidoCalc > 0 ? consumidoCalc : (parseFloat(orcItem.consumido)||0);
