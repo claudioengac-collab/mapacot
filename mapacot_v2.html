@@ -2778,20 +2778,22 @@ function MapEditor(_ref15) {
     if (!aes || aes.length === 0) return null;
     var res = calcResumo(item, mapa.fornecedores, mapa.precos);
     if (res.vlUnit === null) return null;
-    var qtTotal = aes.reduce(function(ac,a){ return ac+(parseFloat(String(a.qtCompra).replace(",","."))||0); }, 0);
-    if (qtTotal <= 0) return null;
+    var qtItem = parseFloat(String(item.qt).replace(",","."))||0;
+    if (qtItem <= 0) return null;
     var vlOrcTotal = aes.reduce(function(ac,a){
-      var oi = obraOrcItens[a.orcItemIndex != null ? a.orcItemIndex : obraOrcItens.findIndex(function(it){ return it.codigo===a.orcItemCodigo; })];
-      console.log("DEBUG calcResMulti: orcItemIndex="+a.orcItemIndex+" codigo="+a.orcItemCodigo+" oi="+(oi?oi.descricao.substring(0,20):"NULL")+" vl="+(oi?oi.valorUnitario:0)+" obraOrcItens.length="+obraOrcItens.length);
+      var idx = a.orcItemIndex != null ? a.orcItemIndex : obraOrcItens.findIndex(function(it){ return it.codigo===a.orcItemCodigo; });
+      var oi = obraOrcItens[idx];
       if (!oi) return ac;
       var fator = parseFloat(a.fator)||1;
       var qt = parseFloat(String(a.qtCompra).replace(",","."))||0;
       return ac + (parseFloat(oi.valorUnitario)||0) * fator * qt;
     }, 0);
-    var vloMedio = vlOrcTotal / qtTotal;
+    if (vlOrcTotal <= 0) return null;
+    var vlCotadoTotal = (res.vlUnit||0) * qtItem;
+    var resultado = vlOrcTotal - vlCotadoTotal;
+    var vloMedio = vlOrcTotal / qtItem;
     var diff = vloMedio - res.vlUnit;
-    var qt = parseFloat(String(item.qt).replace(",","."))||0;
-    return { diff: diff, pct: (diff/vloMedio)*100, lucro: diff>=0, total: diff*qt, vloMedio: vloMedio };
+    return { diff: diff, pct: (diff/vloMedio)*100, lucro: resultado>=0, total: resultado, vloMedio: vloMedio };
   };
   var renderChunk = function renderChunk(chunk, ci) {
     var hiddenCols = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
