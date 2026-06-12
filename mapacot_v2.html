@@ -3160,16 +3160,17 @@ function MapEditor(_ref15) {
         }
       }),
       showOrcamento && (function() {
-        var assoc = getAssocItem(item.id);
-        var vlo = calcVlOrc(assoc);
-        var res = assoc ? calcRes(item, assoc) : null;
+                var aesR = getAssocItens(item.id);
+        var assocR = aesR.length > 0 ? aesR[0] : null;
+        var res = aesR.length > 0 ? calcResMulti(item, aesR) : null;
+        var vloExib = res ? res.vloMedio : (assocR ? calcVlOrc(assocR) : null);
         return /*#__PURE__*/React.createElement(React.Fragment, null,
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
             style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",padding:"5px 8px",textAlign:"right",cursor:"pointer",minWidth:110,verticalAlign:"middle"}
-          }, assoc ? /*#__PURE__*/React.createElement(React.Fragment, null,
-            /*#__PURE__*/React.createElement("div", {style:{fontSize:12,fontWeight:700,color:"#7a4400"}}, vlo!==null?fmtMoney(vlo):"—"),
-            /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:"#aaa",marginTop:1}}, assoc.fator&&assoc.fator!=1?"1 "+(assoc.unidMapa||"UN")+"="+assoc.fator+" "+(assoc.unidOrc||""):"mesma unidade")
+          }, aesR.length > 0 ? /*#__PURE__*/React.createElement(React.Fragment, null,
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:12,fontWeight:700,color:"#7a4400"}}, vloExib!==null?fmtMoney(vloExib):"\u2014"),
+            /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:"#aaa",marginTop:1}}, aesR.length>1?(aesR.length+" fontes"):(assocR&&assocR.fator&&assocR.fator!=1?"1 "+(assocR.unidMapa||"UN")+"="+assocR.fator+" "+(assocR.unidOrc||""):"mesma unidade"))
           ) : /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb",fontStyle:"italic"}}, "Toque para associar")),
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
