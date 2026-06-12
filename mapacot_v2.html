@@ -2142,7 +2142,9 @@ function ReportsModal(_ref12) {
   var open = _ref12.open,
     onClose = _ref12.onClose,
     mapas = _ref12.mapas,
-    cadastros = _ref12.cadastros;
+    cadastros = _ref12.cadastros,
+    orcamentos = _ref12.orcamentos || {},
+    associacoes = _ref12.associacoes || [];
   var _useState19 = useState("periodo"),
     _useState20 = _slicedToArray(_useState19, 2),
     tab = _useState20[0],
@@ -3592,7 +3594,7 @@ function MapEditor(_ref15) {
     style: { display:"flex", alignItems:"center", gap:8, padding:"6px 0", borderBottom:"1px solid #f0f2f5", cursor:"pointer" }
   }, /*#__PURE__*/React.createElement("input", {
     type: "checkbox",
-    checked: !!hiddenCols.orcamento,
+    checked: !hiddenCols.orcamento,
     onChange: function(){ return toggleCol("orcamento"); },
     style: { width:16, height:16 }
   }), /*#__PURE__*/React.createElement("span", {
