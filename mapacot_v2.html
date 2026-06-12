@@ -3085,7 +3085,7 @@ function MapEditor(_ref15) {
         borderTop: "2px solid rgba(0,0,0,0.1)"
       }
     }, /*#__PURE__*/React.createElement("td", {
-      colSpan: 5 + (showOrcamento ? 2 : 0) + (showResumo ? 3 : 0),
+      colSpan: 5,
       style: _objectSpread(_objectSpread({}, SC.td), {}, {
         fontWeight: 700,
         paddingLeft: 10,
@@ -3149,7 +3149,7 @@ function MapEditor(_ref15) {
           borderTop: ri === 0 ? "1px solid #d8dce8" : undefined
         }
       }, /*#__PURE__*/React.createElement("td", {
-        colSpan: 5 + (showOrcamento ? 2 : 0) + (showResumo ? 3 : 0),
+        colSpan: 5,
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           fontWeight: 600,
           fontSize: 11,
@@ -4894,7 +4894,7 @@ setInterval(function() {
   var mirrors = document.querySelectorAll('.scroll-mirror');
   mirrors.forEach(function(mirror) {
     if (mirror._sync) return;
-    var table = mirror.nextSibling;
+    var table = mirror.nextElementSibling;
     if (!table) return;
     mirror._sync = true;
     var inner = mirror.querySelector('.scroll-mirror-inner');
@@ -4903,7 +4903,7 @@ setInterval(function() {
   });
   // Atualizar largura dos inner divs
   document.querySelectorAll('.scroll-mirror').forEach(function(mirror) {
-    var table = mirror.nextSibling;
+    var table = mirror.nextElementSibling;
     var inner = mirror.querySelector('.scroll-mirror-inner');
     if (table && inner) inner.style.width = table.scrollWidth + 'px';
   });
