@@ -2022,7 +2022,9 @@ function ReportsModal(_ref12) {
   var open = _ref12.open,
     onClose = _ref12.onClose,
     mapas = _ref12.mapas,
-    cadastros = _ref12.cadastros;
+    cadastros = _ref12.cadastros,
+    orcamentos = _ref12.orcamentos || {},
+    associacoes = _ref12.associacoes || [];
   var _useState19 = useState("periodo"),
     _useState20 = _slicedToArray(_useState19, 2),
     tab = _useState20[0],
@@ -4607,7 +4609,9 @@ function App() {
       return setShowRep(false);
     },
     mapas: mapas,
-    cadastros: cadastros
+    cadastros: cadastros,
+    orcamentos: orcamentos,
+    associacoes: associacoes
   }),
   showImportOrc && /*#__PURE__*/React.createElement(ModalImportarOrcamento, {
     open: showImportOrc,
