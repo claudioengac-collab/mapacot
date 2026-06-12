@@ -3178,7 +3178,7 @@ function MapEditor(_ref15) {
             /*#__PURE__*/React.createElement("div", {style:{fontSize:11,fontWeight:700,color:res.lucro?"#186818":"#aa1c1c"}}, res.lucro?"\u25cf LUCRO":"\u25cf PREJU\xcdZO"),
             /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:res.lucro?"#186818":"#aa1c1c"}}, (res.lucro?"+":"\u2212")+Math.abs(res.pct).toFixed(1)+"% \u00b7 "+fmtMoney(Math.abs(res.diff))+"/UN"),
             /*#__PURE__*/React.createElement("div", {style:{fontSize:10,fontWeight:700,color:res.lucro?"#186818":"#aa1c1c",marginTop:2,borderTop:"1px dotted "+(res.lucro?"#8ecba8":"#e8a0a0"),paddingTop:2}}, (res.lucro?"+ ":"\u2212 ")+fmtMoney(Math.abs(res.total))+" TOTAL")
-          ) : aes.length>0&&/*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb"}}, "\u2014"))
+          ) : /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb"}}, "\u2014"))
         );
       })(),
       showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
