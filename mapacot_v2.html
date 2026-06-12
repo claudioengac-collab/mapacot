@@ -283,6 +283,13 @@ var orcSaldoDisponivel = function(item, associacoes, mapas, obraOrcItens) {
   }
   return Math.max(0, previsto - (parseFloat(item.consumido)||0));
 };
+var zerarConsumido = function(dados) {
+  if (!dados) return dados;
+  var itens = (dados.itens || dados);
+  var novosItens = itens.map(function(it) { return Object.assign({}, it, { consumido: 0 }); });
+  if (dados.itens) return Object.assign({}, dados, { itens: novosItens });
+  return novosItens;
+};
 var sbSaveOrcamento = function(obraId, dados) {
   var id = orcObraId(obraId);
   return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
@@ -2413,7 +2420,7 @@ function MapEditor(_ref15) {
   React.useEffect(function() {
     if (!init.obra || !onSaveOrcamento) return;
     sbCarregarOrcamento(init.obra).then(function(dados) {
-      if (dados) onSaveOrcamento(init.obra, dados);
+      if (dados) onSaveOrcamento(init.obra, zerarConsumido(dados));
     }).catch(function(){});
   }, []);
   var _useState37 = useState(false),
@@ -3777,7 +3784,7 @@ function MapEditor(_ref15) {
     onClose: function(){ setShowImpEd(false); setObraImpEd(null); },
     obra: obraImpEd,
     orcamentoAtual: obraImpEd?(orcamentos[obraImpEd]||null):null,
-    onSalvar: function(dados){ if(onSaveOrcamento) onSaveOrcamento(obraImpEd,dados); setShowImpEd(false); }
+    onSalvar: function(dados){ if(onSaveOrcamento) onSaveOrcamento(obraImpEd,zerarConsumido(dados)); setShowImpEd(false); }
   }),
   showCadEditor && /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCadEditor,
@@ -4333,7 +4340,7 @@ function App() {
     cadastros.obras.forEach(function(obra) {
       sbCarregarOrcamento(obra).then(function(dados) {
         if (dados) setOrcamentos(function(prev) {
-          return Object.assign({}, prev, _defineProperty({}, obra, dados));
+          return Object.assign({}, prev, _defineProperty({}, obra, zerarConsumido(dados)));
         });
       }).catch(function(){});
     });
@@ -4748,7 +4755,7 @@ function App() {
     onClose: function(){ setShowImportOrc(false); setObraImportando(null); },
     obra: obraImportando,
     orcamentoAtual: obraImportando ? (orcamentos[obraImportando]||null) : null,
-    onSalvar: function(dados){ saveOrcamento(obraImportando, dados); setShowImportOrc(false); setObraImportando(null); }
+    onSalvar: function(dados){ saveOrcamento(obraImportando, zerarConsumido(dados)); setShowImportOrc(false); setObraImportando(null); }
   }),
   /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCad,
