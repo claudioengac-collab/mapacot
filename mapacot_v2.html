@@ -268,8 +268,20 @@ var orcObraId = function(nomeObra) {
   // ID seguro: só letras e números, máx 40 chars
   return 'orc' + String(nomeObra || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
 };
-var orcSaldoDisponivel = function(item) {
-  return Math.max(0, (parseFloat(item.quantidade)||0) - (parseFloat(item.consumido)||0));
+var orcSaldoDisponivel = function(item, associacoes, mapas, obraOrcItens) {
+  var previsto = parseFloat(item.quantidade)||0;
+  if (associacoes && obraOrcItens) {
+    var idxItem = obraOrcItens.indexOf(item);
+    var consumido = associacoes.filter(function(a){
+      var codOk = a.orcItemCodigo===item.codigo || a.orcItemCodigo===String(parseInt(item.codigo||"0",10)) || item.codigo===String(parseInt(a.orcItemCodigo||"0",10));
+      var indexOk = a.orcItemIndex != null ? a.orcItemIndex === idxItem : true;
+      return codOk && indexOk;
+    }).reduce(function(ac, a) {
+      return ac + (parseFloat(String(a.qtCompra).replace(",","."))||0) * (parseFloat(a.fator)||1);
+    }, 0);
+    return Math.max(0, previsto - consumido);
+  }
+  return Math.max(0, previsto - (parseFloat(item.consumido)||0));
 };
 var sbSaveOrcamento = function(obraId, dados) {
   var id = orcObraId(obraId);
@@ -3721,7 +3733,7 @@ function MapEditor(_ref15) {
         /*#__PURE__*/React.createElement("input", {value:assocBusca, onChange:function(e){setAssocBusca(e.target.value.toUpperCase());}, placeholder:"BUSCAR NO OR\xc7AMENTO...", style:{border:"1.5px solid #dde1e9",borderRadius:8,padding:"9px 12px",fontSize:12,outline:"none",width:"100%",fontFamily:"inherit",textTransform:"uppercase"}}),
         /*#__PURE__*/React.createElement("div", {style:{maxHeight:200,overflowY:"auto",border:"1px solid #e4e8f0",borderRadius:8}},
           obraOrcItens.filter(function(it){ return !assocBusca||it.descricao.toUpperCase().includes(assocBusca); }).slice(0,30).map(function(it,idxIt){
-            var saldo=orcSaldoDisponivel(it); var isSel=assocSel===it;
+            var saldo=orcSaldoDisponivel(it, associacoes, mapas, obraOrcItens); var isSel=assocSel===it;
             return /*#__PURE__*/React.createElement("div", {key:idxIt, onClick:function(){setAssocSel(it); setAssocQtParcial("");}, style:{padding:"8px 10px",cursor:"pointer",borderBottom:"1px solid #f0f2f6",fontSize:11,background:isSel?"#e8f0ff":"transparent",borderLeft:isSel?"3px solid #2a5298":"3px solid transparent",display:"flex",alignItems:"flex-start",gap:8}},
               /*#__PURE__*/React.createElement("input", {type:"radio",readOnly:true,checked:!!isSel,onChange:function(){},style:{marginTop:2,accentColor:"#2a5298",cursor:"pointer",flexShrink:0}}),
               /*#__PURE__*/React.createElement("div", {style:{flex:1}},
@@ -3742,7 +3754,7 @@ function MapEditor(_ref15) {
             /*#__PURE__*/React.createElement("span", {style:{fontSize:11,color:"#7a4400",fontWeight:700}}, "QT. A CONSUMIR:"),
             /*#__PURE__*/React.createElement("input", {type:"number",value:assocQtParcial,min:"0.001",step:"0.001",placeholder:String(((parseFloat(String(itemAssociando.qt).replace(",","."))||0)*(parseFloat(assocFator)||1)).toLocaleString("pt-BR",{maximumFractionDigits:3})),onChange:function(e){setAssocQtParcial(e.target.value);},style:{width:120,border:"1.5px solid #e0c060",borderRadius:6,padding:"5px 8px",fontSize:13,textAlign:"right",outline:"none"}}),
             /*#__PURE__*/React.createElement("span", {style:{fontSize:11}}, assocSel.unidade),
-            /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#888",marginLeft:"auto"}}, "Saldo: ", orcSaldoDisponivel(assocSel).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel.unidade))),
+            /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#888",marginLeft:"auto"}}, "Saldo: ", orcSaldoDisponivel(assocSel, associacoes, mapas, obraOrcItens).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel.unidade))),
         /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:8,marginTop:4}},
           /*#__PURE__*/React.createElement("button", {onClick:confirmarAssoc, disabled:!assocSel, style:Object.assign({},SC.btnPri,{opacity:assocSel?1:0.4})}, "\u2705 CONFIRMAR"),
           /*#__PURE__*/React.createElement("button", {onClick:function(){setItemAssociando(null);}, style:{background:"#f0f4ff",border:"1.5px solid #2a5298",borderRadius:7,padding:"8px 16px",fontSize:12,fontWeight:700,color:"#2a5298",cursor:"pointer"}}, "\u23ed PULAR"),
@@ -3750,7 +3762,7 @@ function MapEditor(_ref15) {
       ) : /*#__PURE__*/React.createElement("div", {style:{background:"#fdeaea",border:"1.5px solid #e8a0a0",borderRadius:8,padding:16}},
         /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,color:"#aa1c1c",fontSize:13,marginBottom:8}}, "\u26a0\ufe0f SALDO INSUFICIENTE"),
         /*#__PURE__*/React.createElement("div", {style:{fontSize:12,color:"#7a2020",marginBottom:12}},
-          "Saldo dispon\xedvel: ", /*#__PURE__*/React.createElement("strong",null,assocSel&&orcSaldoDisponivel(assocSel).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel&&assocSel.unidade),
+          "Saldo dispon\xedvel: ", /*#__PURE__*/React.createElement("strong",null,assocSel&&orcSaldoDisponivel(assocSel, associacoes, mapas, obraOrcItens).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel&&assocSel.unidade),
           /*#__PURE__*/React.createElement("br",null), "Informe uma justificativa para o excedente:"),
         /*#__PURE__*/React.createElement("textarea", {value:assocJust,onChange:function(e){setAssocJust(e.target.value.toUpperCase());},placeholder:"JUSTIFICATIVA (obrigat\xf3rio)...",maxLength:500,style:{width:"100%",minHeight:70,border:"1.5px solid #e8a0a0",borderRadius:7,padding:"8px 10px",fontSize:12,fontFamily:"inherit",textTransform:"uppercase",outline:"none",resize:"vertical",marginBottom:10}}),
         /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:8}},
