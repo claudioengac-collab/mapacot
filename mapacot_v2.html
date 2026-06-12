@@ -2782,6 +2782,7 @@ function MapEditor(_ref15) {
     if (qtTotal <= 0) return null;
     var vlOrcTotal = aes.reduce(function(ac,a){
       var oi = obraOrcItens[a.orcItemIndex != null ? a.orcItemIndex : obraOrcItens.findIndex(function(it){ return it.codigo===a.orcItemCodigo; })];
+      console.log("DEBUG calcResMulti: orcItemIndex="+a.orcItemIndex+" codigo="+a.orcItemCodigo+" oi="+(oi?oi.descricao.substring(0,20):"NULL")+" vl="+(oi?oi.valorUnitario:0)+" obraOrcItens.length="+obraOrcItens.length);
       if (!oi) return ac;
       var fator = parseFloat(a.fator)||1;
       var qt = parseFloat(String(a.qtCompra).replace(",","."))||0;
