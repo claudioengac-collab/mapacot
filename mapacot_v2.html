@@ -3160,7 +3160,7 @@ function MapEditor(_ref15) {
             /*#__PURE__*/React.createElement("div", {style:{fontSize:11,fontWeight:700,color:res.lucro?"#186818":"#aa1c1c"}}, res.lucro?"\u25cf LUCRO":"\u25cf PREJU\xcdZO"),
             /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:res.lucro?"#186818":"#aa1c1c"}}, (res.lucro?"+":"\u2212")+Math.abs(res.pct).toFixed(1)+"% \u00b7 "+fmtMoney(Math.abs(res.diff))+"/UN"),
             /*#__PURE__*/React.createElement("div", {style:{fontSize:10,fontWeight:700,color:res.lucro?"#186818":"#aa1c1c",marginTop:2,borderTop:"1px dotted "+(res.lucro?"#8ecba8":"#e8a0a0"),paddingTop:2}}, (res.lucro?"+ ":"\u2212 ")+fmtMoney(Math.abs(res.total))+" TOTAL")
-          ) : assoc&&/*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb"}}, "\u2014"))
+          ) : aes.length>0&&/*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb"}}, "\u2014"))
         );
       })(),
       showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
@@ -3262,10 +3262,10 @@ function MapEditor(_ref15) {
     }, "TOTAL"),
     showOrcamento && (function(){
       var soma = itens.reduce(function(ac,it){
-        var a=getAssocItem(it.id); var r=a?calcRes(it,a):null;
+        var aes=getAssocItens(it.id); var r=aes.length>0?calcResMulti(it,aes):null;
         return ac+(r?r.total:0);
       },0);
-      var temR = itens.some(function(it){ return getAssocItem(it.id)&&calcRes(it,getAssocItem(it.id)); });
+      var temR = itens.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id)); });
       return /*#__PURE__*/React.createElement(React.Fragment, null,
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",fontWeight:700,padding:"6px 8px",color:temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc"}},
