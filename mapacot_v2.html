@@ -2409,12 +2409,8 @@ function MapEditor(_ref15) {
   // Estados do modal de associação
   var _sIA = React.useState(null), itemAssociando = _slicedToArray(_sIA,2)[0], setItemAssociando = _slicedToArray(_sIA,2)[1];
   var _sBu = React.useState(""), assocBusca = _slicedToArray(_sBu,2)[0], setAssocBusca = _slicedToArray(_sBu,2)[1];
-  var _sSe = React.useState(null), assocSel = _slicedToArray(_sSe,2)[0], setAssocSel = _slicedToArray(_sSe,2)[1];
-  var _sFa = React.useState("1"), assocFator = _slicedToArray(_sFa,2)[0], setAssocFator = _slicedToArray(_sFa,2)[1];
-  var _sEx = React.useState(false), assocExc = _slicedToArray(_sEx,2)[0], setAssocExc = _slicedToArray(_sEx,2)[1];
-  var _sJu = React.useState(""), assocJust = _slicedToArray(_sJu,2)[0], setAssocJust = _slicedToArray(_sJu,2)[1];
   var _sSug = React.useState(null), assocSug = _slicedToArray(_sSug,2)[0], setAssocSug = _slicedToArray(_sSug,2)[1];
-  var _sQP = React.useState(""), assocQtParcial = _slicedToArray(_sQP,2)[0], setAssocQtParcial = _slicedToArray(_sQP,2)[1];
+  var _sSel = React.useState({}), assocSelecionados = _slicedToArray(_sSel,2)[0], setAssocSelecionados = _slicedToArray(_sSel,2)[1];
   // Estados modal importação dentro do editor
   var _sIE = React.useState(false), showImpEd = _slicedToArray(_sIE,2)[0], setShowImpEd = _slicedToArray(_sIE,2)[1];
   var _sOE = React.useState(null), obraImpEd = _slicedToArray(_sOE,2)[0], setObraImpEd = _slicedToArray(_sOE,2)[1];
@@ -2585,6 +2581,9 @@ function MapEditor(_ref15) {
   var getAssocItem = function(iid) {
     return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null;
   };
+  var getAssocItens = function(iid) {
+    return associacoes.filter(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; });
+  };
   var calcVlOrc = function(assoc) {
     if (!assoc) return null;
     var oi = obraOrcItens.find(function(it){ return it.codigo===assoc.orcItemCodigo; });
@@ -2601,35 +2600,38 @@ function MapEditor(_ref15) {
   };
   var abrirAssoc = function(item) {
     if (!temOrcamento) return;
-    var ae = getAssocItem(item.id);
+    var aes = getAssocItens(item.id);
     setItemAssociando(item);
     setAssocBusca(item.descricao||"");
-    setAssocExc(false); setAssocJust(""); setAssocQtParcial("");
-    if (ae) {
-      var idxAe = ae.orcItemIndex != null ? ae.orcItemIndex : -1;
-      var itemOrcAe = idxAe >= 0 ? (obraOrcItens[idxAe]||null) : obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null;
-      setAssocSel(itemOrcAe);
-      setAssocFator(String(ae.fator||"1"));
-    } else { setAssocSel(null); setAssocFator("1"); }
+    var selInicial = {};
+    aes.forEach(function(ae) {
+      var idx = ae.orcItemIndex != null ? ae.orcItemIndex : obraOrcItens.findIndex(function(it){ return it.codigo===ae.orcItemCodigo; });
+      if (idx >= 0) selInicial[idx] = { qt: String(ae.qtCompra||""), fator: String(ae.fator||"1") };
+    });
+    setAssocSelecionados(selInicial);
   };
   var confirmarAssoc = function() {
-    if (!itemAssociando || !assocSel || !onCriarAssociacao) return;
-    var fator = parseFloat(assocFator)||1;
-    var qtItem = parseFloat(String(itemAssociando.qt).replace(",","."))||0;
-    var qt = assocQtParcial.trim() ? (parseFloat(String(assocQtParcial).replace(",","."))||0) : qtItem;
-    var saldo = orcSaldoDisponivel(assocSel, associacoes, obraOrcItens);
-    var ae = getAssocItem(itemAssociando.id);
-    var saldoEfetivo = ae ? saldo + (parseFloat(String(ae.qtCompra).replace(",","."))||0)*(parseFloat(ae.fator)||1) : saldo;
-    if (qt*fator > saldoEfetivo && !assocExc) { setAssocExc(true); return; }
-    if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
-    onCriarAssociacao({
-      id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
-      obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
-      orcItemIndex: obraOrcItens.indexOf(assocSel),
-      orcItemDesc: assocSel.descricao, fator: fator,
-      unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
-      qtCompra: qt, excedente: Math.max(0,qt*fator-saldoEfetivo),
-      justificativa: assocJust
+    if (!itemAssociando || !onCriarAssociacao) return;
+    var indices = Object.keys(assocSelecionados);
+    if (indices.length === 0) return;
+    var aesExistentes = getAssocItens(itemAssociando.id);
+    aesExistentes.forEach(function(ae){ if (onRemoverAssociacao) onRemoverAssociacao(ae.id); });
+    indices.forEach(function(idxStr) {
+      var idx = parseInt(idxStr, 10);
+      var orcItem = obraOrcItens[idx];
+      if (!orcItem) return;
+      var sel = assocSelecionados[idxStr];
+      var fator = parseFloat(sel.fator)||1;
+      var qt = parseFloat(String(sel.qt).replace(",","."))||0;
+      if (qt <= 0) return;
+      onCriarAssociacao({
+        id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
+        obraId: mapa.obra, orcItemCodigo: orcItem.codigo,
+        orcItemIndex: idx,
+        orcItemDesc: orcItem.descricao, fator: fator,
+        unidMapa: itemAssociando.unid, unidOrc: orcItem.unidade,
+        qtCompra: qt, excedente: 0, justificativa: ""
+      });
     });
     setItemAssociando(null);
   };
@@ -2641,6 +2643,9 @@ function MapEditor(_ref15) {
   var getAssocItem = function(iid) {
     return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null;
   };
+  var getAssocItens = function(iid) {
+    return associacoes.filter(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; });
+  };
   var calcVlOrc = function(assoc) {
     if (!assoc) return null;
     var oi = obraOrcItens.find(function(it){ return it.codigo===assoc.orcItemCodigo; });
@@ -2657,35 +2662,38 @@ function MapEditor(_ref15) {
   };
   var abrirAssoc = function(item) {
     if (!temOrcamento) return;
-    var ae = getAssocItem(item.id);
+    var aes = getAssocItens(item.id);
     setItemAssociando(item);
     setAssocBusca(item.descricao||"");
-    setAssocExc(false); setAssocJust(""); setAssocQtParcial("");
-    if (ae) {
-      var idxAe2 = ae.orcItemIndex != null ? ae.orcItemIndex : -1;
-      var itemOrcAe2 = idxAe2 >= 0 ? (obraOrcItens[idxAe2]||null) : obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null;
-      setAssocSel(itemOrcAe2);
-      setAssocFator(String(ae.fator||"1"));
-    } else { setAssocSel(null); setAssocFator("1"); }
+    var selInicial = {};
+    aes.forEach(function(ae) {
+      var idx = ae.orcItemIndex != null ? ae.orcItemIndex : obraOrcItens.findIndex(function(it){ return it.codigo===ae.orcItemCodigo; });
+      if (idx >= 0) selInicial[idx] = { qt: String(ae.qtCompra||""), fator: String(ae.fator||"1") };
+    });
+    setAssocSelecionados(selInicial);
   };
   var confirmarAssoc = function() {
-    if (!itemAssociando || !assocSel || !onCriarAssociacao) return;
-    var fator = parseFloat(assocFator)||1;
-    var qtItem = parseFloat(String(itemAssociando.qt).replace(",","."))||0;
-    var qt = assocQtParcial.trim() ? (parseFloat(String(assocQtParcial).replace(",","."))||0) : qtItem;
-    var saldo = orcSaldoDisponivel(assocSel, associacoes, obraOrcItens);
-    var ae = getAssocItem(itemAssociando.id);
-    var saldoEfetivo = ae ? saldo + (parseFloat(String(ae.qtCompra).replace(",","."))||0)*(parseFloat(ae.fator)||1) : saldo;
-    if (qt*fator > saldoEfetivo && !assocExc) { setAssocExc(true); return; }
-    if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
-    onCriarAssociacao({
-      id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
-      obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
-      orcItemIndex: obraOrcItens.indexOf(assocSel),
-      orcItemDesc: assocSel.descricao, fator: fator,
-      unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
-      qtCompra: qt, excedente: Math.max(0,qt*fator-saldoEfetivo),
-      justificativa: assocJust
+    if (!itemAssociando || !onCriarAssociacao) return;
+    var indices = Object.keys(assocSelecionados);
+    if (indices.length === 0) return;
+    var aesExistentes = getAssocItens(itemAssociando.id);
+    aesExistentes.forEach(function(ae){ if (onRemoverAssociacao) onRemoverAssociacao(ae.id); });
+    indices.forEach(function(idxStr) {
+      var idx = parseInt(idxStr, 10);
+      var orcItem = obraOrcItens[idx];
+      if (!orcItem) return;
+      var sel = assocSelecionados[idxStr];
+      var fator = parseFloat(sel.fator)||1;
+      var qt = parseFloat(String(sel.qt).replace(",","."))||0;
+      if (qt <= 0) return;
+      onCriarAssociacao({
+        id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
+        obraId: mapa.obra, orcItemCodigo: orcItem.codigo,
+        orcItemIndex: idx,
+        orcItemDesc: orcItem.descricao, fator: fator,
+        unidMapa: itemAssociando.unid, unidOrc: orcItem.unidade,
+        qtCompra: qt, excedente: 0, justificativa: ""
+      });
     });
     setItemAssociando(null);
   };
@@ -3742,32 +3750,40 @@ function MapEditor(_ref15) {
         /*#__PURE__*/React.createElement("input", {value:assocBusca, onChange:function(e){setAssocBusca(e.target.value.toUpperCase());}, placeholder:"BUSCAR NO OR\xc7AMENTO...", style:{border:"1.5px solid #dde1e9",borderRadius:8,padding:"9px 12px",fontSize:12,outline:"none",width:"100%",fontFamily:"inherit",textTransform:"uppercase"}}),
         /*#__PURE__*/React.createElement("div", {style:{maxHeight:200,overflowY:"auto",border:"1px solid #e4e8f0",borderRadius:8}},
           obraOrcItens.filter(function(it){ return !assocBusca||it.descricao.toUpperCase().includes(assocBusca); }).slice(0,30).map(function(it,idxIt){
-            var saldo=orcSaldoDisponivel(it, associacoes, obraOrcItens); var isSel=assocSel===it;
-            return /*#__PURE__*/React.createElement("div", {key:idxIt, onClick:function(){setAssocSel(it); setAssocQtParcial("");}, style:{padding:"8px 10px",cursor:"pointer",borderBottom:"1px solid #f0f2f6",fontSize:11,background:isSel?"#e8f0ff":"transparent",borderLeft:isSel?"3px solid #2a5298":"3px solid transparent",display:"flex",alignItems:"flex-start",gap:8}},
-              /*#__PURE__*/React.createElement("input", {type:"radio",readOnly:true,checked:!!isSel,onChange:function(){},style:{marginTop:2,accentColor:"#2a5298",cursor:"pointer",flexShrink:0}}),
-              /*#__PURE__*/React.createElement("div", {style:{flex:1}},
-                /*#__PURE__*/React.createElement("div", {style:{fontWeight:isSel?700:400}}, it.descricao),
-                /*#__PURE__*/React.createElement("div", {style:{fontSize:10,color:"#888",marginTop:2}}, it.unidade, " \u2022 Qtd: ", it.quantidade, " \u2022 Saldo: ", /*#__PURE__*/React.createElement("strong", {style:{color:saldo>0?"#186818":"#aa1c1c"}}, saldo.toLocaleString("pt-BR",{maximumFractionDigits:3})), " \u2022 R$ ", (it.valorUnitario||0).toLocaleString("pt-BR",{minimumFractionDigits:2}), "/", it.unidade)));
+            var saldo=orcSaldoDisponivel(it, associacoes, obraOrcItens);
+            var isMarcado = assocSelecionados.hasOwnProperty(idxIt);
+            var selData = assocSelecionados[idxIt] || {};
+            return /*#__PURE__*/React.createElement("div", {key:idxIt, style:{padding:"8px 10px",borderBottom:"1px solid #f0f2f6",fontSize:11,background:isMarcado?"#e8f0ff":"transparent",borderLeft:isMarcado?"3px solid #2a5298":"3px solid transparent"}},
+              /*#__PURE__*/React.createElement("div", {style:{display:"flex",alignItems:"flex-start",gap:8,cursor:"pointer"}, onClick:function(){
+                var novo = Object.assign({}, assocSelecionados);
+                if (isMarcado) { delete novo[idxIt]; } else { novo[idxIt] = { qt: "", fator: "1" }; }
+                setAssocSelecionados(novo);
+              }},
+                /*#__PURE__*/React.createElement("input", {type:"checkbox",readOnly:true,checked:!!isMarcado,onChange:function(){},style:{marginTop:2,accentColor:"#2a5298",cursor:"pointer",flexShrink:0}}),
+                /*#__PURE__*/React.createElement("div", {style:{flex:1}},
+                  /*#__PURE__*/React.createElement("div", {style:{fontWeight:isMarcado?700:400}}, it.descricao),
+                  /*#__PURE__*/React.createElement("div", {style:{fontSize:10,color:"#888",marginTop:2}}, it.unidade, " \u2022 Qtd: ", it.quantidade, " \u2022 Saldo: ", /*#__PURE__*/React.createElement("strong", {style:{color:saldo>0?"#186818":"#aa1c1c"}}, saldo.toLocaleString("pt-BR",{maximumFractionDigits:3})), " \u2022 R$ ", (it.valorUnitario||0).toLocaleString("pt-BR",{minimumFractionDigits:2}), "/", it.unidade))),
+              isMarcado && /*#__PURE__*/React.createElement("div", {style:{marginTop:6,paddingLeft:24,display:"flex",alignItems:"center",gap:8}},
+                /*#__PURE__*/React.createElement("span", {style:{fontSize:11,color:"#2a5298",fontWeight:700}}, "QT:"),
+                /*#__PURE__*/React.createElement("input", {type:"number",value:selData.qt||"",min:"0.001",step:"0.001",placeholder:String(saldo.toLocaleString("pt-BR",{maximumFractionDigits:3})),onChange:function(e){
+                  var novo = Object.assign({}, assocSelecionados);
+                  novo[idxIt] = Object.assign({}, selData, { qt: e.target.value });
+                  setAssocSelecionados(novo);
+                },style:{width:100,border:"1.5px solid #2a5298",borderRadius:6,padding:"4px 8px",fontSize:12,textAlign:"right",outline:"none"}}),
+                /*#__PURE__*/React.createElement("span", {style:{fontSize:11}}, it.unidade),
+                it.unidade !== itemAssociando.unid && /*#__PURE__*/React.createElement(React.Fragment, null,
+                  /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#856404",marginLeft:4}}, "Fator:"),
+                  /*#__PURE__*/React.createElement("input", {type:"number",value:selData.fator||"1",min:"0.001",step:"0.001",onChange:function(e){
+                    var novo = Object.assign({}, assocSelecionados);
+                    novo[idxIt] = Object.assign({}, selData, { fator: e.target.value });
+                    setAssocSelecionados(novo);
+                  },style:{width:60,border:"1.5px solid #e0c060",borderRadius:6,padding:"4px 6px",fontSize:12,textAlign:"right",outline:"none"}})),
+                /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#888",marginLeft:"auto"}}, "Saldo: ", saldo.toLocaleString("pt-BR",{maximumFractionDigits:3}))));
           })),
-        assocSel && /*#__PURE__*/React.createElement("div", {style:{background:"#fff8e8",border:"1px solid #e8d080",borderRadius:8,padding:"12px 14px",fontSize:12}},
-          /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,color:"#7a4400",marginBottom:8}}, "\ud83d\udd04 CONVERS\xc3O DE UNIDADE"),
-          itemAssociando.unid!==assocSel.unidade
-            ? /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:"#856404",marginBottom:8}}, "Voc\xea compra em ", /*#__PURE__*/React.createElement("strong",null,itemAssociando.unid), " mas o or\xe7amento usa ", /*#__PURE__*/React.createElement("strong",null,assocSel.unidade), ". Informe quantos ", assocSel.unidade, " equivalem a 1 ", itemAssociando.unid, ":")
-            : /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:"#186818",marginBottom:8}}, "\u2705 Mesma unidade. Fator = 1"),
-          /*#__PURE__*/React.createElement("div", {style:{display:"flex",alignItems:"center",gap:8}},
-            /*#__PURE__*/React.createElement("span", {style:{fontSize:11}}, "1 ", itemAssociando.unid, " ="),
-            /*#__PURE__*/React.createElement("input", {type:"number",value:assocFator,min:"0.001",step:"0.001",onChange:function(e){setAssocFator(e.target.value);},style:{width:80,border:"1.5px solid #e0c060",borderRadius:6,padding:"5px 8px",fontSize:13,textAlign:"right",outline:"none"}}),
-            /*#__PURE__*/React.createElement("span", {style:{fontSize:11}}, assocSel.unidade, " no or\xe7amento"),
-            /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#888",marginLeft:"auto"}}, "Total: ", ((parseFloat(String(itemAssociando.qt).replace(",","."))||0)*(parseFloat(assocFator)||1)).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel.unidade)),
-          /*#__PURE__*/React.createElement("div", {style:{marginTop:8,paddingTop:8,borderTop:"1px solid #e8d080",display:"flex",alignItems:"center",gap:8}},
-            /*#__PURE__*/React.createElement("span", {style:{fontSize:11,color:"#7a4400",fontWeight:700}}, "QT. A CONSUMIR:"),
-            /*#__PURE__*/React.createElement("input", {type:"number",value:assocQtParcial,min:"0.001",step:"0.001",placeholder:String(((parseFloat(String(itemAssociando.qt).replace(",","."))||0)*(parseFloat(assocFator)||1)).toLocaleString("pt-BR",{maximumFractionDigits:3})),onChange:function(e){setAssocQtParcial(e.target.value);},style:{width:120,border:"1.5px solid #e0c060",borderRadius:6,padding:"5px 8px",fontSize:13,textAlign:"right",outline:"none"}}),
-            /*#__PURE__*/React.createElement("span", {style:{fontSize:11}}, assocSel.unidade),
-            /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#888",marginLeft:"auto"}}, "Saldo: ", orcSaldoDisponivel(assocSel, associacoes, obraOrcItens).toLocaleString("pt-BR",{maximumFractionDigits:3}), " ", assocSel.unidade))),
         /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:8,marginTop:4}},
-          /*#__PURE__*/React.createElement("button", {onClick:confirmarAssoc, disabled:!assocSel, style:Object.assign({},SC.btnPri,{opacity:assocSel?1:0.4})}, "\u2705 CONFIRMAR"),
+          /*#__PURE__*/React.createElement("button", {onClick:confirmarAssoc, disabled:Object.keys(assocSelecionados).length===0, style:Object.assign({},SC.btnPri,{opacity:Object.keys(assocSelecionados).length>0?1:0.4})}, "\u2705 CONFIRMAR"),
           /*#__PURE__*/React.createElement("button", {onClick:function(){setItemAssociando(null);}, style:{background:"#f0f4ff",border:"1.5px solid #2a5298",borderRadius:7,padding:"8px 16px",fontSize:12,fontWeight:700,color:"#2a5298",cursor:"pointer"}}, "\u23ed PULAR"),
-          getAssocItem(itemAssociando.id) && /*#__PURE__*/React.createElement("button", {onClick:function(){var a=getAssocItem(itemAssociando.id);if(a&&onRemoverAssociacao){onRemoverAssociacao(a.id);setItemAssociando(null);}},style:{background:"#fdeaea",border:"none",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#c0392b",cursor:"pointer",marginLeft:"auto"}}, "\ud83d\uddd1 REMOVER"))
+          getAssocItens(itemAssociando.id).length > 0 && /*#__PURE__*/React.createElement("button", {onClick:function(){getAssocItens(itemAssociando.id).forEach(function(a){if(onRemoverAssociacao)onRemoverAssociacao(a.id);}); setAssocSelecionados({}); setItemAssociando(null);},style:{background:"#fdeaea",border:"none",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#c0392b",cursor:"pointer",marginLeft:"auto"}}, "\ud83d\uddd1 REMOVER TUDO"))
       ) : /*#__PURE__*/React.createElement("div", {style:{background:"#fdeaea",border:"1.5px solid #e8a0a0",borderRadius:8,padding:16}},
         /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,color:"#aa1c1c",fontSize:13,marginBottom:8}}, "\u26a0\ufe0f SALDO INSUFICIENTE"),
         /*#__PURE__*/React.createElement("div", {style:{fontSize:12,color:"#7a2020",marginBottom:12}},
