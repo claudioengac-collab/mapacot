@@ -752,6 +752,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
       var mapa = mapasFiltrados.find(function(m){ return m.id === a.mapaId; });
       var itemMapa = mapa ? (mapa.itens||[]).find(function(it){ return it.id === a.itemMapaId; }) : null;
       var qtAtual = itemMapa ? (parseFloat(String(itemMapa.qt).replace(",","."))||0) : (parseFloat(a.qtCompra)||0);
+      console.log("DEBUG consumido:", { orcItemCodigo: a.orcItemCodigo, mapaId: a.mapaId, itemMapaId: a.itemMapaId, mapaEncontrado: !!mapa, itemEncontrado: !!itemMapa, qtNoMapa: itemMapa ? itemMapa.qt : "NAO ENCONTRADO", qtCompra: a.qtCompra, qtAtual: qtAtual, fator: a.fator });
       return ac + qtAtual * (parseFloat(a.fator)||1);
     }, 0);
     var consumido = consumidoCalc > 0 ? consumidoCalc : (parseFloat(orcItem.consumido)||0);
