@@ -738,8 +738,6 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>".concat(pdfTitle, "</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>").concat(pagina0HTML + pagesHTML, "</body></html>");
 };
 var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes) {
-  var debugAssocs = associacoes.filter(function(a){ return a.orcItemCodigo==="00004721"; });
-  console.log("ASSOCS 00004721:", JSON.stringify(debugAssocs.map(function(a){ return {idx:a.orcItemIndex,qt:a.qtCompra,mapaId:a.mapaId.slice(-6),itemId:a.itemMapaId.slice(-6)}; })));
   var obraUp = (obra||"").toUpperCase();
   var obraOrc = orcamentos[obra] ? (orcamentos[obra].itens || orcamentos[obra]) : null;
   if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
@@ -763,6 +761,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
     var codigoNorm = String(parseInt(orcItem.codigo||"0",10));
     var idxOrcItem = obraOrc.indexOf(orcItem);
     var codigoDuplicado = obraOrc.filter(function(o){ return o.codigo===orcItem.codigo; }).length > 1;
+    if (codigoDuplicado) console.log("DUP: idxOrcItem="+idxOrcItem+" codigo="+orcItem.codigo+" desc="+orcItem.descricao.substring(0,20));
     var assocItem = associacoes.filter(function(a){
       var mapaOk = mapaIdsObra.indexOf(a.mapaId) >= 0;
       var codOk = a.orcItemCodigo===orcItem.codigo
