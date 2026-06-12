@@ -2774,15 +2774,16 @@ function MapEditor(_ref15) {
     background: T.sub,
     color: "#333"
   });
-  var calcResMulti = function(item, aes) {
+  var calcResMulti = function(item, aes, orcItens) {
     if (!aes || aes.length === 0) return null;
+    var orcList = orcItens || obraOrcItens;
     var res = calcResumo(item, mapa.fornecedores, mapa.precos);
     if (res.vlUnit === null) return null;
     var qtItem = parseFloat(String(item.qt).replace(",","."))||0;
     if (qtItem <= 0) return null;
     var vlOrcTotal = aes.reduce(function(ac,a){
-      var idx = a.orcItemIndex != null ? a.orcItemIndex : obraOrcItens.findIndex(function(it){ return it.codigo===a.orcItemCodigo; });
-      var oi = obraOrcItens[idx];
+      var idx = a.orcItemIndex != null ? a.orcItemIndex : orcList.findIndex(function(it){ return it.codigo===a.orcItemCodigo; });
+      var oi = orcList[idx];
       if (!oi) return ac;
       var fator = parseFloat(a.fator)||1;
       var qt = parseFloat(String(a.qtCompra).replace(",","."))||0;
@@ -3165,7 +3166,7 @@ function MapEditor(_ref15) {
       showOrcamento && (function() {
                 var aesR = getAssocItens(item.id);
         var assocR = aesR.length > 0 ? aesR[0] : null;
-        var res = aesR.length > 0 ? calcResMulti(item, aesR) : null;
+        var res = aesR.length > 0 ? calcResMulti(item, aesR, obraOrcItens) : null;
         var vloExib = res ? res.vloMedio : (assocR ? calcVlOrc(assocR) : null);
         return /*#__PURE__*/React.createElement(React.Fragment, null,
           /*#__PURE__*/React.createElement("td", {
@@ -3284,10 +3285,10 @@ function MapEditor(_ref15) {
     }, "TOTAL"),
     showOrcamento && (function(){
       var soma = itens.reduce(function(ac,it){
-        var aes=getAssocItens(it.id); var r=aes.length>0?calcResMulti(it,aes):null;
+        var aes=getAssocItens(it.id); var r=aes.length>0?calcResMulti(it,aes,obraOrcItens):null;
         return ac+(r?r.total:0);
       },0);
-      var temR = itens.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id)); });
+      var temR = itens.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id),obraOrcItens); });
       return /*#__PURE__*/React.createElement(React.Fragment, null,
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",fontWeight:700,padding:"6px 8px",color:temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc"}},
