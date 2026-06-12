@@ -274,7 +274,7 @@ var orcSaldoDisponivel = function(item, associacoes, obraOrcItens) {
     var idxItem = obraOrcItens.indexOf(item);
     var consumido = associacoes.filter(function(a){
       var codOk = a.orcItemCodigo===item.codigo || a.orcItemCodigo===String(parseInt(item.codigo||"0",10)) || item.codigo===String(parseInt(a.orcItemCodigo||"0",10));
-      var indexOk = a.orcItemIndex != null ? a.orcItemIndex === idxItem : true;
+      var indexOk = (a.orcItemIndex != null && a.orcItemIndex >= 0) ? a.orcItemIndex === idxItem : true;
       return codOk && indexOk;
     }).reduce(function(ac, a) {
       return ac + (parseFloat(String(a.qtCompra).replace(",","."))||0) * (parseFloat(a.fator)||1);
@@ -760,12 +760,15 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
     var mapaIdsObra = mapasFiltrados.map(function(m){ return m.id; });
     var codigoNorm = String(parseInt(orcItem.codigo||"0",10));
     var idxOrcItem = obraOrc.indexOf(orcItem);
+    var codigoDuplicado = obraOrc.filter(function(o){ return o.codigo===orcItem.codigo; }).length > 1;
     var assocItem = associacoes.filter(function(a){
       var mapaOk = mapaIdsObra.indexOf(a.mapaId) >= 0;
       var codOk = a.orcItemCodigo===orcItem.codigo
         || a.orcItemCodigo===codigoNorm
         || orcItem.codigo===String(parseInt(a.orcItemCodigo||"0",10));
-      var indexOk = a.orcItemIndex != null ? a.orcItemIndex === idxOrcItem : true;
+      var indexOk = (codigoDuplicado && a.orcItemIndex != null && a.orcItemIndex >= 0)
+        ? a.orcItemIndex === idxOrcItem
+        : true;
       return mapaOk && codOk && indexOk;
     });
     // Recalcular consumido usando quantidade ATUAL do item no mapa (não a salva na associação)
