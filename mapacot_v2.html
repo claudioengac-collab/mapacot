@@ -793,8 +793,10 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
       if (r.vlUnit !== null) {
         var fator = parseFloat(a.fator)||1;
         vlCotado = r.vlUnit / fator;
-        var qt = parseFloat(String(item.qt).replace(",","."))||0;
-        vlTotalCotado += r.vlTotal||0;
+        var qtCompraAssoc = parseFloat(String(a.qtCompra).replace(",","."))||0;
+        var qtMapa = parseFloat(String(item.qt).replace(",","."))||0;
+        var qtUsar = (qtCompraAssoc > 0 && qtCompraAssoc < qtMapa) ? qtCompraAssoc : qtMapa;
+        vlTotalCotado += (r.vlUnit / fator) * qtUsar * fator;
       }
     });
     var vlOrc = parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0;
