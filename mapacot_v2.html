@@ -738,6 +738,8 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>".concat(pdfTitle, "</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>").concat(pagina0HTML + pagesHTML, "</body></html>");
 };
 var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes) {
+  var debugAssocs = associacoes.filter(function(a){ return a.orcItemCodigo==="00004721"; });
+  console.log("ASSOCS 00004721:", JSON.stringify(debugAssocs.map(function(a){ return {idx:a.orcItemIndex,qt:a.qtCompra,mapaId:a.mapaId.slice(-6),itemId:a.itemMapaId.slice(-6)}; })));
   var obraUp = (obra||"").toUpperCase();
   var obraOrc = orcamentos[obra] ? (orcamentos[obra].itens || orcamentos[obra]) : null;
   if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
@@ -812,9 +814,8 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
   mapasFiltrados.forEach(function(mapa) {
     (mapa.itens||[]).forEach(function(item) {
       if (!item.comprado) return;
-      // Verificar se este item tem associação — usar mapaId + itemMapaId (mais confiável)
-      var temAssoc = associacoes.some(function(a){ return a.mapaId===mapa.id && a.itemMapaId===item.id; });
-      if (item.comprado && !temAssoc) console.log("ADICIONADO: item="+item.descricao+" id="+item.id+" mapaId="+mapa.id+" assocIds="+associacoes.filter(function(a){return a.mapaId===mapa.id;}).map(function(a){return a.itemMapaId;}).join(","));
+      var assocDoItem = associacoes.filter(function(a){ return a.mapaId===mapa.id && a.itemMapaId===item.id; });
+      var temAssoc = assocDoItem.length > 0;
       if (!temAssoc) {
         var r = calcResumo(item, mapa.fornecedores||[], mapa.precos||{});
         itensAdicionados.push({ item:item, mapa:mapa, resumo:r });
@@ -2386,7 +2387,8 @@ function MapEditor(_ref15) {
     onSaveOrcamento = _ref15.onSaveOrcamento || null,
     onLimparOrcamento = _ref15.onLimparOrcamento || null,
     onCriarAssociacao = _ref15.onCriarAssociacao || null,
-    onRemoverAssociacao = _ref15.onRemoverAssociacao || null;
+    onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
+    onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null;
   var _useState27 = useState(init),
     _useState28 = _slicedToArray(_useState27, 2),
     mapa = _useState28[0],
@@ -2619,7 +2621,8 @@ function MapEditor(_ref15) {
     var indices = Object.keys(assocSelecionados);
     if (indices.length === 0) return;
     var aesExistentes = getAssocItens(itemAssociando.id);
-    aesExistentes.forEach(function(ae){ if (onRemoverAssociacao) onRemoverAssociacao(ae.id); });
+    var idsRemover = aesExistentes.map(function(ae){ return ae.id; });
+    var novasAssocs = [];
     indices.forEach(function(idxStr) {
       var idx = parseInt(idxStr, 10);
       var orcItem = obraOrcItens[idx];
@@ -2628,7 +2631,7 @@ function MapEditor(_ref15) {
       var fator = parseFloat(sel.fator)||1;
       var qt = parseFloat(String(sel.qt).replace(",","."))||0;
       if (qt <= 0) return;
-      onCriarAssociacao({
+      novasAssocs.push({
         id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
         obraId: mapa.obra, orcItemCodigo: orcItem.codigo,
         orcItemIndex: idx,
@@ -2637,6 +2640,7 @@ function MapEditor(_ref15) {
         qtCompra: qt, excedente: 0, justificativa: ""
       });
     });
+    if (onSubstituirAssociacoes) onSubstituirAssociacoes(idsRemover, novasAssocs);
     setItemAssociando(null);
   };
 
@@ -2681,7 +2685,8 @@ function MapEditor(_ref15) {
     var indices = Object.keys(assocSelecionados);
     if (indices.length === 0) return;
     var aesExistentes = getAssocItens(itemAssociando.id);
-    aesExistentes.forEach(function(ae){ if (onRemoverAssociacao) onRemoverAssociacao(ae.id); });
+    var idsRemover = aesExistentes.map(function(ae){ return ae.id; });
+    var novasAssocs = [];
     indices.forEach(function(idxStr) {
       var idx = parseInt(idxStr, 10);
       var orcItem = obraOrcItens[idx];
@@ -2690,7 +2695,7 @@ function MapEditor(_ref15) {
       var fator = parseFloat(sel.fator)||1;
       var qt = parseFloat(String(sel.qt).replace(",","."))||0;
       if (qt <= 0) return;
-      onCriarAssociacao({
+      novasAssocs.push({
         id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
         obraId: mapa.obra, orcItemCodigo: orcItem.codigo,
         orcItemIndex: idx,
@@ -2699,6 +2704,7 @@ function MapEditor(_ref15) {
         qtCompra: qt, excedente: 0, justificativa: ""
       });
     });
+    if (onSubstituirAssociacoes) onSubstituirAssociacoes(idsRemover, novasAssocs);
     setItemAssociando(null);
   };
 
@@ -4415,6 +4421,18 @@ function App() {
     });
   }, []);
 
+  var substituirAssociacoes = React.useCallback(function(idsRemover, novasAssocs) {
+    setAssociacoes(function(prev) {
+      var lista = prev.filter(function(a){ return idsRemover.indexOf(a.id) < 0; });
+      novasAssocs.forEach(function(assoc) {
+        var nova = Object.assign({}, assoc, { criadoEm: new Date().toISOString() });
+        lista = lista.filter(function(a){ return a.id !== nova.id; }).concat([nova]);
+      });
+      sbSaveAssociacoes(lista).catch(function(){});
+      return lista;
+    });
+  }, []);
+
   var addCadastro = useCallback(function (tipo, valor) {
     var v = normalize(valor);
     if (!v) return;
@@ -4527,7 +4545,8 @@ function App() {
     onSaveOrcamento: saveOrcamento,
     onLimparOrcamento: limparOrcamento,
     onCriarAssociacao: criarAssociacao,
-    onRemoverAssociacao: removerAssociacao
+    onRemoverAssociacao: removerAssociacao,
+    onSubstituirAssociacoes: substituirAssociacoes
   });
   return /*#__PURE__*/React.createElement("div", {
     style: {
