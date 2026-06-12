@@ -2596,19 +2596,18 @@ function MapEditor(_ref15) {
     var fator = parseFloat(assocFator)||1;
     var qtItem = parseFloat(String(itemAssociando.qt).replace(",","."))||0;
     var qt = assocQtParcial.trim() ? (parseFloat(String(assocQtParcial).replace(",","."))||0) : qtItem;
-    var saldo = orcSaldoDisponivel(assocSel);
+    var saldo = orcSaldoDisponivel(assocSel, associacoes, mapas, obraOrcItens);
     var ae = getAssocItem(itemAssociando.id);
-    if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
-    var eraAdicionado = itemAssociando.comprado && !ae;
-    var saldoEfetivo = eraAdicionado ? saldo + qt*fator : saldo;
+    var saldoEfetivo = ae ? saldo + (parseFloat(String(ae.qtCompra).replace(",","."))||0)*(parseFloat(ae.fator)||1) : saldo;
     if (qt*fator > saldoEfetivo && !assocExc) { setAssocExc(true); return; }
+    if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
     onCriarAssociacao({
       id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
       obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
       orcItemIndex: obraOrcItens.indexOf(assocSel),
       orcItemDesc: assocSel.descricao, fator: fator,
       unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
-      qtCompra: qt, excedente: Math.max(0,qt*fator-saldo),
+      qtCompra: qt, excedente: Math.max(0,qt*fator-saldoEfetivo),
       justificativa: assocJust
     });
     setItemAssociando(null);
@@ -2653,19 +2652,18 @@ function MapEditor(_ref15) {
     var fator = parseFloat(assocFator)||1;
     var qtItem = parseFloat(String(itemAssociando.qt).replace(",","."))||0;
     var qt = assocQtParcial.trim() ? (parseFloat(String(assocQtParcial).replace(",","."))||0) : qtItem;
-    var saldo = orcSaldoDisponivel(assocSel);
+    var saldo = orcSaldoDisponivel(assocSel, associacoes, mapas, obraOrcItens);
     var ae = getAssocItem(itemAssociando.id);
-    if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
-    var eraAdicionado = itemAssociando.comprado && !ae;
-    var saldoEfetivo = eraAdicionado ? saldo + qt*fator : saldo;
+    var saldoEfetivo = ae ? saldo + (parseFloat(String(ae.qtCompra).replace(",","."))||0)*(parseFloat(ae.fator)||1) : saldo;
     if (qt*fator > saldoEfetivo && !assocExc) { setAssocExc(true); return; }
+    if (ae && onRemoverAssociacao) onRemoverAssociacao(ae.id);
     onCriarAssociacao({
       id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
       obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
       orcItemIndex: obraOrcItens.indexOf(assocSel),
       orcItemDesc: assocSel.descricao, fator: fator,
       unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
-      qtCompra: qt, excedente: Math.max(0,qt*fator-saldo),
+      qtCompra: qt, excedente: Math.max(0,qt*fator-saldoEfetivo),
       justificativa: assocJust
     });
     setItemAssociando(null);
@@ -4346,43 +4344,21 @@ function App() {
   }, []);
 
   var criarAssociacao = React.useCallback(function(assoc) {
-    // Atualizar consumido no orçamento
-    var orc = orcamentos[assoc.obraId];
-    if (orc) {
-      var qtOrc = (parseFloat(assoc.qtCompra)||0) * (parseFloat(assoc.fator)||1);
-      var novosItens = orc.itens.map(function(it) {
-        if (it.codigo !== assoc.orcItemCodigo) return it;
-        return Object.assign({}, it, { consumido: (parseFloat(it.consumido)||0) + qtOrc });
-      });
-      saveOrcamento(assoc.obraId, Object.assign({}, orc, { itens: novosItens }));
-    }
     setAssociacoes(function(prev) {
       var nova = Object.assign({}, assoc, { criadoEm: new Date().toISOString() });
       var lista = [].concat(prev.filter(function(a){ return a.id !== nova.id; }), [nova]);
       sbSaveAssociacoes(lista).catch(function(){});
       return lista;
     });
-  }, [orcamentos, saveOrcamento]);
+  }, []);
 
   var removerAssociacao = React.useCallback(function(assocId) {
-    var assoc = associacoes.find(function(a){ return a.id === assocId; });
-    if (assoc) {
-      var orc = orcamentos[assoc.obraId];
-      if (orc) {
-        var qtOrc = (parseFloat(assoc.qtCompra)||0) * (parseFloat(assoc.fator)||1);
-        var novosItens = orc.itens.map(function(it) {
-          if (it.codigo !== assoc.orcItemCodigo) return it;
-          return Object.assign({}, it, { consumido: Math.max(0, (parseFloat(it.consumido)||0) - qtOrc) });
-        });
-        saveOrcamento(assoc.obraId, Object.assign({}, orc, { itens: novosItens }));
-      }
-    }
     setAssociacoes(function(prev) {
       var lista = prev.filter(function(a){ return a.id !== assocId; });
       sbSaveAssociacoes(lista).catch(function(){});
       return lista;
     });
-  }, [associacoes, orcamentos, saveOrcamento]);
+  }, []);
 
   var addCadastro = useCallback(function (tipo, valor) {
     var v = normalize(valor);
