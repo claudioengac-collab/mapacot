@@ -814,6 +814,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
       if (!item.comprado) return;
       // Verificar se este item tem associação — usar mapaId + itemMapaId (mais confiável)
       var temAssoc = associacoes.some(function(a){ return a.mapaId===mapa.id && a.itemMapaId===item.id; });
+      if (item.comprado && !temAssoc) console.log("ADICIONADO: item="+item.descricao+" id="+item.id+" mapaId="+mapa.id+" assocIds="+associacoes.filter(function(a){return a.mapaId===mapa.id;}).map(function(a){return a.itemMapaId;}).join(","));
       if (!temAssoc) {
         var r = calcResumo(item, mapa.fornecedores||[], mapa.precos||{});
         itensAdicionados.push({ item:item, mapa:mapa, resumo:r });
