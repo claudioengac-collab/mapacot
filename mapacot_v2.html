@@ -738,9 +738,6 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>".concat(pdfTitle, "</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>").concat(pagina0HTML + pagesHTML, "</body></html>");
 };
 var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes) {
-  var _orc = orcamentos[obra]; var _itens = _orc ? (_orc.itens||_orc) : [];
-  var _4721 = _itens.filter(function(x){ return x.codigo==="00004721"; });
-  console.log("ORC length="+_itens.length+" 4721 count="+_4721.length+" indices="+_itens.map(function(x,i){ return x.codigo==="00004721"?i:-1; }).filter(function(i){return i>=0;}).join(","));
   var obraUp = (obra||"").toUpperCase();
   var obraOrc = orcamentos[obra] ? (orcamentos[obra].itens || orcamentos[obra]) : null;
   if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
@@ -763,13 +760,12 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
     var mapaIdsObra = mapasFiltrados.map(function(m){ return m.id; });
     var codigoNorm = String(parseInt(orcItem.codigo||"0",10));
     var idxOrcItem = obraOrc.indexOf(orcItem);
-    var codigoDuplicado = obraOrc.filter(function(o){ return o.codigo===orcItem.codigo; }).length > 1;
     var assocItem = associacoes.filter(function(a){
       var mapaOk = mapaIdsObra.indexOf(a.mapaId) >= 0;
       var codOk = a.orcItemCodigo===orcItem.codigo
         || a.orcItemCodigo===codigoNorm
         || orcItem.codigo===String(parseInt(a.orcItemCodigo||"0",10));
-      var indexOk = (codigoDuplicado && a.orcItemIndex != null && a.orcItemIndex >= 0)
+      var indexOk = (a.orcItemIndex != null && a.orcItemIndex >= 0)
         ? a.orcItemIndex === idxOrcItem
         : true;
       return mapaOk && codOk && indexOk;
