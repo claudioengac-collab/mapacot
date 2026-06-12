@@ -2598,7 +2598,7 @@ function MapEditor(_ref15) {
     var eraAdicionado = itemAssociando.comprado && !ae;
     var saldoEfetivo = eraAdicionado ? saldo + qt*fator : saldo;
     if (qt*fator > saldoEfetivo && !assocExc) { setAssocExc(true); return; }
-    onCriarAssociacao({
+    var novaAssoc = {
       id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
       obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
       orcItemIndex: obraOrcItens.indexOf(assocSel),
@@ -2606,7 +2606,9 @@ function MapEditor(_ref15) {
       unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
       qtCompra: qt, excedente: Math.max(0,qt*fator-saldo),
       justificativa: assocJust
-    });
+    };
+    console.log('DEBUG ASSOC SALVA:', JSON.stringify(novaAssoc));
+    onCriarAssociacao(novaAssoc);
     setItemAssociando(null);
   };
 
