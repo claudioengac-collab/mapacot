@@ -463,6 +463,8 @@ var getTheme = function getTheme(id) {
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 var buildMapaHTML = function buildMapaHTML(mapa) {
   var now = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : new Date();
+  var orcamentos = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+  var associacoes = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : [];
   var T = getTheme(mapa.corTema);
   var fns = mapa.fornecedores || [];
   var itens = mapa.itens || [];
@@ -496,6 +498,86 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var r = calcResumo(item, fns, precos);
     return acc + (r.vlTotal || 0);
   }, 0);
+  // Página 0 — Orçamento + Resumo (só se tiver orçamento associado)
+  var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
+  var obraOrcItens = obraOrc ? (obraOrc.itens || []) : [];
+  var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
+  var temAssoc = obraOrcItens.length > 0 && mapaAssocs.length > 0;
+  var pagina0HTML = "";
+  if (temAssoc) {
+    var orcColor = "#b87800"; var orcSubColor = "#d48800";
+    var rowsP0 = itens.map(function(item, idx0) {
+      var bg0 = idx0 % 2 === 0 ? "#fff" : "#f7f9fc";
+      var r0 = calcResumo(item, fns, precos);
+      var assoc0 = mapaAssocs.find(function(a){ return a.itemMapaId === item.id; });
+      var orcItem0 = assoc0 ? obraOrcItens.find(function(o){ return o.codigo === assoc0.orcItemCodigo; }) : null;
+      var vlOrc0 = orcItem0 ? (parseFloat(orcItem0.valorUnitario||orcItem0.vl_unitario)||0)*(parseFloat(assoc0.fator)||1) : null;
+      var qt0 = parseFloat(String(item.qt).replace(",","."))||0;
+      var vlTot0 = r0.vlUnit !== null ? r0.vlUnit * qt0 : 0;
+      var res0 = vlOrc0 && vlTot0 > 0 ? (vlOrc0 * qt0) - vlTot0 : null;
+      var semA = !assoc0 || !orcItem0;
+      var orcCell0 = semA
+        ? '<td style="border:1px solid #e0bf30;padding:4px 6px;text-align:center;color:#bbb;font-style:italic;background:#fffbee;">SEM ASSOC.</td>'
+          + '<td style="border:1px solid #e0bf30;padding:4px 6px;text-align:center;color:#bbb;background:#fffbee;">&mdash;</td>'
+        : '<td style="border:1px solid #e0bf30;padding:4px 6px;text-align:right;font-weight:700;color:#7a4400;background:#fffbee;">R$ ' + fmtMoney(vlOrc0) + '</td>'
+          + '<td style="border:1px solid #e0bf30;padding:4px 6px;text-align:center;font-weight:700;background:#fffbee;' + (res0!==null?(res0>=0?'color:#186818;':'color:#aa1c1c;'):'') + '">'
+          + (res0!==null?(res0>=0?'&#9679; LUCRO<br>+':'&#9679; PREJ.<br>&minus;')+fmtMoney(Math.abs(res0)):'&mdash;') + '</td>';
+      var resCell0 = r0.vlUnit !== null
+        ? '<td style="border:1px solid #b8c8e8;padding:4px 6px;text-align:right;background:#eef2ff;">R$ ' + fmtMoney(r0.vlUnit) + '</td>'
+          + '<td style="border:1px solid #b8c8e8;padding:4px 6px;text-align:right;font-weight:700;background:#eef2ff;">R$ ' + fmtMoney(r0.vlTotal) + '</td>'
+          + '<td style="border:1px solid #b8c8e8;padding:4px 6px;font-size:9px;background:#eef2ff;">' + (r0.forn||"") + '</td>'
+        : '<td style="border:1px solid #b8c8e8;padding:4px 6px;text-align:center;color:#bbb;background:#eef2ff;">&mdash;</td>'
+          + '<td style="border:1px solid #b8c8e8;padding:4px 6px;text-align:center;color:#bbb;background:#eef2ff;">&mdash;</td>'
+          + '<td style="border:1px solid #b8c8e8;padding:4px 6px;background:#eef2ff;">&mdash;</td>';
+      return '<tr style="background:' + bg0 + '">'
+        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + item.num + '</td>'
+        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + (item.qt||"") + '</td>'
+        + '<td style="border:1px solid #ccc;padding:4px 6px;text-align:center;">' + (item.unid||"") + '</td>'
+        + '<td style="border:1px solid #ccc;padding:4px 6px;">' + (item.descricao||"") + (item.detalhe?'<div style="font-size:8px;color:#888;">'+item.detalhe+'</div>':"") + '</td>'
+        + orcCell0 + resCell0 + '</tr>';
+    }).join("");
+    var resTotalP0 = itens.reduce(function(ac,it){ var r=calcResumo(it,fns,precos); return ac+(r.vlTotal||0); },0);
+    var orcTotalRes = itens.reduce(function(ac,it){
+      var r=calcResumo(it,fns,precos);
+      var a=mapaAssocs.find(function(x){return x.itemMapaId===it.id;});
+      var oi=a?obraOrcItens.find(function(o){return o.codigo===a.orcItemCodigo;}):null;
+      var vo=oi?(parseFloat(oi.valorUnitario||oi.vl_unitario)||0)*(parseFloat(a.fator)||1):null;
+      var qt=parseFloat(String(it.qt).replace(",","."))||0;
+      var vt=r.vlUnit!==null?r.vlUnit*qt:0;
+      return ac+(vo&&vt>0?(vo*qt)-vt:0);
+    },0);
+    var totResStyle = orcTotalRes>=0?'color:#186818;':'color:#aa1c1c;';
+    var totResLabel = orcTotalRes>=0?'&#9679; LUCRO<br>+':'&#9679; PREJ.<br>&minus;';
+    pagina0HTML = '<div style="margin-bottom:20px;">'
+      + '<div style="background:' + T.hdr + ';padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
+      + '<div style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">MAPA DE COTAÇÃO</div>'
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;">MP Nº: ' + (mapa.numero||1) + '</div>'
+      + (mapa.obra?'<div style="font-size:11px;color:rgba(255,255,255,0.95);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">OBRA: '+(mapa.obra||'').toUpperCase()+'</div>':"")
+      + '<div style="font-size:11px;color:rgba(255,255,255,0.9);font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;margin-left:auto;">DATA: '+fmtDate(now)+'&nbsp;&nbsp;HORA: '+fmtHora(now)+'</div></div>'
+      + '<div style="font-size:9px;color:#555;padding:3px 8px;background:#f0f2f5;border-bottom:1px solid #ddd;">&#9658; PÁGINA 1 — Orçamento + Resumo (sem fornecedores)</div>'
+      + '<table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;">'
+      + '<colgroup><col style="width:26px"/><col style="width:30px"/><col style="width:30px"/><col style="width:15%"/><col style="width:8%"/><col style="width:10%"/><col style="width:7%"/><col style="width:8%"/><col style="width:9%"/></colgroup>'
+      + '<thead><tr>'
+      + '<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+T.hdr+';color:#fff;">ITEM</th>'
+      + '<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+T.hdr+';color:#fff;">QT.</th>'
+      + '<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+T.hdr+';color:#fff;">UNID.</th>'
+      + '<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:left;background:'+T.hdr+';color:#fff;overflow:hidden;">DESCRIÇÃO</th>'
+      + '<th colspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+orcColor+';color:#fff;">ORÇAMENTO</th>'
+      + '<th colspan="3" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+T.hdr+';color:#fff;">RESUMO — FORNECEDOR SELECIONADO</th>'
+      + '</tr><tr>'
+      + '<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+orcSubColor+';color:#fff;font-size:9px;">VL. ORÇADO<br>POR UNID. COMPRA</th>'
+      + '<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+orcSubColor+';color:#fff;font-size:9px;">RESULTADO<br>VS. MELHOR PREÇO</th>'
+      + '<th style="border:1px solid #999;padding:4px 5px;text-align:right;background:'+T.sub+';font-size:9px;">VL. UNIT.</th>'
+      + '<th style="border:1px solid #999;padding:4px 5px;text-align:right;background:'+T.sub+';font-size:9px;">VL. TOTAL</th>'
+      + '<th style="border:1px solid #999;padding:4px 5px;background:'+T.sub+';font-size:9px;">FORNECEDOR</th>'
+      + '</tr></thead><tbody>' + rowsP0
+      + '<tr style="background:'+T.sub+';"><td colspan="4" style="border:1px solid #ccc;padding:4px 10px;font-weight:700;">TOTAL</td>'
+      + '<td style="border:1px solid #e0bf30;padding:4px 6px;background:#fffbee;">&mdash;</td>'
+      + '<td style="border:1px solid #e0bf30;padding:4px 6px;text-align:center;font-weight:700;background:#fffbee;'+totResStyle+'">'+totResLabel+fmtMoney(Math.abs(orcTotalRes))+'</td>'
+      + '<td colspan="2" style="border:1px solid #b8c8e8;padding:4px 6px;text-align:right;font-weight:700;background:#eef2ff;">R$ '+fmtMoney(resTotalP0)+'</td>'
+      + '<td style="border:1px solid #b8c8e8;padding:4px 6px;background:#eef2ff;"></td></tr>'
+      + '</tbody></table></div>';
+  }
   var chunks = [];
   for (var i = 0; i < Math.max(fns.length, 1); i += CHUNK_SIZE) chunks.push(fns.slice(i, i + CHUNK_SIZE));
   var hdrColor = T.hdr;
@@ -596,7 +678,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     return "<div style=\"margin-bottom:20px;".concat(ci > 0 ? "page-break-before:always;" : "", "\"><div style=\"background:").concat(hdrColor, ";padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;\"><div style=\"font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;\">MAPA DE COTA\xC7\xC3O</div><div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;\">MP N\xBA: ").concat(mapa.numero || 1, "</div>").concat(mapa.obra ? "<div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;\">OBRA: ".concat((mapa.obra || "").toUpperCase(), "</div>") : "", "<div style=\"font-size:11px;color:rgba(255,255,255,0.9);font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;margin-left:auto;\">DATA: ").concat(fmtDate(now), "&nbsp;&nbsp;HORA: ").concat(fmtHora(now), "</div></div>").concat(renderChunk(chunk, ci), "</div>").concat(ci === chunks.length - 1 ? obsGeralHTML : "");
   }).join("");
   var pdfTitle = "MAPA DE COTACAO - MP N".concat(mapa.numero || 1).concat(mapa.obra ? " - " + (mapa.obra || "").replace(/[^a-zA-Z0-9 ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜàáâãäåçèéêëìíîïòóôõöùúûü]/g, "").trim().slice(0, 40) : "", " - ").concat(fmtDate(now));
-  return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>".concat(pdfTitle, "</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>").concat(pagesHTML, "</body></html>");
+  return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>".concat(pdfTitle, "</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>").concat(pagina0HTML + pagesHTML, "</body></html>");
 };
 var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes) {
   var obraUp = (obra||"").toUpperCase();
@@ -4896,23 +4978,19 @@ function Root() {
 }
 // Sincronizar barras de rolagem duplas para TODOS os mapas
 setInterval(function() {
-  var mirrors = document.querySelectorAll('.scroll-mirror');
-  mirrors.forEach(function(mirror) {
-    if (mirror._sync) return;
+  document.querySelectorAll('.scroll-mirror').forEach(function(mirror) {
     var table = mirror.nextElementSibling;
     if (!table) return;
-    mirror._sync = true;
+    // Atualizar largura sempre
     var inner = mirror.querySelector('.scroll-mirror-inner');
+    if (inner) inner.style.width = table.scrollWidth + 'px';
+    // Sincronizar eventos apenas uma vez por elemento
+    if (mirror._sync) return;
+    mirror._sync = true;
     mirror.addEventListener('scroll', function() { table.scrollLeft = mirror.scrollLeft; });
     table.addEventListener('scroll', function() { mirror.scrollLeft = table.scrollLeft; });
   });
-  // Atualizar largura dos inner divs
-  document.querySelectorAll('.scroll-mirror').forEach(function(mirror) {
-    var table = mirror.nextElementSibling;
-    var inner = mirror.querySelector('.scroll-mirror-inner');
-    if (table && inner) inner.style.width = table.scrollWidth + 'px';
-  });
-}, 300);
+}, 200);
 
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Root, null));
 </script>
