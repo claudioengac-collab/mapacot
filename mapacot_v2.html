@@ -738,7 +738,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var pdfTitle = "MAPA DE COTACAO - MP N".concat(mapa.numero || 1).concat(mapa.obra ? " - " + (mapa.obra || "").replace(/[^a-zA-Z0-9 ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜàáâãäåçèéêëìíîïòóôõöùúûü]/g, "").trim().slice(0, 40) : "", " - ").concat(fmtDate(now));
   return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>".concat(pdfTitle, "</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>").concat(pagina0HTML + pagesHTML, "</body></html>");
 };
-var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes) {
+var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, obra, orcamentos, associacoes) {
   var obraUp = (obra||"").toUpperCase();
   var obraOrc = orcamentos[obra] ? (orcamentos[obra].itens || orcamentos[obra]) : null;
   if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
@@ -1034,7 +1034,7 @@ var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim, o
   }).join("");
   abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:10px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO DE MAPAS POR PER\xCDODO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">PER\xCDODO: ".concat(fmtDate(de), " A ").concat(fmtDate(ate), " \u2014 ").concat(filtrados.length, " MAPA(S)</div></div><table style=\"border-collapse:collapse;width:100%;font-size:11px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">NOME</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">RESPONS\xC1VEL</th><th style=\"border:1px solid #999;padding:5px 7px;width:80px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;width:55px;\">ITENS</th><th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">TOTAL RESUMO</th></tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
 };
-var gerarRelatorioObra = function gerarRelatorioObra(mapas, obra, orcamentos, associacoes) {
+var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes) {
   var filtrados = mapas.filter(function (m) {
     return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
   });
@@ -1048,7 +1048,7 @@ var gerarRelatorioObra = function gerarRelatorioObra(mapas, obra, orcamentos, as
     return "<div style=\"".concat(i > 0 ? "page-break-before:always;" : "", "\">").concat(body, "</div>");
   }).join(""), "</body></html>"));
 };
-var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapas, insumo) {
+var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo) {
   var resultados = [];
   mapas.forEach(function (mapa) {
     (mapa.itens || []).forEach(function (item) {
@@ -2171,12 +2171,14 @@ function ModalImportarOrcamento(_ref_orc) {
 
 // ─── Reports Modal ────────────────────────────────────────────────────────────
 function ReportsModal(_ref12) {
+  var _currentMapa = _ref12.currentMapa || null;
   var open = _ref12.open,
     onClose = _ref12.onClose,
     mapas = _ref12.mapas,
     cadastros = _ref12.cadastros,
     orcamentos = _ref12.orcamentos || {},
     associacoes = _ref12.associacoes || [];
+  var mapasComCurrent = _currentMapa ? mapas.map(function(m){ return m.id === _currentMapa.id ? _currentMapa : m; }) : mapas;
   var _useState19 = useState("periodo"),
     _useState20 = _slicedToArray(_useState19, 2),
     tab = _useState20[0],
@@ -2345,36 +2347,26 @@ function ReportsModal(_ref12) {
     style: SC.btnPri,
     onClick: function onClick() {
       if (tab === "periodo") {
-        if (!periodo.inicio || !periodo.fim) { alert("SELECIONE O PERÍODO."); return; }
-        Promise.all([sbGetMapas(), sbCarregarAssociacoes()]).then(function(res) {
-          var mapasF = res[0] && res[0].length ? res[0] : mapas;
-          var assocsF = res[1];
-          gerarRelatorioPeriodo(mapasF, periodo.inicio, periodo.fim, orcamentos, assocsF);
-        }).catch(function(){ gerarRelatorioPeriodo(mapas, periodo.inicio, periodo.fim, orcamentos, associacoes); });
+        if (!periodo.inicio || !periodo.fim) {
+          alert("SELECIONE O PERÍODO.");
+          return;
+        }
+        gerarRelatorioPeriodo(mapasComCurrent, periodo.inicio, periodo.fim, orcamentos, associacoes);
       }
       if (tab === "obra") {
-        if (!obra.trim()) { alert("INFORME A OBRA."); return; }
-        Promise.all([sbGetMapas(), sbCarregarAssociacoes(), sbCarregarOrcamento(obra)]).then(function(res) {
-          var mapasF = res[0] && res[0].length ? res[0] : mapas;
-          var assocsF = res[1];
-          var orcF = res[2] ? Object.assign({}, orcamentos, _defineProperty({}, obra, zerarConsumido(res[2]))) : orcamentos;
-          gerarRelatorioObra(mapasF, obra, orcF, assocsF);
-        }).catch(function(){ gerarRelatorioObra(mapas, obra, orcamentos, associacoes); });
+        if (!obra.trim()) {
+          alert("INFORME A OBRA.");
+          return;
+        }
+        gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes);
       }
-      if (tab === "orcamento") {
-        if (!obra.trim()) { alert("INFORME A OBRA."); return; }
-        Promise.all([sbGetMapas(), sbCarregarAssociacoes(), sbCarregarOrcamento(obra)]).then(function(res) {
-          var mapasF = res[0] && res[0].length ? res[0] : mapas;
-          var assocsF = res[1];
-          var orcF = res[2] ? Object.assign({}, orcamentos, _defineProperty({}, obra, zerarConsumido(res[2]))) : orcamentos;
-          gerarRelatorioOrcamento(mapasF, obra, orcF, assocsF);
-        }).catch(function(){ gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes); });
-      }
-      if (tab === "insumo") {
-        if (!insumo.trim()) { alert("INFORME O INSUMO."); return; }
-        sbGetMapas().then(function(mapasF) {
-          gerarRelatorioInsumo(mapasF && mapasF.length ? mapasF : mapas, insumo);
-        }).catch(function(){ gerarRelatorioInsumo(mapas, insumo); });
+      if (tab === "orcamento") { if (!obra.trim()) { alert("INFORME A OBRA."); return; } gerarRelatorioOrcamento(mapasComCurrent, obra, orcamentos, associacoes); }
+        if (tab === "insumo") {
+        if (!insumo.trim()) {
+          alert("INFORME O INSUMO.");
+          return;
+        }
+        gerarRelatorioInsumo(mapasComCurrent, insumo);
       }
     }
   }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
@@ -4808,6 +4800,7 @@ function App() {
       return setShowRep(false);
     },
     mapas: mapas,
+    currentMapa: current,
     cadastros: cadastros,
     orcamentos: orcamentos,
     associacoes: associacoes
