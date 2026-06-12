@@ -503,6 +503,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var obraOrcItens = obraOrc ? (obraOrc.itens || []) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
   var temAssoc = obraOrcItens.length > 0 && mapaAssocs.length > 0;
+  console.log("DEBUG buildMapaHTML:", { obraDoMapa: mapa.obra, chavesOrcamentos: Object.keys(orcamentos), obraOrcItensQty: obraOrcItens.length, mapaAssocsQty: mapaAssocs.length, temAssoc: temAssoc, mapaId: mapa.id });
   var pagina0HTML = "";
   if (temAssoc) {
     var orcColor = "#b87800"; var orcSubColor = "#d48800";
