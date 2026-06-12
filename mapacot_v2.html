@@ -747,8 +747,13 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
         || orcItem.codigo===String(parseInt(a.orcItemCodigo||"0",10));
       return mapaOk && codOk;
     });
-    // Recalcular consumido pelas associações (mais confiável que o valor salvo no banco)
-    var consumidoCalc = assocItem.reduce(function(ac,a){ return ac + (parseFloat(a.qtCompra)||0)*(parseFloat(a.fator)||1); }, 0);
+    // Recalcular consumido usando quantidade ATUAL do item no mapa (não a salva na associação)
+    var consumidoCalc = assocItem.reduce(function(ac,a){
+      var mapa = mapasFiltrados.find(function(m){ return m.id === a.mapaId; });
+      var itemMapa = mapa ? (mapa.itens||[]).find(function(it){ return it.id === a.itemMapaId; }) : null;
+      var qtAtual = itemMapa ? (parseFloat(String(itemMapa.qt).replace(",","."))||0) : (parseFloat(a.qtCompra)||0);
+      return ac + qtAtual * (parseFloat(a.fator)||1);
+    }, 0);
     var consumido = consumidoCalc > 0 ? consumidoCalc : (parseFloat(orcItem.consumido)||0);
     var previsto = parseFloat(orcItem.quantidade)||0;
     var saldo = previsto - consumido;
