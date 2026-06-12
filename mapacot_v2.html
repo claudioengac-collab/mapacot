@@ -498,57 +498,51 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var r = calcResumo(item, fns, precos);
     return acc + (r.vlTotal || 0);
   }, 0);
-  // ── Página 0: Orçamento + Resumo (copiado do preview) ──────────────────
+  // ── Página 0 ──────────────────────────────────────────────────────────
   var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
   var obraOrcItens = obraOrc ? (obraOrc.itens || []) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
   var temPagina0 = obraOrcItens.length > 0;
   var pagina0HTML = '';
   if (temPagina0) {
-    var hC = T.hdr; var sC = T.sub;
-    var orcC = '#b87800'; var orcS = '#d48800';
-    var oeS = 'background:#fffbee;'; var reS = 'background:#eef2ff;';
-    // linhas de itens
-    var rowsP0 = itens.map(function(item, ix) {
-      var bg = ix % 2 === 0 ? '' : 'background:#f7f9fc;';
-      var r = calcResumo(item, fns, precos);
-      var assoc = mapaAssocs.find(function(a){ return a.itemMapaId === item.id; });
-      var orcItem = assoc ? obraOrcItens.find(function(o){ return o.codigo === assoc.orcItemCodigo; }) : null;
-      var vlOrc = orcItem ? (parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0)*(parseFloat(assoc&&assoc.fator)||1) : null;
-      var qt = parseFloat(String(item.qt).replace(',','.'))||0;
-      var vlTot = r.vlUnit !== null ? r.vlUnit * qt : 0;
-      var res = vlOrc && vlTot > 0 ? (vlOrc*qt) - vlTot : null;
-      var mesmaUnid = assoc && orcItem && item.unid === orcItem.unidade;
-      // célula orçamento
-      var orcCell = !assoc || !orcItem
-        ? '<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;"><span style="font-size:9px;color:#ccc;">SEM ASSOC.</span></td>'
-          +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        : '<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:right;padding:5px 8px;">'
-            +'<div style="font-size:12px;font-weight:700;color:#7a4400;">R$ '+fmtMoney(vlOrc)+'</div>'
-            +'<div style="font-size:9px;color:#aaa;">'+(mesmaUnid?'mesma unidade':item.unid+' → '+orcItem.unidade)+'</div></td>'
-          +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;padding:5px 8px;">'
-            +(res!==null
-              ? '<div style="font-size:10px;font-weight:700;color:'+(res>=0?'#186818':'#aa1c1c')+';">● '+(res>=0?'LUCRO':'PREJ.')+'</div>'
-                +'<div style="font-size:9px;color:'+(res>=0?'#186818':'#aa1c1c')+';">'+(res>=0?'+':'−')+Math.abs(Math.round((res/(vlOrc*qt))*1000)/10).toFixed(1)+'% · R$ '+fmtMoney(Math.abs(res)/qt)+'/UN</div>'
-                +'<div style="font-size:9px;font-weight:700;color:'+(res>=0?'#186818':'#aa1c1c')+';margin-top:2px;border-top:1px dotted '+(res>=0?'#8ecba8':'#e8a0a0')+';padding-top:2px;">'+(res>=0?'+ ':'− ')+'R$ '+fmtMoney(Math.abs(res))+' TOTAL</div>'
-              : '—')
-            +'</td>';
-      // célula resumo
-      var resCell = r.vlUnit !== null
-        ? '<td style="border:1px solid #ccc;'+reS+'text-align:right;">R$ '+fmtMoney(r.vlUnit)+'</td>'
-          +'<td style="border:1px solid #ccc;'+reS+'text-align:right;font-weight:bold;">R$ '+fmtMoney(r.vlTotal||0)+'</td>'
-          +'<td style="border:1px solid #ccc;'+reS+'font-size:9px;">'+(r.forn||'')+'</td>'
-        : '<td style="border:1px solid #ccc;'+reS+'"></td><td style="border:1px solid #ccc;'+reS+'"></td><td style="border:1px solid #ccc;'+reS+'font-size:9px;"></td>';
-      var descCell = '<td>'+item.descricao+(item.detalhe?'<div style="font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;">↳ '+item.detalhe+'</div>':'')+'</td>';
-      return '<tr style="'+bg+'">'
+    var hC0=T.hdr,sC0=T.sub,oeS0='background:#fffbee;',reS0='background:#eef2ff;';
+    var rowsP0 = itens.map(function(item,ix) {
+      var bg0=ix%2===0?'':'background:#f7f9fc;';
+      var r0=calcResumo(item,fns,precos);
+      var a0=mapaAssocs.find(function(a){return a.itemMapaId===item.id;});
+      var oi0=a0?obraOrcItens.find(function(o){return o.codigo===a0.orcItemCodigo;}):null;
+      var vo0=oi0?(parseFloat(oi0.valorUnitario||oi0.vl_unitario)||0)*(parseFloat(a0&&a0.fator)||1):null;
+      var qt0=parseFloat(String(item.qt).replace(',','.'))||0;
+      var vt0=r0.vlUnit!==null?r0.vlUnit*qt0:0;
+      var res0=vo0&&vt0>0?(vo0*qt0)-vt0:null;
+      var semA0=!a0||!oi0;
+      var desc0=item.descricao+(item.detalhe?'<div style="font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;">\u21b3 '+item.detalhe+'</div>':'');
+      var orcC0=semA0
+        ?'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;"><span style="font-size:9px;color:#ccc;">SEM ASSOC.</span></td>'
+         +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        :'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:right;padding:5px 8px;">'
+           +'<div style="font-size:12px;font-weight:700;color:#7a4400;">R$ '+fmtMoney(vo0)+'</div>'
+           +'<div style="font-size:9px;color:#aaa;">'+(item.unid===(oi0&&oi0.unidade)?'mesma unidade':item.unid+' \u2192 '+(oi0&&oi0.unidade||''))+'</div></td>'
+         +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;padding:5px 8px;">'
+           +(res0!==null
+             ?'<div style="font-size:10px;font-weight:700;color:'+(res0>=0?'#186818':'#aa1c1c')+';">\u25cf '+(res0>=0?'LUCRO':'PREJ.')+'</div>'
+              +'<div style="font-size:9px;color:'+(res0>=0?'#186818':'#aa1c1c')+';">'+(res0>=0?'+':'\u2212')+Math.abs(Math.round(res0/(vo0*qt0)*1000)/10).toFixed(1)+'% \u00b7 R$ '+fmtMoney(Math.abs(res0)/qt0)+'/UN</div>'
+              +'<div style="font-size:9px;font-weight:700;color:'+(res0>=0?'#186818':'#aa1c1c')+';margin-top:2px;border-top:1px dotted '+(res0>=0?'#8ecba8':'#e8a0a0')+';padding-top:2px;">'+(res0>=0?'+ ':'\u2212 ')+'R$ '+fmtMoney(Math.abs(res0))+' TOTAL</div>'
+             :'\u2014')+'</td>';
+      var resC0=r0.vlUnit!==null
+        ?'<td style="border:1px solid #ccc;'+reS0+'text-align:right;">R$ '+fmtMoney(r0.vlUnit)+'</td>'
+         +'<td style="border:1px solid #ccc;'+reS0+'text-align:right;font-weight:bold;">R$ '+fmtMoney(r0.vlTotal||0)+'</td>'
+         +'<td style="border:1px solid #ccc;'+reS0+'font-size:9px;">'+(r0.forn||'')+'</td>'
+        :'<td style="border:1px solid #ccc;'+reS0+'"></td><td style="border:1px solid #ccc;'+reS0+'"></td><td style="border:1px solid #ccc;'+reS0+'font-size:9px;"></td>';
+      return '<tr style="'+bg0+'">'
         +'<td style="border:1px solid #ccc;text-align:center;color:#666;">'+item.num+'</td>'
         +'<td style="border:1px solid #ccc;text-align:center;">'+(item.qt||'')+'</td>'
         +'<td style="border:1px solid #ccc;text-align:center;">'+(item.unid||'')+'</td>'
-        +descCell+orcCell+resCell+'</tr>';
+        +'<td style="border:1px solid #ccc;">'+desc0+'</td>'
+        +orcC0+resC0+'</tr>';
     }).join('');
-    // totais
-    var resumoTotal = itens.reduce(function(ac,it){ var r=calcResumo(it,fns,precos); return ac+(r.vlTotal||0); },0);
-    var orcTotalRes = itens.reduce(function(ac,it){
+    var rTot0=itens.reduce(function(ac,it){var r=calcResumo(it,fns,precos);return ac+(r.vlTotal||0);},0);
+    var orcRes0=itens.reduce(function(ac,it){
       var r=calcResumo(it,fns,precos);
       var a=mapaAssocs.find(function(x){return x.itemMapaId===it.id;});
       var oi=a?obraOrcItens.find(function(o){return o.codigo===a.orcItemCodigo;}):null;
@@ -557,51 +551,49 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       var vt=r.vlUnit!==null?r.vlUnit*qt:0;
       return ac+(vo&&vt>0?(vo*qt)-vt:0);
     },0);
-    var totResC = orcTotalRes>=0?'#186818':'#aa1c1c';
-    var totResL = orcTotalRes>=0?'● LUCRO':'● PREJ.';
-    // rodapé
-    var rodR = mapa.rodape||{}; var rSum = rodR['__resumo__']||{};
-    var vlLiq = resumoTotal-(parseMoney(rSum.desconto)||0)+(parseMoney(rSum.impostos)||0)+(parseMoney(rSum.frete)||0);
-    var rodapeP0 = ''
-      +'<tr class="tot"><td colspan="4" style="border:1px solid #ccc;font-weight:700;">TOTAL</td>'
-        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;font-weight:700;color:'+totResC+';">'
-          +'<div style="font-size:9px;">'+totResL+'</div><div style="font-size:10px;font-weight:800;">'+(orcTotalRes>=0?'+ ':'− ')+'R$ '+fmtMoney(Math.abs(orcTotalRes))+'</div></td>'
-        +'<td style="border:1px solid #ccc;border-right:none;'+reS+'"></td>'
-        +'<td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS+'text-align:right;font-weight:bold;">R$ '+fmtMoney(resumoTotal)+'</td>'
-        +'<td style="border:1px solid #ccc;border-left:none;'+reS+'"></td></tr>'
+    var rC0=orcRes0>=0?'#186818':'#aa1c1c';
+    var rL0=orcRes0>=0?'\u25cf LUCRO':'\u25cf PREJ.';
+    var rod0=mapa.rodape||{},rSum0=rod0['__resumo__']||{};
+    var vlLiq0=rTot0-(parseMoney(rSum0.desconto)||0)+(parseMoney(rSum0.impostos)||0)+(parseMoney(rSum0.frete)||0);
+    var rodP0=''
+      +'<tr style="background:#c5d8f0;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;">TOTAL</td>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;font-weight:700;color:'+rC0+';">'
+          +'<div style="font-size:9px;">'+rL0+'</div><div style="font-size:10px;font-weight:800;">'+(orcRes0>=0?'+ ':'\u2212 ')+'R$ '+fmtMoney(Math.abs(orcRes0))+'</div></td>'
+        +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td>'
+        +'<td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'text-align:right;font-weight:bold;">R$ '+fmtMoney(rTot0)+'</td>'
+        +'<td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
       +'<tr><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">DESCONTO</td>'
-        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:none;'+reS+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS+'"></td></tr>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
       +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">IMPOSTOS</td>'
-        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:none;'+reS+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS+'"></td></tr>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
       +'<tr><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">FRETE</td>'
-        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:none;'+reS+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS+'"></td></tr>'
-      +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">VALOR LÍQUIDO</td>'
-        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:none;'+reS+'"></td>'
-        +'<td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS+'text-align:right;font-weight:700;color:#1a56b0;">'+(vlLiq>0?'R$ '+fmtMoney(vlLiq):'—')+'</td>'
-        +'<td style="border:1px solid #ccc;border-left:none;'+reS+'"></td></tr>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
+      +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">VALOR L\u00cdQUIDO</td>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td>'
+        +'<td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'text-align:right;font-weight:700;color:#1a56b0;">'+(vlLiq0>0?'R$ '+fmtMoney(vlLiq0):'\u2014')+'</td>'
+        +'<td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
       +'<tr><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">CONTATO</td>'
-        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td colspan="3" style="border:1px solid #ccc;'+reS+'font-size:9px;">'+(rSum.contato||'—')+'</td></tr>'
-      +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">OBSERVAÇÕES</td>'
-        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS+'text-align:center;color:#ccc;">—</td>'
-        +'<td colspan="3" style="border:1px solid #ccc;'+reS+'font-size:9px;word-wrap:break-word;white-space:normal;">'+(rSum.observacao||'—')+'</td></tr>';
-    // montar página 0
-    pagina0HTML = '<div style="margin-bottom:20px;page-break-after:always;">'
-      +'<div style="font-size:9px;color:#444;margin-bottom:6px;font-style:italic;font-weight:bold;background:#fff3cd;padding:4px 8px;border-radius:3px;display:inline-block;">&#9658; PÁGINA 1 — Orçamento + Resumo (sem fornecedores)</div>'
-      +'<div style="background:'+hC+';padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
-        +'<div style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">MAPA DE COTAÇÃO</div>'
-        +'<div style="font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;">MP Nº: '+(mapa.numero||1)+'</div>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td colspan="3" style="border:1px solid #ccc;'+reS0+'font-size:9px;">'+(rSum0.contato||'\u2014')+'</td></tr>'
+      +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">OBSERVA\u00c7\u00d5ES</td>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td colspan="3" style="border:1px solid #ccc;'+reS0+'font-size:9px;word-wrap:break-word;white-space:normal;">'+(rSum0.observacao||'\u2014')+'</td></tr>';
+    pagina0HTML='<div style="margin-bottom:20px;page-break-after:always;">'
+      +'<div style="font-size:9px;color:#444;margin-bottom:6px;font-style:italic;font-weight:bold;background:#fff3cd;padding:4px 8px;border-radius:3px;display:inline-block;">&#9658; P\u00c1GINA 1 \u2014 Or\u00e7amento + Resumo (sem fornecedores)</div>'
+      +'<div style="background:'+hC0+';padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
+        +'<div style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">MAPA DE COTA\u00c7\u00c3O</div>'
+        +'<div style="font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;">MP N\u00ba: '+(mapa.numero||1)+'</div>'
         +(mapa.obra?'<div style="font-size:11px;color:#fff;font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;">OBRA: '+(mapa.obra||'').toUpperCase()+'</div>':'')
         +'<div style="font-size:11px;color:#fff;font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;">DATA: '+fmtDate(now)+'&nbsp;&nbsp;HORA: '+fmtHora(now)+'</div>'
       +'</div>'
@@ -609,20 +601,20 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         +'<colgroup><col style="width:4%"><col style="width:5%"><col style="width:5%"><col style="width:28%">'
         +'<col style="width:13%"><col style="width:15%"><col style="width:10%"><col style="width:12%"><col style="width:8%"></colgroup>'
         +'<thead><tr>'
-          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC+';color:#fff;">ITEM</th>'
-          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC+';color:#fff;">QT.</th>'
-          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC+';color:#fff;">UNID.</th>'
-          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:left;background:'+hC+';color:#fff;">DESCRIÇÃO</th>'
-          +'<th colspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+orcC+';color:#fff;font-weight:700;">ORÇAMENTO</th>'
-          +'<th colspan="3" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC+';color:#fff;font-weight:700;">RESUMO — FORNECEDOR SELECIONADO</th>'
+          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC0+';color:#fff;">ITEM</th>'
+          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC0+';color:#fff;">QT.</th>'
+          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC0+';color:#fff;">UNID.</th>'
+          +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:left;background:'+hC0+';color:#fff;">DESCRI\u00c7\u00c3O</th>'
+          +'<th colspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:#b87800;color:#fff;font-weight:700;">OR\u00c7AMENTO</th>'
+          +'<th colspan="3" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC0+';color:#fff;font-weight:700;">RESUMO \u2014 FORNECEDOR SELECIONADO</th>'
         +'</tr><tr>'
-          +'<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+orcS+';color:#fff;font-size:9px;">VL. ORÇADO<br><span style=\"font-weight:400;\">por unid. compra</span></th>'
-          +'<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+orcS+';color:#fff;font-size:9px;">RESULTADO<br><span style=\"font-weight:400;\">vs. melhor preço</span></th>'
-          +'<th style="border:1px solid #999;padding:4px 5px;text-align:right;background:'+sC+';font-size:9px;">VL. UNIT.</th>'
-          +'<th style="border:1px solid #999;padding:4px 5px;text-align:right;background:'+sC+';font-size:9px;">VL. TOTAL</th>'
-          +'<th style="border:1px solid #999;padding:4px 5px;background:'+sC+';font-size:9px;">FORNECEDOR</th>'
+          +'<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:#d48800;color:#fff;font-size:9px;">VL. OR\u00c7ADO<br><span style=\'font-weight:400;\'>por unid. compra</span></th>'
+          +'<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:#d48800;color:#fff;font-size:9px;">RESULTADO<br><span style=\'font-weight:400;\'>vs. melhor pre\u00e7o</span></th>'
+          +'<th style="border:1px solid #999;padding:4px 5px;text-align:right;background:'+sC0+';font-size:9px;">VL. UNIT.</th>'
+          +'<th style="border:1px solid #999;padding:4px 5px;text-align:right;background:'+sC0+';font-size:9px;">VL. TOTAL</th>'
+          +'<th style="border:1px solid #999;padding:4px 5px;background:'+sC0+';font-size:9px;">FORNECEDOR</th>'
         +'</tr></thead>'
-        +'<tbody>'+rowsP0+rodapeP0+'</tbody>'
+        +'<tbody>'+rowsP0+rodP0+'</tbody>'
       +'</table></div>';
   }
   var chunks = [];
@@ -2151,9 +2143,7 @@ function ReportsModal(_ref12) {
   var open = _ref12.open,
     onClose = _ref12.onClose,
     mapas = _ref12.mapas,
-    cadastros = _ref12.cadastros,
-    orcamentos = _ref12.orcamentos || {},
-    associacoes = _ref12.associacoes || [];
+    cadastros = _ref12.cadastros;
   var _useState19 = useState("periodo"),
     _useState20 = _slicedToArray(_useState19, 2),
     tab = _useState20[0],
@@ -2195,7 +2185,7 @@ function ReportsModal(_ref12) {
       borderBottom: "2px solid #e8eaf0",
       background: "#f8f9fb"
     }
-  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["orcamento", "ORÇAMENTO"], ["insumo", "POR INSUMO"]].map(function (_ref13) {
+  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["orcamento", "OR\xC7AMENTO"], ["insumo", "POR INSUMO"]].map(function (_ref13) {
     var _ref14 = _slicedToArray(_ref13, 2),
       id = _ref14[0],
       lbl = _ref14[1];
@@ -2336,7 +2326,7 @@ function ReportsModal(_ref12) {
         gerarRelatorioObra(mapas, obra, orcamentos, associacoes);
       }
       if (tab === "orcamento") { if (!obra.trim()) { alert("INFORME A OBRA."); return; } gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes); }
-      if (tab === "insumo") {
+        if (tab === "insumo") {
         if (!insumo.trim()) {
           alert("INFORME O INSUMO.");
           return;
@@ -5025,19 +5015,23 @@ function Root() {
 }
 // Sincronizar barras de rolagem duplas para TODOS os mapas
 setInterval(function() {
-  document.querySelectorAll('.scroll-mirror').forEach(function(mirror) {
+  var mirrors = document.querySelectorAll('.scroll-mirror');
+  mirrors.forEach(function(mirror) {
+    if (mirror._sync) return;
     var table = mirror.nextElementSibling;
     if (!table) return;
-    // Atualizar largura sempre
-    var inner = mirror.querySelector('.scroll-mirror-inner');
-    if (inner) inner.style.width = table.scrollWidth + 'px';
-    // Sincronizar eventos apenas uma vez por elemento
-    if (mirror._sync) return;
     mirror._sync = true;
+    var inner = mirror.querySelector('.scroll-mirror-inner');
     mirror.addEventListener('scroll', function() { table.scrollLeft = mirror.scrollLeft; });
     table.addEventListener('scroll', function() { mirror.scrollLeft = table.scrollLeft; });
   });
-}, 200);
+  // Atualizar largura dos inner divs
+  document.querySelectorAll('.scroll-mirror').forEach(function(mirror) {
+    var table = mirror.nextElementSibling;
+    var inner = mirror.querySelector('.scroll-mirror-inner');
+    if (table && inner) inner.style.width = table.scrollWidth + 'px';
+  });
+}, 300);
 
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(Root, null));
 </script>
