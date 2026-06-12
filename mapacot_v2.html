@@ -740,12 +740,14 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapas, obra, orca
     // Filtrar associações: usar mapaId dos mapas da obra (mais confiável que comparar nome da obra)
     var mapaIdsObra = mapasFiltrados.map(function(m){ return m.id; });
     var codigoNorm = String(parseInt(orcItem.codigo||"0",10));
+    var idxOrcItem = obraOrc.indexOf(orcItem);
     var assocItem = associacoes.filter(function(a){
       var mapaOk = mapaIdsObra.indexOf(a.mapaId) >= 0;
       var codOk = a.orcItemCodigo===orcItem.codigo
         || a.orcItemCodigo===codigoNorm
         || orcItem.codigo===String(parseInt(a.orcItemCodigo||"0",10));
-      return mapaOk && codOk;
+      var indexOk = a.orcItemIndex != null ? a.orcItemIndex === idxOrcItem : true;
+      return mapaOk && codOk && indexOk;
     });
     // Recalcular consumido usando quantidade ATUAL do item no mapa (não a salva na associação)
     var consumidoCalc = assocItem.reduce(function(ac,a){
@@ -2580,7 +2582,9 @@ function MapEditor(_ref15) {
     setAssocBusca(item.descricao||"");
     setAssocExc(false); setAssocJust("");
     if (ae) {
-      setAssocSel(obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null);
+      var idxAe = ae.orcItemIndex != null ? ae.orcItemIndex : -1;
+      var itemOrcAe = idxAe >= 0 ? (obraOrcItens[idxAe]||null) : obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null;
+      setAssocSel(itemOrcAe);
       setAssocFator(String(ae.fator||"1"));
     } else { setAssocSel(null); setAssocFator("1"); }
   };
@@ -2597,6 +2601,7 @@ function MapEditor(_ref15) {
     onCriarAssociacao({
       id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
       obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
+      orcItemIndex: obraOrcItens.indexOf(assocSel),
       orcItemDesc: assocSel.descricao, fator: fator,
       unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
       qtCompra: qt, excedente: Math.max(0,qt*fator-saldo),
@@ -2633,7 +2638,9 @@ function MapEditor(_ref15) {
     setAssocBusca(item.descricao||"");
     setAssocExc(false); setAssocJust("");
     if (ae) {
-      setAssocSel(obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null);
+      var idxAe2 = ae.orcItemIndex != null ? ae.orcItemIndex : -1;
+      var itemOrcAe2 = idxAe2 >= 0 ? (obraOrcItens[idxAe2]||null) : obraOrcItens.find(function(it){ return it.codigo===ae.orcItemCodigo; })||null;
+      setAssocSel(itemOrcAe2);
       setAssocFator(String(ae.fator||"1"));
     } else { setAssocSel(null); setAssocFator("1"); }
   };
@@ -2650,6 +2657,7 @@ function MapEditor(_ref15) {
     onCriarAssociacao({
       id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
       obraId: mapa.obra, orcItemCodigo: assocSel.codigo,
+      orcItemIndex: obraOrcItens.indexOf(assocSel),
       orcItemDesc: assocSel.descricao, fator: fator,
       unidMapa: itemAssociando.unid, unidOrc: assocSel.unidade,
       qtCompra: qt, excedente: Math.max(0,qt*fator-saldo),
