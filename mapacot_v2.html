@@ -2064,7 +2064,7 @@ function ReportsModal(_ref12) {
       borderBottom: "2px solid #e8eaf0",
       background: "#f8f9fb"
     }
-  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["orcamento", "ORÇAMENTO"], ["insumo", "POR INSUMO"]].map(function (_ref13) {
+  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["insumo", "POR INSUMO"]].map(function (_ref13) {
     var _ref14 = _slicedToArray(_ref13, 2),
       id = _ref14[0],
       lbl = _ref14[1];
@@ -2153,7 +2153,7 @@ function ReportsModal(_ref12) {
     }
   }, mapas.filter(function (m) {
     return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
-  }).length, " MAPA(S)")), tab === "orcamento" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {style: SC.rDesc}, "Gera o relatório de orçamento de uma obra."), /*#__PURE__*/React.createElement("label", {style: SC.lbl}, "OBRA"), /*#__PURE__*/React.createElement(AutocompleteInput, {value: obra, onChange: setObra, suggestions: Object.keys(orcamentos), placeholder: "BUSCAR OU DIGITAR OBRA...", showOnFocus: true, xStyle: {marginBottom: 4}, inputStyle: {border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none"}}), obra && /*#__PURE__*/React.createElement("div", {style: {fontSize: 11, color: "#888", marginTop: 4}}, orcamentos[obra] ? (orcamentos[obra].itens||orcamentos[obra]||[]).length + " ITEM(S)" : "SEM ORÇAMENTO")), tab === "insumo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }).length, " MAPA(S)")), tab === "insumo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: SC.rDesc
   }, "Compara pre\xE7os de um insumo em todos os mapas."), /*#__PURE__*/React.createElement("label", {
     style: SC.lbl
@@ -2204,7 +2204,6 @@ function ReportsModal(_ref12) {
         }
         gerarRelatorioObra(mapas, obra, orcamentos, associacoes);
       }
-      if (tab === "orcamento") { if (!obra.trim()) { alert("INFORME A OBRA."); return; } gerarRelatorioOrcamento(mapas, obra, orcamentos, associacoes); }
       if (tab === "insumo") {
         if (!insumo.trim()) {
           alert("INFORME O INSUMO.");
@@ -3086,7 +3085,7 @@ function MapEditor(_ref15) {
         borderTop: "2px solid rgba(0,0,0,0.1)"
       }
     }, /*#__PURE__*/React.createElement("td", {
-      colSpan: 5,
+      colSpan: 5 + (showOrcamento ? 2 : 0) + (showResumo ? 3 : 0),
       style: _objectSpread(_objectSpread({}, SC.td), {}, {
         fontWeight: 700,
         paddingLeft: 10,
@@ -3150,7 +3149,7 @@ function MapEditor(_ref15) {
           borderTop: ri === 0 ? "1px solid #d8dce8" : undefined
         }
       }, /*#__PURE__*/React.createElement("td", {
-        colSpan: 5,
+        colSpan: 5 + (showOrcamento ? 2 : 0) + (showResumo ? 3 : 0),
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           fontWeight: 600,
           fontSize: 11,
@@ -4895,7 +4894,7 @@ setInterval(function() {
   var mirrors = document.querySelectorAll('.scroll-mirror');
   mirrors.forEach(function(mirror) {
     if (mirror._sync) return;
-    var table = mirror.nextElementSibling;
+    var table = mirror.nextSibling;
     if (!table) return;
     mirror._sync = true;
     var inner = mirror.querySelector('.scroll-mirror-inner');
@@ -4904,7 +4903,7 @@ setInterval(function() {
   });
   // Atualizar largura dos inner divs
   document.querySelectorAll('.scroll-mirror').forEach(function(mirror) {
-    var table = mirror.nextElementSibling;
+    var table = mirror.nextSibling;
     var inner = mirror.querySelector('.scroll-mirror-inner');
     if (table && inner) inner.style.width = table.scrollWidth + 'px';
   });
