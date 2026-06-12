@@ -557,7 +557,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       + '<div style="font-size:11px;color:rgba(255,255,255,0.9);font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;margin-left:auto;">DATA: '+fmtDate(now)+'&nbsp;&nbsp;HORA: '+fmtHora(now)+'</div></div>'
       + '<div style="font-size:9px;color:#555;padding:3px 8px;background:#f0f2f5;border-bottom:1px solid #ddd;">&#9658; PÁGINA 1 — Orçamento + Resumo (sem fornecedores)</div>'
       + '<table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;">'
-      + '<colgroup><col style="width:26px"/><col style="width:30px"/><col style="width:30px"/><col style="width:15%"/><col style="width:8%"/><col style="width:10%"/><col style="width:7%"/><col style="width:8%"/><col style="width:9%"/></colgroup>'
+      + '<colgroup><col style="width:3%"/><col style="width:5%"/><col style="width:5%"/><col style="width:22%"/><col style="width:11%"/><col style="width:13%"/><col style="width:9%"/><col style="width:11%"/><col style="width:11%"/></colgroup>'
       + '<thead><tr>'
       + '<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+T.hdr+';color:#fff;">ITEM</th>'
       + '<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+T.hdr+';color:#fff;">QT.</th>'
@@ -577,7 +577,31 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       + '<td style="border:1px solid #e0bf30;padding:4px 6px;text-align:center;font-weight:700;background:#fffbee;'+totResStyle+'">'+totResLabel+fmtMoney(Math.abs(orcTotalRes))+'</td>'
       + '<td colspan="2" style="border:1px solid #b8c8e8;padding:4px 6px;text-align:right;font-weight:700;background:#eef2ff;">R$ '+fmtMoney(resTotalP0)+'</td>'
       + '<td style="border:1px solid #b8c8e8;padding:4px 6px;background:#eef2ff;"></td></tr>'
-      + '</tbody></table></div>';
+      var rodapeP0 = mapa.rodape || {};
+      var resumoRodP0 = rodapeP0['__resumo__'] || {};
+      var rodapeRowsP0 = [
+        {key:'desconto', label:'DESCONTO', money:true},
+        {key:'impostos', label:'IMPOSTOS', money:true},
+        {key:'frete', label:'FRETE', money:true},
+        {key:'valorLiquido', label:'VALOR L\xcdQUIDO', computed:true},
+        {key:'contato', label:'CONTATO'},
+        {key:'observacao', label:'OBSERVA\xc7\xd5ES'}
+      ];
+      var rodapeHTMLP0 = rodapeRowsP0.map(function(row) {
+        var val = '';
+        if (row.computed) {
+          var rr = resumoRodP0;
+          var vl = resTotalP0 - (parseMoney(rr.desconto)||0) + (parseMoney(rr.impostos)||0) + (parseMoney(rr.frete)||0);
+          val = vl > 0 ? '<span style="color:#1a56b0;font-weight:700;">R$ ' + fmtMoney(vl) + '</span>' : '&mdash;';
+        } else {
+          val = resumoRodP0[row.key] || '&mdash;';
+        }
+        return '<tr><td colspan="4" style="border:1px solid #ccc;padding:4px 10px;font-weight:600;font-size:10px;">' + row.label + '</td>'
+          + '<td style="border:1px solid #e0bf30;padding:4px 6px;background:#fffbee;text-align:center;">&mdash;</td>'
+          + '<td style="border:1px solid #e0bf30;padding:4px 6px;background:#fffbee;text-align:center;">&mdash;</td>'
+          + '<td colspan="3" style="border:1px solid #b8c8e8;padding:4px 6px;background:#eef2ff;">' + val + '</td></tr>';
+      }).join('');
+      + '</tbody>' + rodapeHTMLP0 + '</table></div>';
   }
   var chunks = [];
   for (var i = 0; i < Math.max(fns.length, 1); i += CHUNK_SIZE) chunks.push(fns.slice(i, i + CHUNK_SIZE));
