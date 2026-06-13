@@ -742,7 +742,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
   var obraUp = (obra||"").toUpperCase();
   var obraOrc = orcamentos[obra] ? (orcamentos[obra].itens || orcamentos[obra]) : null;
   if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
-  var mapasFiltrados = mapas.filter(function(m){ return (m.obra||"").toUpperCase().includes(obraUp); });
+  var mapasFiltrados = mapasComCurrent.filter(function(m){ return (m.obra||"").toUpperCase().includes(obraUp); });
   var now = new Date();
   var css = [
     "@page{size:A4 landscape;margin:8mm;}",
@@ -793,7 +793,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
     var vlCotado = null;
     var vlTotalCotado = 0;
     assocItem.forEach(function(a) {
-      var mapa = mapas.find(function(m){ return m.id===a.mapaId; });
+      var mapa = mapasComCurrent.find(function(m){ return m.id===a.mapaId; });
       if (!mapa) return;
       var item = (mapa.itens||[]).find(function(i){ return i.id===a.itemMapaId; });
       if (!item) return;
