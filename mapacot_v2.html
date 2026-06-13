@@ -3563,7 +3563,7 @@ function MapEditor(_ref15) {
     style: SC.appBar,
     className: "rsp-appbar"
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: onBack,
+    onClick: function(){ onBack(mapa); },
     style: SC.backBtn
   }, /*#__PURE__*/React.createElement(IcoBack, null), " MAPAS"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4539,7 +4539,7 @@ function App() {
   });
   if (current) return /*#__PURE__*/React.createElement(MapEditor, {
     mapa: current,
-    onBack: function onBack() { return setCurrent(null); },
+    onBack: function onBack(mapaAtual) { if(mapaAtual) { setMapas(function(prev){ return prev.map(function(m){ return m.id===mapaAtual.id ? mapaAtual : m; }); }); sbSaveMapa(mapaAtual).catch(function(){}); } setCurrent(null); },
     onSave: handleSave,
     cadastros: cadastros,
     addCadastro: addCadastro,
