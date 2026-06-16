@@ -69,7 +69,7 @@ var SB = {
   "Content-Type": "application/json",
   "Prefer": "resolution=merge-duplicates"
 };
-var sbGetMapas = /*#__PURE__*/function () {
+var sbGetMapasOnce = /*#__PURE__*/function () {
   var _ref = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee() {
     var r, d;
     return _regenerator().w(function (_context) {
@@ -97,9 +97,21 @@ var sbGetMapas = /*#__PURE__*/function () {
       }
     }, _callee);
   }));
-  return function sbGetMapas() {
+  return function sbGetMapasOnce() {
     return _ref.apply(this, arguments);
   };
+}();
+var sbGetMapas = function sbGetMapas() {
+  return sbGetMapasOnce().then(function(res) {
+    if (res && res.length) return res;
+    return new Promise(function(resolve){ setTimeout(resolve, 2000); })
+      .then(function(){ return sbGetMapasOnce(); })
+      .then(function(res2) {
+        if (res2 && res2.length) return res2;
+        return new Promise(function(resolve){ setTimeout(resolve, 2000); })
+          .then(function(){ return sbGetMapasOnce(); });
+      });
+  });
 }();
 var sbSaveMapa = /*#__PURE__*/function () {
   var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(m) {
@@ -4773,14 +4785,21 @@ function App() {
       color: "#7a8aaa",
       textAlign: "center"
     }
-  }, mapas.length === 0 ? 'CLIQUE EM "NOVO MAPA" PARA COMEÇAR.' : "TENTE OUTRO TERMO."), mapas.length === 0 && /*#__PURE__*/React.createElement("button", {
+  }, mapas.length === 0 ? 'CLIQUE EM "NOVO MAPA" PARA COMEÇAR.' : "TENTE OUTRO TERMO."), mapas.length === 0 && /*#__PURE__*/React.createElement("div", {style:{display:'flex',gap:10,marginTop:16}}, /*#__PURE__*/React.createElement("button", {
     style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
-      marginTop: 16
+      background:'#2563eb'
+    }),
+    onClick: function onClick() {
+      sbGetMapas().then(function(d){ if(d&&d.length) setMapas(d); });
+    }
+  }, "↺ RECARREGAR MAPAS"), /*#__PURE__*/React.createElement("button", {
+    style: _objectSpread(_objectSpread({}, SC.btnPri), {}, {
+      marginTop: 0
     }),
     onClick: function onClick() {
       return setShowNew(true);
     }
-  }, /*#__PURE__*/React.createElement(IcoPlus, null), " CRIAR PRIMEIRO MAPA")) : /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(IcoPlus, null), " CRIAR PRIMEIRO MAPA"))) : /*#__PURE__*/React.createElement("div", {
     style: {
       display: "grid",
       gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))",
