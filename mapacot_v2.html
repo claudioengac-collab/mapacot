@@ -4453,9 +4453,12 @@ function App() {
   }, []);
   var removeCadastro = useCallback(function (tipo, valor) {
     setCadastros(function (prev) {
-      return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, (prev[tipo] || []).filter(function (x) {
+      var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, (prev[tipo] || []).filter(function (x) {
         return normalize(x) !== normalize(valor);
       })));
+      if (tipo === 'insumos') sbSaveInsumos(updated.insumos).catch(function(){});
+      else sbSaveCadastros(updated).catch(function(){});
+      return updated;
     });
   }, []);
   var editCadastro = useCallback(function (tipo, oldVal, newVal) {
@@ -4466,7 +4469,10 @@ function App() {
       var lista = (prev[tipo] || []).map(function (x) {
         return normalize(x) === vOld ? vNew : x;
       });
-      return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, _toConsumableArray(new Set(lista)).sort()));
+      var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, _toConsumableArray(new Set(lista)).sort()));
+      if (tipo === 'insumos') sbSaveInsumos(updated.insumos).catch(function(){});
+      else sbSaveCadastros(updated).catch(function(){});
+      return updated;
     });
   }, []);
   var handleCreate = /*#__PURE__*/function () {
