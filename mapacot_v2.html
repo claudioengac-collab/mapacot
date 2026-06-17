@@ -4460,6 +4460,7 @@ function App() {
       })) return prev;
       var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, [].concat(_toConsumableArray(lista), [v]).sort()));
       if (tipo === "insumos") sbSaveInsumos(updated.insumos).catch(function () {});
+      else sbSaveCadastros(updated).catch(function () {});
       return updated;
     });
   }, []);
