@@ -3194,7 +3194,7 @@ function MapEditor(_ref15) {
                 var aesR = getAssocItens(item.id);
         var assocR = aesR.length > 0 ? aesR[0] : null;
         var res = aesR.length > 0 ? calcResMulti(item, aesR, obraOrcItens) : null;
-        var vloExib = res ? res.vloMedio : (assocR ? calcVlOrc(assocR) : null);
+        var vloExib = res ? res.vloMedio : (aesR.length > 0 ? (aesR.reduce(function(ac,a){ var oi=obraOrcItens[a.orcItemIndex]; return ac+(oi?(parseFloat(oi.valorUnitario)||0)*(parseFloat(String(a.qtCompra).replace(",","."))||0):0); },0) / (parseFloat(String(item.qt).replace(",","."))||1)) : null);
         return /*#__PURE__*/React.createElement(React.Fragment, null,
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
