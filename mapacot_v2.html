@@ -2814,7 +2814,7 @@ function MapEditor(_ref15) {
       if (!oi) return ac;
       var fator = parseFloat(a.fator)||1;
       var qt = parseFloat(String(a.qtCompra).replace(",","."))||0;
-      return ac + (parseFloat(oi.valorUnitario)||0) * fator * qt;
+      return ac + (parseFloat(oi.valorUnitario)||0) * qt;
     }, 0);
     if (vlOrcTotal <= 0) return null;
     var vlCotadoTotal = (res.vlUnit||0) * qtItem;
