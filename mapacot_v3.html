@@ -2152,6 +2152,10 @@ function ModalGerenciarOrcamento(_ref_ger) {
     setPopupForm(null);
   };
   var handleSalvar = function() {
+    if (itensRef.current.length === 0) {
+      alert("ERRO: Nenhum item carregado. Feche e abra o gerenciador novamente.");
+      return;
+    }
     setSalvando(true);
     var itensFinal = itensRef.current.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
     var dadosSalvar = Array.isArray(orcamentoAtual) ? itensFinal : Object.assign({}, orcamentoAtual, { itens: itensFinal });
