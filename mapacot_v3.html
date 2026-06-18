@@ -304,19 +304,23 @@ var zerarConsumido = function(dados) {
 };
 var sbSaveOrcamento = function(obraId, dados) {
   var id = orcObraId(obraId);
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
-    method: "POST",
-    headers: SB,
-    body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
-  }).then(function(r) {
-    if (!r.ok) {
-      return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id), {
-        method: "PATCH",
-        headers: SB,
-        body: JSON.stringify({ dados: dados, atualizado_em: new Date().toISOString() })
-      });
-    }
-    return r;
+  var body = JSON.stringify({ dados: dados, atualizado_em: new Date().toISOString() });
+  var doPatch = function() {
+    return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id), {
+      method: "PATCH", headers: SB, body: body
+    }).then(function(r) {
+      if (!r.ok) {
+        // Se PATCH falhou (registro não existe ainda), tenta POST
+        return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
+          method: "POST", headers: SB,
+          body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
+        });
+      }
+      return r;
+    });
+  };
+  return doPatch().catch(function() {
+    return new Promise(function(res){ setTimeout(res, 1500); }).then(doPatch);
   });
 };
 var sbDeleteOrcamento = function(obraId) {
@@ -2093,6 +2097,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
   var open = _ref_ger.open, onClose = _ref_ger.onClose, obra = _ref_ger.obra,
     orcamentoAtual = _ref_ger.orcamentoAtual, associacoes = _ref_ger.associacoes, onSalvar = _ref_ger.onSalvar;
   var _sItens = React.useState([]), itens = _sItens[0], setItens = _sItens[1];
+  var itensRef = React.useRef([]);
   var _sFiltro = React.useState("TODOS"), filtro = _sFiltro[0], setFiltro = _sFiltro[1];
   var _sBusca = React.useState(""), busca = _sBusca[0], setBusca = _sBusca[1];
   var _sPopI = React.useState(null), popupInativar = _sPopI[0], setPopupInativar = _sPopI[1];
@@ -2102,9 +2107,12 @@ function ModalGerenciarOrcamento(_ref_ger) {
   React.useEffect(function() {
     if (!open || !orcamentoAtual) return;
     var base = Array.isArray(orcamentoAtual) ? orcamentoAtual : (orcamentoAtual.itens || []);
-    setItens(base.map(function(it, idx) { return Object.assign({}, it, { _idx: idx, ativo: it.ativo !== false }); }));
+    var lista = base.map(function(it, idx) { return Object.assign({}, it, { _idx: idx, ativo: it.ativo !== false }); });
+    setItens(lista);
+    itensRef.current = lista;
     setBusca(""); setFiltro("TODOS");
   }, [open, orcamentoAtual]);
+  React.useEffect(function() { itensRef.current = itens; }, [itens]);
 
   if (!open) return null;
 
@@ -2140,9 +2148,9 @@ function ModalGerenciarOrcamento(_ref_ger) {
   };
   var handleSalvar = function() {
     setSalvando(true);
-    var itensFinal = itens.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
+    var itensFinal = itensRef.current.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
     var dadosSalvar = Array.isArray(orcamentoAtual) ? itensFinal : Object.assign({}, orcamentoAtual, { itens: itensFinal });
-    onSalvar(dadosSalvar); setSalvando(false); onClose();
+    onSalvar(dadosSalvar);
   };
 
   var totAtivos = itens.filter(function(x){ return x.ativo!==false; }).length;
@@ -4606,7 +4614,7 @@ function App() {
   // ── Funções de orçamento ──────────────────────────────────────────────────
   var saveOrcamento = React.useCallback(function(obraId, dados) {
     setOrcamentos(function(prev){ return Object.assign({}, prev, _defineProperty({}, obraId, dados)); });
-    sbSaveOrcamento(obraId, dados).catch(function(){});
+    return sbSaveOrcamento(obraId, dados).catch(function(){});
   }, []);
 
   var limparOrcamento = React.useCallback(function(obraId) {
@@ -5044,7 +5052,7 @@ function App() {
     obra: obraGerenciando,
     orcamentoAtual: obraGerenciando ? (orcamentos[obraGerenciando]||null) : null,
     associacoes: associacoes,
-    onSalvar: function(dados){ saveOrcamento(obraGerenciando, dados); setShowGerenciarOrc(false); setObraGerenciando(null); }
+    onSalvar: function(dados){ var _ob = obraGerenciando; saveOrcamento(_ob, dados).then(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }).catch(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }); }
   }),
   /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCad,
