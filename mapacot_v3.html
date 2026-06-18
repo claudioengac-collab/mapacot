@@ -2112,7 +2112,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
     itensRef.current = lista;
     setBusca(""); setFiltro("TODOS");
   }, [open, orcamentoAtual]);
-  React.useEffect(function() { itensRef.current = itens; }, [itens]);
+
 
   if (!open) return null;
 
@@ -2131,20 +2131,21 @@ function ModalGerenciarOrcamento(_ref_ger) {
     return bOk;
   });
 
+  var atualizarItens = function(novos) { itensRef.current = novos; setItens(novos); };
   var handleInativar = function(it) {
     if (calcSaldo(it) > 0) { setPopupInativar(it); }
-    else { setItens(itens.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:false}) : x; })); }
+    else { atualizarItens(itensRef.current.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:false}) : x; })); }
   };
   var confirmarInativar = function(criar) {
     var it = popupInativar;
-    var novos = itens.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:false}) : x; });
+    var novos = itensRef.current.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:false}) : x; });
     if (criar) novos = novos.concat([{ _idx:novos.length, codigo:it.codigo||"", descricao:(it.descricao||"")+" - SALDO COMPLEMENTAR", unidade:it.unidade||"", quantidade:calcSaldo(it), valorUnitario:it.valorUnitario||0, consumido:0, ativo:true }]);
-    setItens(novos); setPopupInativar(null);
+    atualizarItens(novos); setPopupInativar(null);
   };
-  var handleReativar = function(it) { setItens(itens.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:true}) : x; })); };
+  var handleReativar = function(it) { atualizarItens(itensRef.current.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:true}) : x; })); };
   var handleExcluir = function(it) {
     if (!window.confirm("EXCLUIR \"" + (it.descricao||"") + "\"?")) return;
-    setItens(itens.filter(function(x){ return x._idx!==it._idx; }).map(function(x,i){ return Object.assign({},x,{_idx:i}); }));
+    atualizarItens(itensRef.current.filter(function(x){ return x._idx!==it._idx; }).map(function(x,i){ return Object.assign({},x,{_idx:i}); }));
   };
   var handleSalvar = function() {
     setSalvando(true);
@@ -2239,7 +2240,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
         )
       ),
       popupForm && E("div", { style:{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center"} },
-        E(FormItemOrcamento, { modo:popupForm.modo, item:popupForm.it, onSalvar:function(dados){ if(popupForm.modo==="editar"){ setItens(itens.map(function(x){ return x._idx===popupForm.it._idx ? Object.assign({},x,{codigo:dados.codigo,descricao:dados.descricao,unidade:dados.unidade,quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,observacao:dados.observacao||""}) : x; })); } else { setItens(itens.concat([{_idx:itens.length,codigo:dados.codigo||"",descricao:dados.descricao||"",unidade:dados.unidade||"",quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,consumido:0,ativo:true,observacao:dados.observacao||""}])); } setPopupForm(null); }, onCancelar:function(){ setPopupForm(null); } })
+        E(FormItemOrcamento, { modo:popupForm.modo, item:popupForm.it, onSalvar:function(dados){ if(popupForm.modo==="editar"){ atualizarItens(itensRef.current.map(function(x){ return x._idx===popupForm.it._idx ? Object.assign({},x,{codigo:dados.codigo,descricao:dados.descricao,unidade:dados.unidade,quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,observacao:dados.observacao||""}) : x; })); } else { atualizarItens(itensRef.current.concat([{_idx:itensRef.current.length,codigo:dados.codigo||"",descricao:dados.descricao||"",unidade:dados.unidade||"",quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,consumido:0,ativo:true,observacao:dados.observacao||""}])); } setPopupForm(null); }, onCancelar:function(){ setPopupForm(null); } })
       )
     )
   );
