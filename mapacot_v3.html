@@ -532,7 +532,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   }, 0);
   // ── Página 0 ──────────────────────────────────────────────────────────
   var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
-  var obraOrcItens = obraOrc ? (obraOrc.itens || []) : [];
+  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens || [])) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
   var temPagina0 = obraOrcItens.length > 0;
   var pagina0HTML = '';
@@ -2861,7 +2861,7 @@ function MapEditor(_ref15) {
   };
   // ── Helpers de orçamento ──────────────────────────────────────────────────
   var obraOrc = mapa.obra ? (orcamentos[mapa.obra]||null) : null;
-  var obraOrcItens = obraOrc ? (obraOrc.itens||[]) : [];
+  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
   var temOrcamento = obraOrcItens.length > 0;
   var getAssocItem = function(iid) {
     return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null;
@@ -2925,7 +2925,7 @@ function MapEditor(_ref15) {
 
   // ── Helpers de orçamento ──────────────────────────────────────────────────
   var obraOrc = mapa.obra ? (orcamentos[mapa.obra]||null) : null;
-  var obraOrcItens = obraOrc ? (obraOrc.itens||[]) : [];
+  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
   var temOrcamento = obraOrcItens.length > 0;
   var getAssocItem = function(iid) {
     return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null;
