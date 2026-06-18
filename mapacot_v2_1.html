@@ -2159,6 +2159,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
     var itensFinal = lista.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
     var dadosSalvar = Array.isArray(orcamentoAtual) ? itensFinal : Object.assign({}, orcamentoAtual, { itens: itensFinal });
     onSalvar(dadosSalvar);
+    setTimeout(function(){ setSalvando(false); }, 1000);
   };
 
   var totAt = itensRef.current.filter(function(x){ return x.ativo!==false; }).length;
@@ -4050,7 +4051,8 @@ function MapEditor(_ref15) {
     onEdit: editCadastro || function(){},
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
-    onLimparOrcamento: onLimparOrcamento
+    onLimparOrcamento: onLimparOrcamento,
+    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); if(onGerenciarOrcamento) onGerenciarOrcamento(obra); }
   }));
 }
 
@@ -5053,7 +5055,7 @@ function App() {
     obra: obraGerenciando,
     orcamentoAtual: obraGerenciando ? (orcamentos[obraGerenciando]||null) : null,
     associacoes: associacoes,
-    onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob,dados).then(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }).catch(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }); }
+    onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob,dados).catch(function(){}); }
   }),
   /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCad,
