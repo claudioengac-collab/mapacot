@@ -2088,48 +2088,34 @@ function CadastrosModal(_ref11) {
 
 
 // ─── Modal Importar Orçamento ─────────────────────────────────────────────────
-
 // --- Modal Gerenciar Orcamento ---
 function ModalGerenciarOrcamento(_ref_ger) {
-  var open = _ref_ger.open,
-    onClose = _ref_ger.onClose,
-    obra = _ref_ger.obra,
-    orcamentoAtual = _ref_ger.orcamentoAtual,
-    associacoes = _ref_ger.associacoes,
-    onSalvar = _ref_ger.onSalvar;
-
+  var open = _ref_ger.open, onClose = _ref_ger.onClose, obra = _ref_ger.obra,
+    orcamentoAtual = _ref_ger.orcamentoAtual, associacoes = _ref_ger.associacoes, onSalvar = _ref_ger.onSalvar;
   var _sItens = React.useState([]), itens = _sItens[0], setItens = _sItens[1];
   var _sFiltro = React.useState("TODOS"), filtro = _sFiltro[0], setFiltro = _sFiltro[1];
   var _sBusca = React.useState(""), busca = _sBusca[0], setBusca = _sBusca[1];
-  var _sPopInativar = React.useState(null), popupInativar = _sPopInativar[0], setPopupInativar = _sPopInativar[1];
-  var _sPopForm = React.useState(null), popupForm = _sPopForm[0], setPopupForm = _sPopForm[1];
-  var _sSalvando = React.useState(false), salvando = _sSalvando[0], setSalvando = _sSalvando[1];
+  var _sPopI = React.useState(null), popupInativar = _sPopI[0], setPopupInativar = _sPopI[1];
+  var _sPopF = React.useState(null), popupForm = _sPopF[0], setPopupForm = _sPopF[1];
+  var _sSalv = React.useState(false), salvando = _sSalv[0], setSalvando = _sSalv[1];
 
   React.useEffect(function() {
     if (!open || !orcamentoAtual) return;
-    var listaBase = Array.isArray(orcamentoAtual) ? orcamentoAtual : (orcamentoAtual.itens || []);
-    var lista = listaBase.map(function(it, idx) {
-      return Object.assign({}, it, { _idx: idx, ativo: it.ativo !== false });
-    });
-    setItens(lista);
-    setBusca("");
-    setFiltro("TODOS");
+    var base = Array.isArray(orcamentoAtual) ? orcamentoAtual : (orcamentoAtual.itens || []);
+    setItens(base.map(function(it, idx) { return Object.assign({}, it, { _idx: idx, ativo: it.ativo !== false }); }));
+    setBusca(""); setFiltro("TODOS");
   }, [open, orcamentoAtual]);
 
   if (!open) return null;
 
-  var temAssocItem = function(idx) {
-    if (!associacoes || !associacoes.length) return false;
-    return associacoes.some(function(a) { return a.orcItemIndex === idx; });
-  };
+  var temAssoc = function(idx) { return associacoes ? associacoes.some(function(a){ return a.orcItemIndex === idx; }) : false; };
+  var calcSaldo = function(it) { return (parseFloat(it.quantidade)||0) - (parseFloat(it.consumido)||0); };
+  var fmtN = function(v) { return (parseFloat(v)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var fmtC = function(v) { return "R$ " + fmtN(v); };
 
-  var calcSaldo = function(it) {
-    return (parseFloat(it.quantidade) || 0) - (parseFloat(it.consumido) || 0);
-  };
-
-  var itensFiltrados = itens.filter(function(it) {
+  var itensFilt = itens.filter(function(it) {
     var bOk = !busca || (it.descricao||"").toUpperCase().indexOf(busca.toUpperCase()) >= 0 || (it.codigo||"").indexOf(busca) >= 0;
-    var assoc = temAssocItem(it._idx);
+    var assoc = temAssoc(it._idx);
     if (filtro === "ATIVOS" && !it.ativo) return false;
     if (filtro === "INATIVOS" && it.ativo) return false;
     if (filtro === "COM ASSOCIACAO" && !assoc) return false;
@@ -2138,105 +2124,66 @@ function ModalGerenciarOrcamento(_ref_ger) {
   });
 
   var handleInativar = function(it) {
-    var saldo = calcSaldo(it);
-    if (saldo > 0) { setPopupInativar(it); }
+    if (calcSaldo(it) > 0) { setPopupInativar(it); }
     else { setItens(itens.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:false}) : x; })); }
   };
-
-  var confirmarInativar = function(criarSaldo) {
+  var confirmarInativar = function(criar) {
     var it = popupInativar;
     var novos = itens.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:false}) : x; });
-    if (criarSaldo) {
-      var saldo = calcSaldo(it);
-      novos = novos.concat([{ _idx: novos.length, codigo: it.codigo||"", descricao: (it.descricao||"") + " - SALDO COMPLEMENTAR", unidade: it.unidade||"", quantidade: saldo, valorUnitario: it.valorUnitario||0, consumido: 0, ativo: true }]);
-    }
-    setItens(novos);
-    setPopupInativar(null);
+    if (criar) novos = novos.concat([{ _idx:novos.length, codigo:it.codigo||"", descricao:(it.descricao||"")+" - SALDO COMPLEMENTAR", unidade:it.unidade||"", quantidade:calcSaldo(it), valorUnitario:it.valorUnitario||0, consumido:0, ativo:true }]);
+    setItens(novos); setPopupInativar(null);
   };
-
-  var handleReativar = function(it) {
-    setItens(itens.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:true}) : x; }));
-  };
-
+  var handleReativar = function(it) { setItens(itens.map(function(x){ return x._idx===it._idx ? Object.assign({},x,{ativo:true}) : x; })); };
   var handleExcluir = function(it) {
     if (!window.confirm("EXCLUIR \"" + (it.descricao||"") + "\"?")) return;
     setItens(itens.filter(function(x){ return x._idx!==it._idx; }).map(function(x,i){ return Object.assign({},x,{_idx:i}); }));
   };
-
-  var handleEditar = function(it) { setPopupForm({ modo:"editar", it:it }); };
-  var handleAdicionar = function() { setPopupForm({ modo:"adicionar", it:{ codigo:"", descricao:"", unidade:"", quantidade:"", valorUnitario:"" } }); };
-
-  var salvarForm = function(dados) {
-    if (popupForm.modo === "editar") {
-      setItens(itens.map(function(x){ return x._idx===popupForm.it._idx ? Object.assign({},x,{ codigo:dados.codigo, descricao:dados.descricao, unidade:dados.unidade, quantidade:parseFloat(dados.quantidade)||0, valorUnitario:parseFloat(dados.valorUnitario)||0 }) : x; }));
-    } else {
-      setItens(itens.concat([{ _idx:itens.length, codigo:dados.codigo||"", descricao:dados.descricao||"", unidade:dados.unidade||"", quantidade:parseFloat(dados.quantidade)||0, valorUnitario:parseFloat(dados.valorUnitario)||0, consumido:0, ativo:true }]));
-    }
-    setPopupForm(null);
-  };
-
   var handleSalvar = function() {
     setSalvando(true);
-    var itensFinal = itens.map(function(it){ var c = Object.assign({},it); delete c._idx; return c; });
-    var dadosSalvar = Array.isArray(orcamentoAtual)
-      ? itensFinal
-      : Object.assign({}, orcamentoAtual, { itens: itensFinal });
-    onSalvar(dadosSalvar);
-    setSalvando(false);
-    onClose();
+    var itensFinal = itens.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
+    var dadosSalvar = Array.isArray(orcamentoAtual) ? itensFinal : Object.assign({}, orcamentoAtual, { itens: itensFinal });
+    onSalvar(dadosSalvar); setSalvando(false); onClose();
   };
 
-  var totalAtivos = itens.filter(function(x){ return x.ativo!==false; }).length;
-  var totalInativos = itens.filter(function(x){ return x.ativo===false; }).length;
-  var totalAssoc = itens.filter(function(x){ return temAssocItem(x._idx); }).length;
-
-  var fmtN = function(v){ return (parseFloat(v)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); };
-  var fmtC = function(v){ return "R$ " + fmtN(v); };
-
+  var totAtivos = itens.filter(function(x){ return x.ativo!==false; }).length;
+  var totInativos = itens.filter(function(x){ return x.ativo===false; }).length;
+  var totAssoc = itens.filter(function(x){ return temAssoc(x._idx); }).length;
   var E = React.createElement;
-  var oStyle = {position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.55)",zIndex:3000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px",boxSizing:"border-box",overflowY:"auto"};
-  var mStyle = {background:"#fff",borderRadius:10,width:"100%",maxWidth:1200,boxShadow:"0 4px 32px rgba(0,0,0,0.18)",overflow:"hidden",marginBottom:20};
 
-  return E("div", { style:oStyle, onClick:function(e){ if(e.target===e.currentTarget) onClose(); } },
-    E("div", { style:mStyle },
-
-      E("div", { style:{background:"#0f1f3d",color:"#fff",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10} },
+  return E("div", { style:{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.55)",zIndex:3000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px",boxSizing:"border-box",overflowY:"auto"}, onClick:function(ev){ if(ev.target===ev.currentTarget) onClose(); } },
+    E("div", { style:{background:"#fff",borderRadius:10,width:"100%",maxWidth:1200,boxShadow:"0 4px 32px rgba(0,0,0,0.18)",overflow:"hidden",marginBottom:20} },
+      E("div", { style:{background:"#0f1f3d",color:"#fff",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"} },
         E("span", { style:{fontWeight:700,fontSize:13,letterSpacing:1} }, "GERENCIAMENTO DE ORÇAMENTO — " + (obra||"").toUpperCase()),
-        E("button", { onClick:handleAdicionar, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"7px 14px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "+ ADICIONAR ITEM")
+        E("button", { onClick:function(){ setPopupForm({modo:"adicionar",it:{codigo:"",descricao:"",unidade:"",quantidade:"",valorUnitario:"",observacao:""}}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"7px 14px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "+ ADICIONAR ITEM")
       ),
-
       E("div", { style:{padding:"10px 20px",background:"#f8f9fb",borderBottom:"1px solid #e0e4ec",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"} },
-        E("input", { type:"text", placeholder:"BUSCAR POR DESCRICAO OU CODIGO...", value:busca, onChange:function(e){setBusca(e.target.value);}, style:{padding:"7px 12px",border:"1px solid #d1d5db",borderRadius:6,fontSize:12,width:280,textTransform:"none"} }),
+        E("input", { type:"text", placeholder:"BUSCAR POR DESCRICAO OU CODIGO...", value:busca, onChange:function(e){setBusca(e.target.value);}, style:{padding:"7px 12px",border:"1px solid #d1d5db",borderRadius:6,fontSize:12,width:280} }),
         E("div", { style:{display:"flex",gap:6,flexWrap:"wrap"} },
           ["TODOS","ATIVOS","INATIVOS","COM ASSOCIACAO","SEM ASSOCIACAO"].map(function(f) {
-            return E("button", { key:f, onClick:function(){setFiltro(f);}, style:{padding:"5px 12px",borderRadius:20,border:"2px solid #1a56db",background:filtro===f?"#1a56db":"#fff",color:filtro===f?"#fff":"#1a56db",fontSize:11,fontWeight:700,cursor:"pointer"} }, f);
+            return E("button", { key:f, onClick:function(){ setFiltro(f); }, style:{padding:"5px 12px",borderRadius:20,border:"2px solid #1a56db",background:filtro===f?"#1a56db":"#fff",color:filtro===f?"#fff":"#1a56db",fontSize:11,fontWeight:700,cursor:"pointer"} }, f);
           })
         )
       ),
-
       E("div", { style:{background:"#fffbe6",borderLeft:"4px solid #f59e0b",padding:"8px 16px",margin:"10px 20px",borderRadius:4,fontSize:11,color:"#92400e"} },
         "Itens COM ASSOCIACAO estao bloqueados para edicao e exclusao. Apenas inativacao e permitida."
       ),
-
       E("div", { style:{overflowX:"auto",maxHeight:420,overflowY:"auto"} },
         E("table", { style:{width:"100%",borderCollapse:"collapse"} },
-          E("thead", null,
-            E("tr", null,
-              [["CODIGO","80px"],["DESCRICAO","auto"],["UNID.","55px"],["QT. PREVISTA","90px"],["QT. CONSUMIDA","90px"],["SALDO","85px"],["VL. UNIT. ORC.","105px"],["STATUS","70px"],["VINCULO","75px"],["ACOES","185px"]].map(function(h) {
-                return E("th", { key:h[0], style:{background:"#1e3a5f",color:"#fff",padding:"9px 10px",textAlign:"left",fontSize:11,letterSpacing:0.5,whiteSpace:"nowrap",position:"sticky",top:0,zIndex:1,width:h[1]} }, h[0]);
-              })
-            )
-          ),
+          E("thead", null, E("tr", null,
+            [["CODIGO","80px"],["DESCRICAO","auto"],["UNID.","55px"],["QT.PREVISTA","90px"],["QT.CONSUMIDA","90px"],["SALDO","85px"],["VL.UNIT.ORC.","100px"],["STATUS","70px"],["VINCULO","75px"],["ACOES","185px"]].map(function(h) {
+              return E("th", { key:h[0], style:{background:"#1e3a5f",color:"#fff",padding:"9px 10px",textAlign:"left",fontSize:11,whiteSpace:"nowrap",position:"sticky",top:0,zIndex:1,width:h[1]} }, h[0]);
+            })
+          )),
           E("tbody", null,
-            itensFiltrados.length === 0
+            itensFilt.length === 0
               ? E("tr", null, E("td", { colSpan:10, style:{textAlign:"center",padding:24,color:"#888",fontSize:13} }, "Nenhum item encontrado."))
-              : itensFiltrados.map(function(it) {
+              : itensFilt.map(function(it) {
                   var ativo = it.ativo !== false;
-                  var assoc = temAssocItem(it._idx);
+                  var assoc = temAssoc(it._idx);
                   var saldo = calcSaldo(it);
-                  var bgRow = !ativo ? "#f9f9f9" : assoc ? "#f0fff4" : "#fff";
-                  var opRow = !ativo ? 0.6 : 1;
-                  return E("tr", { key:it._idx, style:{borderBottom:"1px solid #e5e7eb",background:bgRow,opacity:opRow} },
+                  var bg = !ativo ? "#f9f9f9" : assoc ? "#f0fff4" : "#fff";
+                  var op = !ativo ? 0.6 : 1;
+                  return E("tr", { key:it._idx, style:{borderBottom:"1px solid #e5e7eb",background:bg,opacity:op} },
                     E("td", { style:{padding:"7px 10px",fontSize:11} }, it.codigo||"-"),
                     E("td", { style:{padding:"7px 10px",fontSize:11} }, it.descricao||""),
                     E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"center"} }, it.unidade||""),
@@ -2244,103 +2191,80 @@ function ModalGerenciarOrcamento(_ref_ger) {
                     E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"right"} }, fmtN(it.consumido||0)),
                     E("td", { style:{padding:"7px 10px",fontSize:11,fontWeight:700,textAlign:"right",color:saldo>0?"#057a55":"#6b7280"} }, fmtN(saldo)),
                     E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"right"} }, fmtC(it.valorUnitario||0)),
-                    E("td", { style:{padding:"7px 10px"} },
-                      E("span", { style:{display:"inline-block",padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:ativo?"#def7ec":"#fde8e8",color:ativo?"#057a55":"#c81e1e"} }, ativo?"ATIVO":"INATIVO")
-                    ),
-                    E("td", { style:{padding:"7px 10px"} },
-                      E("span", { style:{display:"inline-block",padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:assoc?"#e1effe":"#f3f4f6",color:assoc?"#1a56db":"#6b7280"} }, assoc?"ASSOC.":"LIVRE")
-                    ),
+                    E("td", { style:{padding:"7px 10px"} }, E("span", { style:{display:"inline-block",padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:ativo?"#def7ec":"#fde8e8",color:ativo?"#057a55":"#c81e1e"} }, ativo?"ATIVO":"INATIVO")),
+                    E("td", { style:{padding:"7px 10px"} }, E("span", { style:{display:"inline-block",padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:assoc?"#e1effe":"#f3f4f6",color:assoc?"#1a56db":"#6b7280"} }, assoc?"ASSOC.":"LIVRE")),
                     E("td", { style:{padding:"5px 10px",whiteSpace:"nowrap"} },
-                      ativo && !assoc && E("button", { onClick:function(){handleEditar(it);}, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#e1effe",color:"#1a56db",marginRight:3} }, "EDITAR"),
-                      ativo && E("button", { onClick:function(){handleInativar(it);}, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#fde8e8",color:"#c81e1e",marginRight:3} }, "INATIVAR"),
-                      !ativo && E("button", { onClick:function(){handleReativar(it);}, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#def7ec",color:"#057a55",marginRight:3} }, "REATIVAR"),
-                      !assoc && E("button", { onClick:function(){handleExcluir(it);}, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#fde8e8",color:"#c81e1e"} }, "EXCLUIR")
+                      ativo && !assoc && E("button", { onClick:function(){ setPopupForm({modo:"editar",it:it}); }, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#e1effe",color:"#1a56db",marginRight:3} }, "EDITAR"),
+                      ativo && E("button", { onClick:function(){ handleInativar(it); }, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#fde8e8",color:"#c81e1e",marginRight:3} }, "INATIVAR"),
+                      !ativo && E("button", { onClick:function(){ handleReativar(it); }, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#def7ec",color:"#057a55",marginRight:3} }, "REATIVAR"),
+                      !assoc && E("button", { onClick:function(){ handleExcluir(it); }, style:{padding:"3px 7px",borderRadius:4,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,background:"#fde8e8",color:"#c81e1e"} }, "EXCLUIR")
                     )
                   );
                 })
           )
         )
       ),
-
       E("div", { style:{display:"flex",gap:14,padding:"8px 20px",background:"#f8f9fb",borderTop:"1px solid #e0e4ec",flexWrap:"wrap",fontSize:11,color:"#6b7280"} },
-        [["#f0fff4","1px solid #057a55","Com associacao (edicao bloqueada)"],["#f9f9f9","1px solid #ccc","Inativo"],["#fff","1px solid #ccc","Ativo livre"]].map(function(l) {
-          return E("div", { key:l[2], style:{display:"flex",alignItems:"center",gap:5} },
-            E("div", { style:{width:14,height:14,borderRadius:3,background:l[0],border:l[1]} }), l[2]
-          );
+        [["#f0fff4","Com associacao"],["#f9f9f9","Inativo"],["#fff","Ativo livre"]].map(function(l) {
+          return E("div", { key:l[1], style:{display:"flex",alignItems:"center",gap:5} }, E("div", { style:{width:14,height:14,borderRadius:3,background:l[0],border:"1px solid #ccc"} }), l[1]);
         })
       ),
-
       E("div", { style:{padding:"10px 20px",background:"#f8f9fb",borderTop:"1px solid #e0e4ec",display:"flex",justifyContent:"space-between",alignItems:"center"} },
-        E("span", { style:{fontSize:11,color:"#6b7280"} }, "Total: " + itens.length + " itens | " + totalAtivos + " ativos | " + totalInativos + " inativos | " + totalAssoc + " com associacao"),
+        E("span", { style:{fontSize:11,color:"#6b7280"} }, "Total: "+itens.length+" itens | "+totAtivos+" ativos | "+totInativos+" inativos | "+totAssoc+" com associacao"),
         E("div", { style:{display:"flex",gap:8} },
           E("button", { onClick:onClose, style:{background:"#e5e7eb",color:"#374151",border:"none",borderRadius:6,padding:"7px 16px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "FECHAR"),
-          E("button", { onClick:handleSalvar, disabled:salvando, style:{background:"#057a55",color:"#fff",border:"none",borderRadius:6,padding:"7px 16px",fontWeight:700,fontSize:12,cursor:"pointer"} }, salvando ? "SALVANDO..." : "SALVAR ALTERACOES")
+          E("button", { onClick:handleSalvar, disabled:salvando, style:{background:"#057a55",color:"#fff",border:"none",borderRadius:6,padding:"7px 16px",fontWeight:700,fontSize:12,cursor:"pointer"} }, salvando?"SALVANDO...":"SALVAR ALTERACOES")
         )
       ),
-
       popupInativar && E("div", { style:{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center"} },
         E("div", { style:{background:"#fff",borderRadius:10,padding:28,maxWidth:420,width:"90%",boxShadow:"0 8px 32px rgba(0,0,0,0.2)",textAlign:"center"} },
-          E("div", { style:{fontSize:36,marginBottom:10} }, "||"),
           E("h4", { style:{fontSize:15,color:"#0f1f3d",marginBottom:8} }, "INATIVAR ITEM DO ORCAMENTO"),
-          E("div", { style:{background:"#f0f4ff",borderRadius:6,padding:"10px 14px",margin:"10px 0",textAlign:"left",fontSize:12,color:"#374151",lineHeight:1.8} },
-            E("strong", null, popupInativar.descricao), E("br", null),
-            "QT. Prevista: " + fmtN(popupInativar.quantidade) + " " + (popupInativar.unidade||""), E("br", null),
-            "QT. Consumida: " + fmtN(popupInativar.consumido||0) + " " + (popupInativar.unidade||""), E("br", null),
-            E("strong", null, "Saldo: " + fmtN(calcSaldo(popupInativar)) + " " + (popupInativar.unidade||""))
+          E("div", { style:{background:"#f0f4ff",borderRadius:6,padding:"10px 14px",margin:"10px 0",textAlign:"left",fontSize:12,lineHeight:1.8} },
+            E("strong", null, popupInativar.descricao), E("br",null),
+            "Saldo disponivel: "+fmtN(calcSaldo(popupInativar))+" "+(popupInativar.unidade||"")
           ),
-          E("p", { style:{fontSize:13,color:"#6b7280",marginBottom:6,lineHeight:1.5} }, "Deseja criar um novo item com o saldo restante?"),
-          E("div", { style:{fontSize:20,fontWeight:700,color:"#057a55",margin:"12px 0"} }, "Saldo: " + fmtN(calcSaldo(popupInativar)) + " " + (popupInativar.unidade||"")),
+          E("p", { style:{fontSize:13,color:"#6b7280",margin:"10px 0"} }, "Deseja criar um novo item com o saldo restante?"),
           E("div", { style:{display:"flex",gap:12,justifyContent:"center",marginTop:16} },
-            E("button", { onClick:function(){confirmarInativar(true);}, style:{background:"#057a55",color:"#fff",padding:"10px 24px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer"} }, "SIM, CRIAR ITEM"),
-            E("button", { onClick:function(){confirmarInativar(false);}, style:{background:"#e5e7eb",color:"#374151",padding:"10px 24px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer"} }, "NAO")
+            E("button", { onClick:function(){ confirmarInativar(true); }, style:{background:"#057a55",color:"#fff",padding:"10px 24px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer"} }, "SIM, CRIAR ITEM"),
+            E("button", { onClick:function(){ confirmarInativar(false); }, style:{background:"#e5e7eb",color:"#374151",padding:"10px 24px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer"} }, "NAO")
           )
         )
       ),
-
       popupForm && E("div", { style:{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.5)",zIndex:4000,display:"flex",alignItems:"center",justifyContent:"center"} },
-        E(FormItemOrcamento, { modo:popupForm.modo, item:popupForm.it, onSalvar:salvarForm, onCancelar:function(){setPopupForm(null);} })
+        E(FormItemOrcamento, { modo:popupForm.modo, item:popupForm.it, onSalvar:function(dados){ if(popupForm.modo==="editar"){ setItens(itens.map(function(x){ return x._idx===popupForm.it._idx ? Object.assign({},x,{codigo:dados.codigo,descricao:dados.descricao,unidade:dados.unidade,quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,observacao:dados.observacao||""}) : x; })); } else { setItens(itens.concat([{_idx:itens.length,codigo:dados.codigo||"",descricao:dados.descricao||"",unidade:dados.unidade||"",quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,consumido:0,ativo:true,observacao:dados.observacao||""}])); } setPopupForm(null); }, onCancelar:function(){ setPopupForm(null); } })
       )
     )
   );
 }
 
 function FormItemOrcamento(_ref_form) {
-  var modo = _ref_form.modo,
-    item = _ref_form.item,
-    onSalvar = _ref_form.onSalvar,
-    onCancelar = _ref_form.onCancelar;
-
-  var _sC = React.useState(item.codigo||""), vCodigo = _sC[0], setCodigo = _sC[1];
-  var _sD = React.useState(item.descricao||""), vDesc = _sD[0], setDesc = _sD[1];
-  var _sU = React.useState(item.unidade||""), vUnid = _sU[0], setUnid = _sU[1];
-  var _sQ = React.useState(String(item.quantidade||"")), vQt = _sQ[0], setQt = _sQ[1];
-  var _sV = React.useState(String(item.valorUnitario||"")), vVl = _sV[0], setVl = _sV[1];
-  var _sO = React.useState(item.observacao||""), vObs = _sO[0], setObs = _sO[1];
-
-  var titulo = modo === "editar" ? "EDITAR ITEM" : "ADICIONAR ITEM AO ORCAMENTO";
-  var inp = {width:"100%",padding:"8px 10px",border:"1px solid #d1d5db",borderRadius:6,fontSize:13,boxSizing:"border-box",textTransform:"none"};
-  var lbl = {display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:4,textTransform:"uppercase"};
+  var modo = _ref_form.modo, item = _ref_form.item, onSalvar = _ref_form.onSalvar, onCancelar = _ref_form.onCancelar;
+  var _sC = React.useState(item.codigo||""), vC = _sC[0], setC = _sC[1];
+  var _sD = React.useState(item.descricao||""), vD = _sD[0], setD = _sD[1];
+  var _sU = React.useState(item.unidade||""), vU = _sU[0], setU = _sU[1];
+  var _sQ = React.useState(String(item.quantidade||"")), vQ = _sQ[0], setQ = _sQ[1];
+  var _sV = React.useState(String(item.valorUnitario||"")), vV = _sV[0], setV = _sV[1];
+  var _sO = React.useState(item.observacao||""), vO = _sO[0], setO = _sO[1];
+  var inp = {width:"100%",padding:"8px 10px",border:"1px solid #d1d5db",borderRadius:6,fontSize:13,boxSizing:"border-box"};
+  var lbl = {display:"block",fontSize:11,fontWeight:700,color:"#374151",marginBottom:4};
   var E = React.createElement;
-
   return E("div", { style:{background:"#fff",borderRadius:10,padding:24,maxWidth:500,width:"90%",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"} },
-    E("h4", { style:{fontSize:14,color:"#0f1f3d",marginBottom:16,fontWeight:700} }, titulo),
-    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "CODIGO"), E("input", { type:"text", value:vCodigo, onChange:function(e){setCodigo(e.target.value);}, placeholder:"Ex: 00004721", style:inp })),
-    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "DESCRICAO *"), E("input", { type:"text", value:vDesc, onChange:function(e){setDesc(e.target.value);}, placeholder:"Descricao do item", style:inp })),
+    E("h4", { style:{fontSize:14,color:"#0f1f3d",marginBottom:16,fontWeight:700} }, modo==="editar"?"EDITAR ITEM":"ADICIONAR ITEM AO ORCAMENTO"),
+    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "CODIGO"), E("input", { type:"text", value:vC, onChange:function(e){setC(e.target.value);}, placeholder:"Ex: 00004721", style:inp })),
+    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "DESCRICAO *"), E("input", { type:"text", value:vD, onChange:function(e){setD(e.target.value);}, placeholder:"Descricao do item", style:inp })),
     E("div", { style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10} },
-      E("div", null, E("label", { style:lbl }, "UNIDADE *"), E("input", { type:"text", value:vUnid, onChange:function(e){setUnid(e.target.value);}, placeholder:"M3, KG, UN...", style:inp })),
-      E("div", null, E("label", { style:lbl }, "QT. PREVISTA *"), E("input", { type:"number", value:vQt, onChange:function(e){setQt(e.target.value);}, placeholder:"0,00", style:inp }))
+      E("div", null, E("label", { style:lbl }, "UNIDADE *"), E("input", { type:"text", value:vU, onChange:function(e){setU(e.target.value);}, placeholder:"M3, KG, UN...", style:inp })),
+      E("div", null, E("label", { style:lbl }, "QT. PREVISTA *"), E("input", { type:"number", value:vQ, onChange:function(e){setQ(e.target.value);}, placeholder:"0,00", style:inp }))
     ),
-    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "VALOR UNITARIO (R$)"), E("input", { type:"number", value:vVl, onChange:function(e){setVl(e.target.value);}, placeholder:"0,00", style:inp })),
-    E("div", { style:{marginBottom:14} },
-      E("label", { style:lbl }, "OBSERVACAO (MOTIVO DA INCLUSAO)"),
-      E("textarea", { value:vObs, onChange:function(e){setObs(e.target.value);}, placeholder:"Ex: Item solicitado pelo fiscal em 18/06/2026...", rows:3, style:Object.assign({},inp,{resize:"vertical",fontFamily:"inherit"}) })
-    ),
+    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "VALOR UNITARIO (R$)"), E("input", { type:"number", value:vV, onChange:function(e){setV(e.target.value);}, placeholder:"0,00", style:inp })),
+    E("div", { style:{marginBottom:14} }, E("label", { style:lbl }, "OBSERVACAO (MOTIVO DA INCLUSAO)"), E("textarea", { value:vO, onChange:function(e){setO(e.target.value);}, placeholder:"Ex: Item solicitado pelo fiscal...", rows:3, style:Object.assign({},inp,{resize:"vertical"}) })),
     E("div", { style:{display:"flex",gap:10,justifyContent:"flex-end"} },
       E("button", { onClick:onCancelar, style:{background:"#e5e7eb",color:"#374151",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "CANCELAR"),
-      E("button", { onClick:function(){ if(!vDesc.trim()){ alert("DESCRICAO E OBRIGATORIA!"); return; } onSalvar({codigo:vCodigo,descricao:vDesc,unidade:vUnid,quantidade:vQt,valorUnitario:vVl,observacao:vObs}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "SALVAR")
+      E("button", { onClick:function(){ if(!vD.trim()){ alert("DESCRICAO E OBRIGATORIA!"); return; } onSalvar({codigo:vC,descricao:vD,unidade:vU,quantidade:vQ,valorUnitario:vV,observacao:vO}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "SALVAR")
     )
   );
 }
+
 function ModalImportarOrcamento(_ref_orc) {
   var open = _ref_orc.open,
     onClose = _ref_orc.onClose,
@@ -2665,6 +2589,7 @@ function MapEditor(_ref15) {
     associacoes = _ref15.associacoes || [],
     onSaveOrcamento = _ref15.onSaveOrcamento || null,
     onLimparOrcamento = _ref15.onLimparOrcamento || null,
+    onGerenciarOrcamento = _ref15.onGerenciarOrcamento || null,
     onCriarAssociacao = _ref15.onCriarAssociacao || null,
     onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
     onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null;
@@ -4116,8 +4041,7 @@ function MapEditor(_ref15) {
     onEdit: editCadastro || function(){},
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
-    onLimparOrcamento: onLimparOrcamento,
-    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraGerenciando(obra); setShowGerenciarOrc(true); }, 200); }
+    onLimparOrcamento: onLimparOrcamento
   }));
 }
 
