@@ -900,12 +900,15 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
   // Linhas dos itens do orçamento
   var rows = itensProcesados.map(function(x) {
     var oi = x.orcItem;
-    var cls = x.saldo < 0 ? "over" : (x.vlCotado===null ? "warn" : "ok");
-    var sitTag = x.saldo < 0
-      ? "<span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">\u26a0 EXCEDENTE</span>"
-      : (x.vlCotado===null
-        ? "<span class=\"tag\" style=\"background:#fff3cd;color:#856404;\">\u23f3 PENDENTE</span>"
-        : "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u2713 OK</span>");
+    var ativoItem = x.orcItem.ativo !== false;
+    var cls = !ativoItem ? "" : (x.saldo < 0 ? "over" : (x.vlCotado===null ? "warn" : "ok"));
+    var sitTag = !ativoItem
+      ? "<span class=\"tag\" style=\"background:#e9ecef;color:#6c757d;\">\u23f8 INATIVO</span>"
+      : (x.saldo < 0
+        ? "<span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">\u26a0 EXCEDENTE</span>"
+        : (x.vlCotado===null
+          ? "<span class=\"tag\" style=\"background:#fff3cd;color:#856404;\">\u23f3 PENDENTE</span>"
+          : "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u2713 OK</span>"));
     var resTag = x.resultado !== null
       ? (x.resultado>=0
         ? "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u25cf LUCRO +"+(Math.abs(x.resultado/x.vlOrc/x.consumido*100)||0).toFixed(1)+"%</span><div style=\"font-size:9px;color:#186818;\">+ "+fmtMoney(x.resultado)+"</div>"
@@ -2308,6 +2311,7 @@ function FormItemOrcamento(_ref_form) {
   var _sU = React.useState(item.unidade||""), vUnid = _sU[0], setUnid = _sU[1];
   var _sQ = React.useState(String(item.quantidade||"")), vQt = _sQ[0], setQt = _sQ[1];
   var _sV = React.useState(String(item.valorUnitario||"")), vVl = _sV[0], setVl = _sV[1];
+  var _sO = React.useState(item.observacao||""), vObs = _sO[0], setObs = _sO[1];
 
   var titulo = modo === "editar" ? "EDITAR ITEM" : "ADICIONAR ITEM AO ORCAMENTO";
   var inp = {width:"100%",padding:"8px 10px",border:"1px solid #d1d5db",borderRadius:6,fontSize:13,boxSizing:"border-box",textTransform:"none"};
@@ -2322,10 +2326,14 @@ function FormItemOrcamento(_ref_form) {
       E("div", null, E("label", { style:lbl }, "UNIDADE *"), E("input", { type:"text", value:vUnid, onChange:function(e){setUnid(e.target.value);}, placeholder:"M3, KG, UN...", style:inp })),
       E("div", null, E("label", { style:lbl }, "QT. PREVISTA *"), E("input", { type:"number", value:vQt, onChange:function(e){setQt(e.target.value);}, placeholder:"0,00", style:inp }))
     ),
-    E("div", { style:{marginBottom:14} }, E("label", { style:lbl }, "VALOR UNITARIO (R$)"), E("input", { type:"number", value:vVl, onChange:function(e){setVl(e.target.value);}, placeholder:"0,00", style:inp })),
+    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "VALOR UNITARIO (R$)"), E("input", { type:"number", value:vVl, onChange:function(e){setVl(e.target.value);}, placeholder:"0,00", style:inp })),
+    E("div", { style:{marginBottom:14} },
+      E("label", { style:lbl }, "OBSERVACAO (MOTIVO DA INCLUSAO)"),
+      E("textarea", { value:vObs, onChange:function(e){setObs(e.target.value);}, placeholder:"Ex: Item solicitado pelo fiscal em 18/06/2026...", rows:3, style:Object.assign({},inp,{resize:"vertical",fontFamily:"inherit"}) })
+    ),
     E("div", { style:{display:"flex",gap:10,justifyContent:"flex-end"} },
       E("button", { onClick:onCancelar, style:{background:"#e5e7eb",color:"#374151",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "CANCELAR"),
-      E("button", { onClick:function(){ if(!vDesc.trim()){ alert("DESCRICAO E OBRIGATORIA!"); return; } onSalvar({codigo:vCodigo,descricao:vDesc,unidade:vUnid,quantidade:vQt,valorUnitario:vVl}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "SALVAR")
+      E("button", { onClick:function(){ if(!vDesc.trim()){ alert("DESCRICAO E OBRIGATORIA!"); return; } onSalvar({codigo:vCodigo,descricao:vDesc,unidade:vUnid,quantidade:vQt,valorUnitario:vVl,observacao:vObs}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "SALVAR")
     )
   );
 }
