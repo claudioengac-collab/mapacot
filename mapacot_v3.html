@@ -309,17 +309,15 @@ var sbSaveOrcamento = function(obraId, dados) {
     return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id), {
       method: "PATCH", headers: SB, body: body
     }).then(function(r) {
-      if (!r.ok) {
-        return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
-          method: "POST", headers: SB,
-          body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
-        });
-      }
+      if (!r.ok) return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
+        method: "POST", headers: SB,
+        body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
+      });
       return r;
     });
   };
   return doPatch().catch(function() {
-    return new Promise(function(res){ setTimeout(res, 1500); }).then(doPatch);
+    return new Promise(function(res){ setTimeout(res,1500); }).then(doPatch);
   });
 };
 var sbDeleteOrcamento = function(obraId) {
@@ -2152,12 +2150,13 @@ function ModalGerenciarOrcamento(_ref_ger) {
     setPopupForm(null);
   };
   var handleSalvar = function() {
-    if (itensRef.current.length === 0) {
-      alert("ERRO: Nenhum item carregado. Feche e abra o gerenciador novamente.");
+    var lista = itensRef.current;
+    if (!lista || lista.length === 0) {
+      alert("Erro: nenhum item carregado. Feche e abra novamente.");
       return;
     }
     setSalvando(true);
-    var itensFinal = itensRef.current.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
+    var itensFinal = lista.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
     var dadosSalvar = Array.isArray(orcamentoAtual) ? itensFinal : Object.assign({}, orcamentoAtual, { itens: itensFinal });
     onSalvar(dadosSalvar);
   };
@@ -2187,7 +2186,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
       E("div", { style:{overflowX:"auto",maxHeight:420,overflowY:"auto"} },
         E("table", { style:{width:"100%",borderCollapse:"collapse"} },
           E("thead", null, E("tr", null,
-            [["CODIGO","80px"],["DESCRICAO","auto"],["UNID.","55px"],["QT.PREVISTA","90px"],["QT.CONSUMIDA","90px"],["SALDO","85px"],["VL.UNIT.ORC.","100px"],["STATUS","70px"],["VINCULO","75px"],["ACOES","180px"]].map(function(h) {
+            [["CODIGO","80px"],["DESCRICAO","auto"],["UNID.","55px"],["QT.PREV","90px"],["QT.CONS","90px"],["SALDO","85px"],["VL.UNIT","100px"],["STATUS","70px"],["VINCULO","75px"],["ACOES","175px"]].map(function(h) {
               return E("th", { key:h[0], style:{background:"#1e3a5f",color:"#fff",padding:"9px 10px",textAlign:"left",fontSize:11,whiteSpace:"nowrap",position:"sticky",top:0,zIndex:1,width:h[1]} }, h[0]);
             })
           )),
@@ -2198,15 +2197,14 @@ function ModalGerenciarOrcamento(_ref_ger) {
                   var ativo = it.ativo !== false;
                   var assoc = temAssoc(it._idx);
                   var saldo = calcSaldo(it);
-                  var bg = !ativo ? "#f9f9f9" : assoc ? "#f0fff4" : "#fff";
-                  return E("tr", { key:it._idx, style:{borderBottom:"1px solid #e5e7eb",background:bg,opacity:!ativo?0.6:1} },
+                  return E("tr", { key:it._idx, style:{borderBottom:"1px solid #e5e7eb",background:!ativo?"#f9f9f9":assoc?"#f0fff4":"#fff",opacity:!ativo?0.6:1} },
                     E("td", { style:{padding:"7px 10px",fontSize:11} }, it.codigo||"-"),
                     E("td", { style:{padding:"7px 10px",fontSize:11} }, it.descricao||""),
                     E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"center"} }, it.unidade||""),
                     E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"right"} }, fmtN(it.quantidade)),
                     E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"right"} }, fmtN(it.consumido||0)),
                     E("td", { style:{padding:"7px 10px",fontSize:11,fontWeight:700,textAlign:"right",color:saldo>0?"#057a55":"#6b7280"} }, fmtN(saldo)),
-                    E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"right"} }, "R$ " + fmtN(it.valorUnitario||0)),
+                    E("td", { style:{padding:"7px 10px",fontSize:11,textAlign:"right"} }, "R$ "+fmtN(it.valorUnitario||0)),
                     E("td", null, E("span", { style:{display:"inline-block",padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:ativo?"#def7ec":"#fde8e8",color:ativo?"#057a55":"#c81e1e",margin:"7px 10px"} }, ativo?"ATIVO":"INATIVO")),
                     E("td", null, E("span", { style:{display:"inline-block",padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:assoc?"#e1effe":"#f3f4f6",color:assoc?"#1a56db":"#6b7280",margin:"7px 10px"} }, assoc?"ASSOC.":"LIVRE")),
                     E("td", { style:{padding:"5px 10px",whiteSpace:"nowrap"} },
@@ -2221,7 +2219,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
         )
       ),
       E("div", { style:{padding:"10px 20px",background:"#f8f9fb",borderTop:"1px solid #e0e4ec",display:"flex",justifyContent:"space-between",alignItems:"center"} },
-        E("span", { style:{fontSize:11,color:"#6b7280"} }, "Total: "+itensRef.current.length+" | "+totAt+" ativos | "+totIn+" inativos | "+totAs+" com associacao"),
+        E("span", { style:{fontSize:11,color:"#6b7280"} }, "Total: "+itensRef.current.length+" | "+totAt+" ativos | "+totIn+" inativos | "+totAs+" com assoc."),
         E("div", { style:{display:"flex",gap:8} },
           E("button", { onClick:onClose, style:{background:"#e5e7eb",color:"#374151",border:"none",borderRadius:6,padding:"7px 16px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "FECHAR"),
           E("button", { onClick:handleSalvar, disabled:salvando, style:{background:"#057a55",color:"#fff",border:"none",borderRadius:6,padding:"7px 16px",fontWeight:700,fontSize:12,cursor:"pointer"} }, salvando?"SALVANDO...":"SALVAR ALTERACOES")
@@ -2231,8 +2229,8 @@ function ModalGerenciarOrcamento(_ref_ger) {
         E("div", { style:{background:"#fff",borderRadius:10,padding:28,maxWidth:420,width:"90%",boxShadow:"0 8px 32px rgba(0,0,0,0.2)",textAlign:"center"} },
           E("h4", { style:{fontSize:15,color:"#0f1f3d",marginBottom:8} }, "INATIVAR ITEM"),
           E("p", { style:{fontSize:13,color:"#374151",margin:"10px 0",fontWeight:700} }, popupInativar.descricao),
-          E("p", { style:{fontSize:12,color:"#6b7280"} }, "Saldo: " + fmtN(calcSaldo(popupInativar)) + " " + (popupInativar.unidade||"")),
-          E("p", { style:{fontSize:13,color:"#6b7280",margin:"10px 0"} }, "Deseja criar um novo item com o saldo restante?"),
+          E("p", { style:{fontSize:12,color:"#6b7280"} }, "Saldo: "+fmtN(calcSaldo(popupInativar))+" "+(popupInativar.unidade||"")),
+          E("p", { style:{fontSize:13,color:"#6b7280",margin:"10px 0"} }, "Deseja criar novo item com o saldo restante?"),
           E("div", { style:{display:"flex",gap:12,justifyContent:"center",marginTop:16} },
             E("button", { onClick:function(){ confirmarInativar(true); }, style:{background:"#057a55",color:"#fff",padding:"10px 24px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer"} }, "SIM, CRIAR ITEM"),
             E("button", { onClick:function(){ confirmarInativar(false); }, style:{background:"#e5e7eb",color:"#374151",padding:"10px 24px",border:"none",borderRadius:6,fontSize:13,fontWeight:700,cursor:"pointer"} }, "NAO")
@@ -2266,7 +2264,9 @@ function FormItemOrcamento(_ref_form) {
       E("div", null, E("label", { style:lbl }, "QT. PREVISTA *"), E("input", { type:"number", value:vQ, onChange:function(e){setQ(e.target.value);}, style:inp }))
     ),
     E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "VALOR UNITARIO (R$)"), E("input", { type:"number", value:vV, onChange:function(e){setV(e.target.value);}, style:inp })),
-    E("div", { style:{marginBottom:14} }, E("label", { style:lbl }, "OBSERVACAO (MOTIVO)"), E("textarea", { value:vO, onChange:function(e){setO(e.target.value);}, rows:3, style:Object.assign({},inp,{resize:"vertical"}) })),
+    E("div", { style:{marginBottom:14} }, E("label", { style:lbl }, "OBSERVACAO (MOTIVO)"),
+      E("textarea", { value:vO, onChange:function(e){setO(e.target.value);}, rows:3, style:Object.assign({},inp,{resize:"vertical"}) })
+    ),
     E("div", { style:{display:"flex",gap:10,justifyContent:"flex-end"} },
       E("button", { onClick:onCancelar, style:{background:"#e5e7eb",color:"#374151",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "CANCELAR"),
       E("button", { onClick:function(){ if(!vD.trim()){ alert("DESCRICAO OBRIGATORIA!"); return; } onSalvar({codigo:vC,descricao:vD,unidade:vU,quantidade:vQ,valorUnitario:vV,observacao:vO}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "SALVAR")
@@ -5053,7 +5053,7 @@ function App() {
     obra: obraGerenciando,
     orcamentoAtual: obraGerenciando ? (orcamentos[obraGerenciando]||null) : null,
     associacoes: associacoes,
-    onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob, dados).then(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }).catch(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }); }
+    onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob,dados).then(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }).catch(function(){ setShowGerenciarOrc(false); setObraGerenciando(null); }); }
   }),
   /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCad,
