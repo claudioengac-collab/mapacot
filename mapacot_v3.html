@@ -533,7 +533,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   }, 0);
   // ── Página 0 ──────────────────────────────────────────────────────────
   var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
-  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens || [])) : [];
+  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
   var temPagina0 = obraOrcItens.length > 0;
   var pagina0HTML = '';
@@ -1735,8 +1735,7 @@ function CadastrosModal(_ref11) {
     onEdit = _ref11.onEdit,
     orcamentos = _ref11.orcamentos || {},
     onImportarOrcamento = _ref11.onImportarOrcamento || null,
-    onLimparOrcamento = _ref11.onLimparOrcamento || null,
-    onGerenciarOrcamento = _ref11.onGerenciarOrcamento || null;
+    onLimparOrcamento = _ref11.onLimparOrcamento || null;
   var _useState9 = useState("fornecedores"),
     _useState0 = _slicedToArray(_useState9, 2),
     tab = _useState0[0],
@@ -2072,11 +2071,7 @@ function CadastrosModal(_ref11) {
       onClick: function() { if (window.confirm("REMOVER OR\xc7AMENTO DE \"" + item + "\"?")) { if (onLimparOrcamento) onLimparOrcamento(item); } },
       title: "REMOVER OR\xc7AMENTO",
       style: { background: "#fdeaea", border: "none", borderRadius: 5, padding: "4px 7px", color: "#c0392b", cursor: "pointer", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }
-    }, "\ud83d\uddd1 ORC."),
-    tab === "obras" && orcamentos[item] && /*#__PURE__*/React.createElement("button", {
-      onClick: function() { if (onGerenciarOrcamento) onGerenciarOrcamento(item); },
-      style: { background: "#e8f0fe", border: "none", borderRadius: 5, padding: "4px 7px", color: "#1a56db", cursor: "pointer", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }
-    }, "\ud83d\udccb GER.")));
+    }, "\ud83d\uddd1 ORC.")));
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
@@ -2142,19 +2137,19 @@ function ModalGerenciarOrcamento(_ref_ger) {
     upd(itensRef.current.filter(function(x){ return x._idx!==it._idx; }).map(function(x,i){ return Object.assign({},x,{_idx:i}); }));
   };
   var handleSalvarForm = function(dados) {
+    var novoItens;
     if (popupForm.modo === "editar") {
-      upd(itensRef.current.map(function(x){ return x._idx===popupForm.it._idx ? Object.assign({},x,{codigo:dados.codigo,descricao:dados.descricao,unidade:dados.unidade,quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,observacao:dados.observacao||""}) : x; }));
+      novoItens = itensRef.current.map(function(x){ return x._idx===popupForm.it._idx ? Object.assign({},x,{codigo:dados.codigo,descricao:dados.descricao,unidade:dados.unidade,quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,observacao:dados.observacao||""}) : x; });
     } else {
-      upd(itensRef.current.concat([{_idx:itensRef.current.length,codigo:dados.codigo||"",descricao:dados.descricao||"",unidade:dados.unidade||"",quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,consumido:0,ativo:true,observacao:dados.observacao||""}]));
+      var novoItem = {_idx:itensRef.current.length,codigo:dados.codigo||"",descricao:dados.descricao||"",unidade:dados.unidade||"",quantidade:parseFloat(dados.quantidade)||0,valorUnitario:parseFloat(dados.valorUnitario)||0,consumido:0,ativo:true,observacao:dados.observacao||""};
+      novoItens = itensRef.current.concat([novoItem]);
     }
+    upd(novoItens);
     setPopupForm(null);
   };
   var handleSalvar = function() {
     var lista = itensRef.current;
-    if (!lista || lista.length === 0) {
-      alert("Erro: nenhum item carregado. Feche e abra novamente.");
-      return;
-    }
+    if (!lista || lista.length === 0) { alert("Erro: nenhum item carregado."); return; }
     setSalvando(true);
     var itensFinal = lista.map(function(it){ var cp=Object.assign({},it); delete cp._idx; return cp; });
     var dadosSalvar = Array.isArray(orcamentoAtual) ? itensFinal : Object.assign({}, orcamentoAtual, { itens: itensFinal });
@@ -2598,7 +2593,6 @@ function MapEditor(_ref15) {
     associacoes = _ref15.associacoes || [],
     onSaveOrcamento = _ref15.onSaveOrcamento || null,
     onLimparOrcamento = _ref15.onLimparOrcamento || null,
-    onGerenciarOrcamento = _ref15.onGerenciarOrcamento || null,
     onCriarAssociacao = _ref15.onCriarAssociacao || null,
     onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
     onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null;
@@ -4511,12 +4505,6 @@ function App() {
   var _useStateObraImp = React.useState(null),
     obraImportando = _slicedToArray(_useStateObraImp, 2)[0],
     setObraImportando = _slicedToArray(_useStateObraImp, 2)[1];
-  var _useStateShowGer = React.useState(false),
-    showGerenciarOrc = _slicedToArray(_useStateShowGer, 2)[0],
-    setShowGerenciarOrc = _slicedToArray(_useStateShowGer, 2)[1];
-  var _useStateObraGer = React.useState(null),
-    obraGerenciando = _slicedToArray(_useStateObraGer, 2)[0],
-    setObraGerenciando = _slicedToArray(_useStateObraGer, 2)[1];
 
   // Load all data
   useEffect(function () {
@@ -4770,7 +4758,6 @@ function App() {
     associacoes: associacoes,
     onSaveOrcamento: saveOrcamento,
     onLimparOrcamento: limparOrcamento,
-    onGerenciarOrcamento: function(obra){ setObraGerenciando(obra); setShowGerenciarOrc(true); },
     onCriarAssociacao: criarAssociacao,
     onRemoverAssociacao: removerAssociacao,
     onSubstituirAssociacoes: substituirAssociacoes
@@ -5064,8 +5051,7 @@ function App() {
     onEdit: editCadastro,
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraImportando(obra); setShowImportOrc(true); }, 200); },
-    onLimparOrcamento: limparOrcamento,
-    onGerenciarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraGerenciando(obra); setShowGerenciarOrc(true); }, 200); }
+    onLimparOrcamento: limparOrcamento
   }), /*#__PURE__*/React.createElement("style", null, "\n        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');\n        *{box-sizing:border-box;margin:0;padding:0;}\n        body{background:#f0f2f5;font-family:'DM Sans',sans-serif;}\n        input,textarea,button{text-transform:uppercase;font-family:inherit;}\n        input[type=date]{text-transform:none;}\n        input::placeholder{color:#bbb;text-transform:uppercase;}\n        input:focus{outline:none;}\n        button{cursor:pointer;}\n        @keyframes spin{to{transform:rotate(360deg)}}\n        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}\n      "));
 }
 
