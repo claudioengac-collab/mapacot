@@ -2107,7 +2107,8 @@ function ModalGerenciarOrcamento(_ref_ger) {
 
   React.useEffect(function() {
     if (!open || !orcamentoAtual) return;
-    var lista = (orcamentoAtual.itens || orcamentoAtual || []).map(function(it, idx) {
+    var listaBase = Array.isArray(orcamentoAtual) ? orcamentoAtual : (orcamentoAtual.itens || []);
+    var lista = listaBase.map(function(it, idx) {
       return Object.assign({}, it, { _idx: idx, ativo: it.ativo !== false });
     });
     setItens(lista);
@@ -2177,7 +2178,10 @@ function ModalGerenciarOrcamento(_ref_ger) {
   var handleSalvar = function() {
     setSalvando(true);
     var itensFinal = itens.map(function(it){ var c = Object.assign({},it); delete c._idx; return c; });
-    onSalvar(Object.assign({}, orcamentoAtual, { itens: itensFinal }));
+    var dadosSalvar = Array.isArray(orcamentoAtual)
+      ? itensFinal
+      : Object.assign({}, orcamentoAtual, { itens: itensFinal });
+    onSalvar(dadosSalvar);
     setSalvando(false);
     onClose();
   };
@@ -4833,6 +4837,7 @@ function App() {
     associacoes: associacoes,
     onSaveOrcamento: saveOrcamento,
     onLimparOrcamento: limparOrcamento,
+    onGerenciarOrcamento: function(obra){ setObraGerenciando(obra); setShowGerenciarOrc(true); },
     onCriarAssociacao: criarAssociacao,
     onRemoverAssociacao: removerAssociacao,
     onSubstituirAssociacoes: substituirAssociacoes
