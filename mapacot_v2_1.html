@@ -2168,7 +2168,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
   var E = React.createElement;
 
   return E("div", { style:{position:"fixed",top:0,left:0,width:"100%",height:"100%",background:"rgba(0,0,0,0.55)",zIndex:3000,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px",boxSizing:"border-box",overflowY:"auto"}, onClick:function(ev){ if(ev.target===ev.currentTarget) onClose(); } },
-    E("div", { style:{background:"#fff",borderRadius:10,width:"100%",maxWidth:1200,boxShadow:"0 4px 32px rgba(0,0,0,0.18)",overflow:"hidden",marginBottom:20} },
+    E("div", { style:{background:"#fff",borderRadius:10,width:"100%",maxWidth:1200,boxShadow:"0 4px 32px rgba(0,0,0,0.18)",overflow:"hidden",marginBottom:20}, onClick:function(ev){ ev.stopPropagation(); } },
       E("div", { style:{background:"#0f1f3d",color:"#fff",padding:"14px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"} },
         E("span", { style:{fontWeight:700,fontSize:13,letterSpacing:1} }, "GERENCIAMENTO DE ORÇAMENTO — " + (obra||"").toUpperCase()),
         E("button", { onClick:function(){ setPopupForm({modo:"adicionar",it:{codigo:"",descricao:"",unidade:"",quantidade:"",valorUnitario:"",observacao:""}}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"7px 14px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "+ ADICIONAR ITEM")
