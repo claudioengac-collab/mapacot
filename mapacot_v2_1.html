@@ -2258,7 +2258,7 @@ function FormItemOrcamento(_ref_form) {
   var E = React.createElement;
   return E("div", { style:{background:"#fff",borderRadius:10,padding:24,maxWidth:500,width:"90%",boxShadow:"0 8px 32px rgba(0,0,0,0.2)"} },
     E("h4", { style:{fontSize:14,color:"#0f1f3d",marginBottom:16,fontWeight:700} }, modo==="editar"?"EDITAR ITEM":"ADICIONAR ITEM AO ORCAMENTO"),
-    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "CODIGO"), E("input", { type:"text", value:vC, onChange:function(e){setC(e.target.value);}, style:inp })),
+    E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "CODIGO"), E("input", { type:"text", value:vC, onChange:function(e){setC(e.target.value.replace(/[^0-9]/g,""));}, style:inp })),
     E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "DESCRICAO *"), E("input", { type:"text", value:vD, onChange:function(e){setD(e.target.value);}, style:inp })),
     E("div", { style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10} },
       E("div", null, E("label", { style:lbl }, "UNIDADE *"), E("input", { type:"text", value:vU, onChange:function(e){setU(e.target.value);}, style:inp })),
