@@ -2604,7 +2604,11 @@ function MapEditor(_ref15) {
     onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
     onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null;
 var gerOrcMapEditor = onGerenciarOrcamento;
-  var _useState27 = useState(init),
+  var _useStateGerEd = useState(false);
+var showGerEd = _slicedToArray(_useStateGerEd,2)[0], setShowGerEd = _slicedToArray(_useStateGerEd,2)[1];
+var _useStateObraGerEd = useState(null);
+var obraGerEd = _slicedToArray(_useStateObraGerEd,2)[0], setObraGerEd = _slicedToArray(_useStateObraGerEd,2)[1];
+var _useState27 = useState(init),
     _useState28 = _slicedToArray(_useState27, 2),
     mapa = _useState28[0],
     setMapa = _useState28[1];
@@ -4036,6 +4040,14 @@ var gerOrcMapEditor = onGerenciarOrcamento;
     )
   ),
   // Modal importação dentro do editor
+  showGerEd && /*#__PURE__*/React.createElement(ModalGerenciarOrcamento, {
+    open: showGerEd,
+    onClose: function(){ setShowGerEd(false); setObraGerEd(null); },
+    obra: obraGerEd,
+    orcamentoAtual: obraGerEd ? (orcamentos[obraGerEd]||null) : null,
+    associacoes: associacoes,
+    onSalvar: function(dados){ if(onSaveOrcamento) onSaveOrcamento(obraGerEd,dados); }
+  }),
   showImpEd && /*#__PURE__*/React.createElement(ModalImportarOrcamento, {
     open: showImpEd,
     onClose: function(){ setShowImpEd(false); setObraImpEd(null); },
@@ -4053,7 +4065,7 @@ var gerOrcMapEditor = onGerenciarOrcamento;
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
     onLimparOrcamento: onLimparOrcamento,
-    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ if(gerOrcMapEditor) gerOrcMapEditor(obra); }, 200); }
+    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraGerEd(obra); setShowGerEd(true); }, 200); }
   }));
 }
 
@@ -4761,8 +4773,7 @@ function App() {
     });
     return passaSearch && passaInsumo;
   });
-  if (current) return React.createElement(React.Fragment, null,
-    React.createElement(MapEditor, {
+  if (current) return /*#__PURE__*/React.createElement(MapEditor, {
     mapa: current,
     onBack: function onBack(mapaAtual) { if(mapaAtual) { setMapas(function(prev){ return prev.map(function(m){ return m.id===mapaAtual.id ? mapaAtual : m; }); }); sbSaveMapa(mapaAtual).catch(function(){}); } setCurrent(null); },
     onSave: handleSave,
@@ -4778,16 +4789,7 @@ function App() {
     onCriarAssociacao: criarAssociacao,
     onRemoverAssociacao: removerAssociacao,
     onSubstituirAssociacoes: substituirAssociacoes
-    }),
-    showGerenciarOrc && React.createElement(ModalGerenciarOrcamento, {
-    open: showGerenciarOrc,
-    onClose: function(){ setShowGerenciarOrc(false); setObraGerenciando(null); },
-    obra: obraGerenciando,
-    orcamentoAtual: obraGerenciando ? (orcamentos[obraGerenciando]||null) : null,
-    associacoes: associacoes,
-    onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob,dados).catch(function(){}); }
-    })
-  );
+  });
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
