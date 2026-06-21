@@ -2603,6 +2603,7 @@ function MapEditor(_ref15) {
     onCriarAssociacao = _ref15.onCriarAssociacao || null,
     onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
     onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null;
+var gerOrcMapEditor = onGerenciarOrcamento;
   var _useState27 = useState(init),
     _useState28 = _slicedToArray(_useState27, 2),
     mapa = _useState28[0],
@@ -4052,7 +4053,7 @@ function MapEditor(_ref15) {
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
     onLimparOrcamento: onLimparOrcamento,
-    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ if(onGerenciarOrcamento) onGerenciarOrcamento(obra); }, 200); }
+    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ if(gerOrcMapEditor) gerOrcMapEditor(obra); }, 200); }
   }));
 }
 
