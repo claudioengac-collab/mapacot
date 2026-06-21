@@ -2089,6 +2089,21 @@ function CadastrosModal(_ref11) {
 
 // ─── Modal Importar Orçamento ─────────────────────────────────────────────────
 // --- Modal Gerenciar Orcamento ---
+var calcConsumidoGer = function(idx, assocs, mpas) {
+  var total = 0;
+  for(var _i=0;_i<assocs.length;_i++){
+    var _a=assocs[_i];
+    if(_a.orcItemIndex!==idx) continue;
+    var _m=null;
+    for(var _j=0;_j<mpas.length;_j++){ if(mpas[_j].id===_a.mapaId){ _m=mpas[_j]; break; } }
+    if(!_m) continue;
+    var _it=null; var _its=_m.itens||[];
+    for(var _k=0;_k<_its.length;_k++){ if(_its[_k].id===_a.itemMapaId){ _it=_its[_k]; break; } }
+    if(!_it||!_it.comprado) continue;
+    total+=(parseFloat(String(_a.qtCompra).replace(",","."))||0)*(parseFloat(_a.fator)||1);
+  }
+  return total;
+};
 function ModalGerenciarOrcamento(_ref_ger) {
   var open = _ref_ger.open, onClose = _ref_ger.onClose, obra = _ref_ger.obra,
     orcamentoAtual = _ref_ger.orcamentoAtual, associacoes = _ref_ger.associacoes, onSalvar = _ref_ger.onSalvar, mapas = _ref_ger.mapas || [];
@@ -2103,15 +2118,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
   React.useEffect(function() {
     if (!open || !orcamentoAtual) return;
     var base = Array.isArray(orcamentoAtual) ? orcamentoAtual : (orcamentoAtual.itens || []);
-    var lista = base.map(function(it, idx) {
-  var consumidoReal = (associacoes||[]).filter(function(a){
-    if(a.orcItemIndex!==idx) return false;
-    var mapa = (mapas||[]).find(function(m){ return m.id===a.mapaId; });
-    var itemMapa = mapa ? (mapa.itens||[]).find(function(it2){ return it2.id===a.itemMapaId; }) : null;
-    return itemMapa ? !!itemMapa.comprado : false;
-  }).reduce(function(ac,a){ return ac+(parseFloat(String(a.qtCompra).replace(",","."))||0)*(parseFloat(a.fator)||1); },0);
-  return Object.assign({}, it, { _idx: idx, ativo: it.ativo !== false, consumido: consumidoReal });
-});
+    var lista = base.map(function(it, i) { return Object.assign({}, it, { _idx: i, ativo: it.ativo !== false, consumido: calcConsumidoGer(i, associacoes, mapas) }); });
     itensRef.current = lista;
     setItens(lista);
     setBusca(""); setFiltro("TODOS");
@@ -4052,7 +4059,7 @@ var _useState27 = useState(init),
     open: showGerEd,
     onClose: function(){ setShowGerEd(false); setObraGerEd(null); },
     obra: obraGerEd,
-    orcamentoAtual: obraGerEd ? (orcamentos[obraGerEd]||null) : null,
+    orcamentoAtual: obraGerEd ? calcOrcComConsumo(orcamentos[obraGerEd]||null, obraGerEd, associacoes, mapas) : null,
     associacoes: associacoes,
     mapas: mapas,
     onSalvar: function(dados){ if(onSaveOrcamento) onSaveOrcamento(obraGerEd,dados); }
@@ -4478,6 +4485,31 @@ function Login(_ref18) {
     }
   }, "ENTRAR")));
 }
+var calcOrcComConsumo = function(orc, obra, assocs, mpas) {
+  if(!orc) return orc;
+  var base = Array.isArray(orc) ? orc : (orc.itens||[]);
+  var novos = [];
+  for(var _i=0;_i<base.length;_i++){
+    var _it=base[_i]; var _total=0;
+    for(var _j=0;_j<assocs.length;_j++){
+      var _a=assocs[_j];
+      if(_a.orcItemIndex!==_i) continue;
+      var _m=null;
+      for(var _k=0;_k<mpas.length;_k++){ if(mpas[_k].id===_a.mapaId){ _m=mpas[_k]; break; } }
+      if(!_m||_m.obra!==obra) continue;
+      var _itm=null; var _its=_m.itens||[];
+      for(var _l=0;_l<_its.length;_l++){ if(_its[_l].id===_a.itemMapaId){ _itm=_its[_l]; break; } }
+      if(!_itm||!_itm.comprado) continue;
+      var _qS=parseFloat(String(_a.qtCompra).replace(",","."))||0;
+      var _qM=parseFloat(String(_itm.qt).replace(",","."))||0;
+      var _qA=(_qS>0&&_qS<_qM)?_qS:(_qM||_qS);
+      _total+=_qA*(parseFloat(_a.fator)||1);
+    }
+    novos.push(Object.assign({},_it,{consumido:_total}));
+  }
+  if(Array.isArray(orc)) return novos;
+  return Object.assign({},orc,{itens:novos});
+};
 function App() {
   var _useState51 = useState([]),
     _useState52 = _slicedToArray(_useState51, 2),
@@ -5075,7 +5107,7 @@ function App() {
     open: showGerenciarOrc,
     onClose: function(){ setShowGerenciarOrc(false); setObraGerenciando(null); },
     obra: obraGerenciando,
-    orcamentoAtual: obraGerenciando ? (orcamentos[obraGerenciando]||null) : null,
+    orcamentoAtual: obraGerenciando ? calcOrcComConsumo(orcamentos[obraGerenciando]||null, obraGerenciando, associacoes, mapas) : null,
     associacoes: associacoes,
     mapas: mapas,
     onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob,dados).catch(function(){}); }
