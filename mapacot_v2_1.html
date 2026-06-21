@@ -2091,7 +2091,7 @@ function CadastrosModal(_ref11) {
 // --- Modal Gerenciar Orcamento ---
 function ModalGerenciarOrcamento(_ref_ger) {
   var open = _ref_ger.open, onClose = _ref_ger.onClose, obra = _ref_ger.obra,
-    orcamentoAtual = _ref_ger.orcamentoAtual, associacoes = _ref_ger.associacoes, onSalvar = _ref_ger.onSalvar;
+    orcamentoAtual = _ref_ger.orcamentoAtual, associacoes = _ref_ger.associacoes, onSalvar = _ref_ger.onSalvar, mapas = _ref_ger.mapas || [];
   var _sI = React.useState([]), itens = _sI[0], setItens = _sI[1];
   var itensRef = React.useRef([]);
   var _sF = React.useState("TODOS"), filtro = _sF[0], setFiltro = _sF[1];
@@ -2103,7 +2103,15 @@ function ModalGerenciarOrcamento(_ref_ger) {
   React.useEffect(function() {
     if (!open || !orcamentoAtual) return;
     var base = Array.isArray(orcamentoAtual) ? orcamentoAtual : (orcamentoAtual.itens || []);
-    var lista = base.map(function(it, i) { return Object.assign({}, it, { _idx: i, ativo: it.ativo !== false }); });
+    var lista = base.map(function(it, idx) {
+  var consumidoReal = (associacoes||[]).filter(function(a){
+    if(a.orcItemIndex!==idx) return false;
+    var mapa = (mapas||[]).find(function(m){ return m.id===a.mapaId; });
+    var itemMapa = mapa ? (mapa.itens||[]).find(function(it2){ return it2.id===a.itemMapaId; }) : null;
+    return itemMapa ? !!itemMapa.comprado : false;
+  }).reduce(function(ac,a){ return ac+(parseFloat(String(a.qtCompra).replace(",","."))||0)*(parseFloat(a.fator)||1); },0);
+  return Object.assign({}, it, { _idx: idx, ativo: it.ativo !== false, consumido: consumidoReal });
+});
     itensRef.current = lista;
     setItens(lista);
     setBusca(""); setFiltro("TODOS");
@@ -4046,6 +4054,7 @@ var _useState27 = useState(init),
     obra: obraGerEd,
     orcamentoAtual: obraGerEd ? (orcamentos[obraGerEd]||null) : null,
     associacoes: associacoes,
+    mapas: mapas,
     onSalvar: function(dados){ if(onSaveOrcamento) onSaveOrcamento(obraGerEd,dados); }
   }),
   showImpEd && /*#__PURE__*/React.createElement(ModalImportarOrcamento, {
@@ -5068,6 +5077,7 @@ function App() {
     obra: obraGerenciando,
     orcamentoAtual: obraGerenciando ? (orcamentos[obraGerenciando]||null) : null,
     associacoes: associacoes,
+    mapas: mapas,
     onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob,dados).catch(function(){}); }
   }),
   /*#__PURE__*/React.createElement(CadastrosModal, {
