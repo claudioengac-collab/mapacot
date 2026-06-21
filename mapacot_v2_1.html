@@ -2118,7 +2118,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
   React.useEffect(function() {
     if (!open || !orcamentoAtual) return;
     var base = Array.isArray(orcamentoAtual) ? orcamentoAtual : (orcamentoAtual.itens || []);
-    var lista = base.map(function(it, i) { return Object.assign({}, it, { _idx: i, ativo: it.ativo !== false, consumido: calcConsumidoGer(i, associacoes, mapas) }); });
+    var lista = base.map(function(it, i) { return Object.assign({}, it, { _idx: i, ativo: it.ativo !== false }); });
     itensRef.current = lista;
     setItens(lista);
     setBusca(""); setFiltro("TODOS");
