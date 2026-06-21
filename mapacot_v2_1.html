@@ -4761,7 +4761,8 @@ function App() {
     });
     return passaSearch && passaInsumo;
   });
-  if (current) return /*#__PURE__*/React.createElement(MapEditor, {
+  if (current) return React.createElement(React.Fragment, null,
+    React.createElement(MapEditor, {
     mapa: current,
     onBack: function onBack(mapaAtual) { if(mapaAtual) { setMapas(function(prev){ return prev.map(function(m){ return m.id===mapaAtual.id ? mapaAtual : m; }); }); sbSaveMapa(mapaAtual).catch(function(){}); } setCurrent(null); },
     onSave: handleSave,
@@ -4777,7 +4778,16 @@ function App() {
     onCriarAssociacao: criarAssociacao,
     onRemoverAssociacao: removerAssociacao,
     onSubstituirAssociacoes: substituirAssociacoes
-  });
+    }),
+    showGerenciarOrc && React.createElement(ModalGerenciarOrcamento, {
+    open: showGerenciarOrc,
+    onClose: function(){ setShowGerenciarOrc(false); setObraGerenciando(null); },
+    obra: obraGerenciando,
+    orcamentoAtual: obraGerenciando ? (orcamentos[obraGerenciando]||null) : null,
+    associacoes: associacoes,
+    onSalvar: function(dados){ var ob=obraGerenciando; saveOrcamento(ob,dados).catch(function(){}); }
+    })
+  );
   return /*#__PURE__*/React.createElement("div", {
     style: {
       minHeight: "100vh",
