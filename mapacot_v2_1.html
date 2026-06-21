@@ -4052,7 +4052,7 @@ function MapEditor(_ref15) {
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
     onLimparOrcamento: onLimparOrcamento,
-    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); if(onGerenciarOrcamento) onGerenciarOrcamento(obra); }
+    onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ if(onGerenciarOrcamento) onGerenciarOrcamento(obra); }, 200); }
   }));
 }
 
