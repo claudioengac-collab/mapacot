@@ -2281,7 +2281,7 @@ function FormItemOrcamento(_ref_form) {
     ),
     E("div", { style:{marginBottom:10} }, E("label", { style:lbl }, "VALOR UNITARIO (R$)"), E("input", { type:"number", value:vV, onChange:function(e){setV(e.target.value);}, style:inp })),
     E("div", { style:{marginBottom:14} }, E("label", { style:lbl }, "OBSERVACAO (MOTIVO)"),
-      E("textarea", { value:vO, onChange:function(e){setO(e.target.value);}, rows:3, style:Object.assign({},inp,{resize:"vertical"}) })
+      E("textarea", { value:vO, onChange:function(e){setO(e.target.value);}, rows:3, style:Object.assign({},inp,{resize:"vertical",textTransform:"uppercase"}) })
     ),
     E("div", { style:{display:"flex",gap:10,justifyContent:"flex-end"} },
       E("button", { onClick:onCancelar, style:{background:"#e5e7eb",color:"#374151",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "CANCELAR"),
