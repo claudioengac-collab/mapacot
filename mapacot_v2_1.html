@@ -1400,11 +1400,9 @@ function EC(_ref0) {
     ref: ref,
     value: raw,
     onChange: function onChange(e) {
-      var el=e.target; var ss=el.selectionStart; var se=el.selectionEnd;
-      var v = (maxLen ? el.value.slice(0, maxLen) : el.value).toUpperCase();
+      var v = (maxLen ? e.target.value.slice(0, maxLen) : e.target.value).toUpperCase();
       if (numericOnly) v = v.replace(/[^0-9.,]/g, "");
       setRaw(v);
-      requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
     },
     onBlur: function onBlur() {
       return commit(raw);
@@ -3643,7 +3641,10 @@ var _useState27 = useState(init),
             tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
               background: bg,
               borderLeft: bl,
-              borderRight: br
+              borderRight: br,
+              maxWidth: 0,
+              overflowWrap: "break-word",
+              whiteSpace: "normal"
             })
           });
         }
