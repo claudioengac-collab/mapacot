@@ -549,7 +549,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       var vt0=r0.vlUnit!==null?r0.vlUnit*qt0:0;
       var res0=vo0&&vt0>0?(vo0*qt0)-vt0:null;
       var semA0=!a0||!oi0;
-      var desc0=item.descricao+(item.detalhe?'<div style="font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;">\u21b3 '+item.detalhe+'</div>':'');
+      var desc0=item.descricao+(item.detalhe?'<div style="font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;word-break:break-word;">\u21b3 '+item.detalhe+'</div>':'');
       var orcC0=semA0
         ?'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;"><span style="font-size:9px;color:#ccc;">SEM ASSOC.</span></td>'
          +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
@@ -693,10 +693,10 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         var key = "".concat(item.id, "_").concat(f.id);
         var unit = parseMoney(precos[key]);
         var isMin = r.vlUnit !== null && unit !== null && unit > 0 && unit === r.vlUnit;
-        return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
+        return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
       }).join("");
-      var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
-      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;\">\u21b3 " + item.detalhe + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
+      var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
+      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;word-break:break-word;\">\u21b3 " + item.detalhe + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
     }).join("");
     var rodapeRows = RODAPE_ROWS.map(function (row) {
       var resumoCell = isFirst ? function () {
@@ -1351,7 +1351,8 @@ function EC(_ref0) {
     numericOnly = _ref0.numericOnly,
     strictMatch = _ref0.strictMatch,
     detailValue = _ref0.detailValue,
-    onDetailChange = _ref0.onDetailChange;
+    onDetailChange = _ref0.onDetailChange,
+    wrapText = _ref0.wrapText;
   var _useState5 = useState(false),
     _useState6 = _slicedToArray(_useState5, 2),
     ed = _useState6[0],
@@ -1437,7 +1438,7 @@ function EC(_ref0) {
     }),
     colSpan: colSpan,
     onClick: start
-  }, value !== "" && value !== null && value !== undefined ? value : /*#__PURE__*/React.createElement("span", {
+  }, value !== "" && value !== null && value !== undefined ? (wrapText ? /*#__PURE__*/React.createElement("span", {style:{wordBreak:"break-word",whiteSpace:"pre-wrap",display:"block"}}, value) : value) : /*#__PURE__*/React.createElement("span", {
     style: {
       color: "#ccc"
     }
@@ -1445,10 +1446,13 @@ function EC(_ref0) {
     value: detailValue || "",
     onChange: function onChange(e) {
       e.stopPropagation();
+      e.target.style.height="auto";
+      e.target.style.height=e.target.scrollHeight+"px";
       if (onDetailChange) onDetailChange(e.target.value.toUpperCase());
     },
     onClick: function onClick(e) { e.stopPropagation(); },
     onFocus: function onFocus(e) { e.stopPropagation(); },
+    onBlur: function onBlur(e) { e.stopPropagation(); e.target.scrollTop=0; },
     placeholder: "DETALHE (FABRICANTE, MARCA...)",
     rows: 1,
     style: {
@@ -1457,18 +1461,20 @@ function EC(_ref0) {
       border: "1px dashed #a0b4d0",
       borderRadius: 4,
       padding: "2px 5px",
-      fontSize: 10,
+      fontSize: 12,
       color: "#4a6080",
       background: "#f0f6ff",
       fontFamily: "inherit",
       resize: "none",
-      minHeight: 22,
+      overflow: "hidden",
+      minHeight: 60,
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
       textTransform: "uppercase",
       cursor: "text",
       display: "block",
-      outline: "none"
+      outline: "none",
+      fontWeight: "bold"
     }
   }));
 }
@@ -3638,6 +3644,7 @@ var _useState27 = useState(init),
             align: "left",
             colSpan: 3,
             maxLen: row.maxLen,
+            wrapText: true,
             tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
               background: bg,
               borderLeft: bl,
@@ -3692,6 +3699,7 @@ var _useState27 = useState(init),
           align: row.money ? "right" : "left",
           maxLen: row.maxLen,
           numericOnly: row.money,
+          wrapText: row.money ? false : true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4"
           })
