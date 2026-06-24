@@ -1725,26 +1725,7 @@ function Modal(_ref10) {
 }
 
 // ─── Cadastros Modal ──────────────────────────────────────────────────────────
-var estaEmUso = function(tipo, valor, mapas) {
-  var v = normalize(valor);
-  for(var _i=0;_i<mapas.length;_i++){
-    var _m=mapas[_i];
-    if(tipo==="obras" && normalize(_m.obra||"")===v) return true;
-    if(tipo==="unidades"){
-      var _its=_m.itens||[];
-      for(var _j=0;_j<_its.length;_j++){ if(normalize(_its[_j].unid||"")===v) return true; }
-    }
-    if(tipo==="fornecedores"){
-      var _fns=_m.fornecedores||[];
-      for(var _j=0;_j<_fns.length;_j++){ if(normalize(_fns[_j].nome||"")===v) return true; }
-    }
-    if(tipo==="insumos"){
-      var _its2=_m.itens||[];
-      for(var _j=0;_j<_its2.length;_j++){ if(normalize(_its2[_j].descricao||"")===v) return true; }
-    }
-  }
-  return false;
-};
+var estaEmUso=function(tp,vl,mp){var v=normalize(vl);for(var i=0;i<mp.length;i++){var m=mp[i];if(tp==="obras"&&normalize(m.obra||"")===v)return true;if(tp==="unidades"){var u=m.itens||[];for(var j=0;j<u.length;j++){if(normalize(u[j].unid||"")===v)return true;}}if(tp==="fornecedores"){var f=m.fornecedores||[];for(var j=0;j<f.length;j++){if(normalize(f[j].nome||"")===v)return true;}}if(tp==="insumos"){var s=m.itens||[];for(var j=0;j<s.length;j++){if(normalize(s[j].descricao||"")===v)return true;}}}return false;};
 function CadastrosModal(_ref11) {
   var _tabs$find;
   var open = _ref11.open,
@@ -1757,7 +1738,7 @@ function CadastrosModal(_ref11) {
     onImportarOrcamento = _ref11.onImportarOrcamento || null,
     onLimparOrcamento = _ref11.onLimparOrcamento || null,
     onGerenciarOrcamento = _ref11.onGerenciarOrcamento || null,
-mapas = _ref11.mapas || [];
+    mapas = _ref11.mapas || [];
   var _useState9 = useState("fornecedores"),
     _useState0 = _slicedToArray(_useState9, 2),
     tab = _useState0[0],
@@ -4507,6 +4488,26 @@ function Login(_ref18) {
     }
   }, "ENTRAR")));
 }
+var estaEmUso = function(tipo, valor, mapas) {
+  var v = normalize(valor);
+  for(var _i=0;_i<mapas.length;_i++){
+    var _m=mapas[_i];
+    if(tipo==="obras" && normalize(_m.obra||"")===v) return true;
+    if(tipo==="unidades"){
+      var _its=_m.itens||[];
+      for(var _j=0;_j<_its.length;_j++){ if(normalize(_its[_j].unid||"")===v) return true; }
+    }
+    if(tipo==="fornecedores"){
+      var _fns=_m.fornecedores||[];
+      for(var _j=0;_j<_fns.length;_j++){ if(normalize(_fns[_j].nome||"")===v) return true; }
+    }
+    if(tipo==="insumos"){
+      var _its2=_m.itens||[];
+      for(var _j=0;_j<_its2.length;_j++){ if(normalize(_its2[_j].descricao||"")===v) return true; }
+    }
+  }
+  return false;
+};
 var calcOrcComConsumo = function(orc, obra, assocs, mpas) {
   if(!orc) return orc;
   var base = Array.isArray(orc) ? orc : (orc.itens||[]);
