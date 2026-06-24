@@ -1443,12 +1443,15 @@ function EC(_ref0) {
     value: detailValue || "",
     onChange: function onChange(e) {
       e.stopPropagation();
-      if (onDetailChange) onDetailChange(e.target.value.toUpperCase());
+      var el=e.target; var ss=el.selectionStart; var se=el.selectionEnd;
+      var v=el.value.toUpperCase();
+      if (onDetailChange) onDetailChange(v);
+      requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
     },
     onClick: function onClick(e) { e.stopPropagation(); },
     onFocus: function onFocus(e) { e.stopPropagation(); },
     placeholder: "DETALHE (FABRICANTE, MARCA...)",
-    rows: 1,
+    rows: 2,
     style: {
       width: "100%",
       marginTop: 3,
@@ -1459,8 +1462,8 @@ function EC(_ref0) {
       color: "#4a6080",
       background: "#f0f6ff",
       fontFamily: "inherit",
-      resize: "none",
-      minHeight: 22,
+      resize: "vertical",
+      minHeight: 38,
       textTransform: "uppercase",
       cursor: "text",
       display: "block",
