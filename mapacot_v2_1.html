@@ -2623,7 +2623,8 @@ function MapEditor(_ref15) {
     onGerenciarOrcamento = _ref15.onGerenciarOrcamento || null,
     onCriarAssociacao = _ref15.onCriarAssociacao || null,
     onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
-    onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null;
+    onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null,
+    mapas = _ref15.mapas || [];
 var gerOrcMapEditor = onGerenciarOrcamento;
   var _useStateGerEd = useState(false);
 var showGerEd = _slicedToArray(_useStateGerEd,2)[0], setShowGerEd = _slicedToArray(_useStateGerEd,2)[1];
@@ -4858,7 +4859,8 @@ function App() {
     onGerenciarOrcamento: function(obra){ setObraGerenciando(obra); setShowGerenciarOrc(true); },
     onCriarAssociacao: criarAssociacao,
     onRemoverAssociacao: removerAssociacao,
-    onSubstituirAssociacoes: substituirAssociacoes
+    onSubstituirAssociacoes: substituirAssociacoes,
+    mapas: mapas
   });
   return /*#__PURE__*/React.createElement("div", {
     style: {
