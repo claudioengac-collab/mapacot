@@ -1736,7 +1736,8 @@ function CadastrosModal(_ref11) {
     orcamentos = _ref11.orcamentos || {},
     onImportarOrcamento = _ref11.onImportarOrcamento || null,
     onLimparOrcamento = _ref11.onLimparOrcamento || null,
-    onGerenciarOrcamento = _ref11.onGerenciarOrcamento || null;
+    onGerenciarOrcamento = _ref11.onGerenciarOrcamento || null,
+mapas = _ref11.mapas || [];
   var _useState9 = useState("fornecedores"),
     _useState0 = _slicedToArray(_useState9, 2),
     tab = _useState0[0],
@@ -1784,7 +1785,7 @@ function CadastrosModal(_ref11) {
   };
   var confirmEdit = function confirmEdit(oldVal) {
     var v = normalize(editVal);
-    if (v && v !== normalize(oldVal)) onEdit(tab, oldVal, v);
+    if (v && v !== normalize(oldVal)){ if(estaEmUso(tab, oldVal, mapas)){ alert("NAO E POSSIVEL EDITAR: este item esta em uso em um ou mais mapas de cotacao."); cancelEdit(); return; } onEdit(tab, oldVal, v); }
     cancelEdit();
   };
   var tabs = [{
@@ -2049,7 +2050,7 @@ function CadastrosModal(_ref11) {
       }
     }, /*#__PURE__*/React.createElement(IcoPencil, null)), /*#__PURE__*/React.createElement("button", {
       onClick: function onClick() {
-        if (window.confirm("EXCLUIR \"" + item + "\"?")) onRemove(tab, item);
+        if (window.confirm("EXCLUIR \"" + item + "\"?")){ if(estaEmUso(tab, item, mapas)){ alert("NAO E POSSIVEL EXCLUIR: este item esta em uso em um ou mais mapas de cotacao."); return; } onRemove(tab, item); }
       },
       title: "EXCLUIR",
       style: {
@@ -4078,6 +4079,7 @@ var _useState27 = useState(init),
     onAdd: addCadastro,
     onRemove: removeCadastro || function(){},
     onEdit: editCadastro || function(){},
+    mapas: mapas,
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
     onLimparOrcamento: onLimparOrcamento,
@@ -5141,6 +5143,7 @@ function App() {
     onAdd: addCadastro,
     onRemove: removeCadastro,
     onEdit: editCadastro,
+    mapas: mapas,
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraImportando(obra); setShowImportOrc(true); }, 200); },
     onLimparOrcamento: limparOrcamento,
