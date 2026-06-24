@@ -3330,8 +3330,7 @@ var _useState27 = useState(init),
         style: _objectSpread(_objectSpread({}, thS), {}, {
           textAlign: "right",
           borderLeft: fi === 0 ? "2px solid rgba(255,255,255,0.2)" : "1px solid rgba(0,0,0,0.1)",
-          fontSize: 10,
-          width: 120
+          fontSize: 10
         })
       }, "VL. UNIT.");
     }), emptyChunk && /*#__PURE__*/React.createElement("th", {
@@ -3697,7 +3696,10 @@ var _useState27 = useState(init),
           maxLen: row.maxLen,
           numericOnly: row.money,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
-            borderLeft: "1px solid #e4e8f4"
+            borderLeft: "1px solid #e4e8f4",
+            maxWidth: row.money ? undefined : 120,
+            wordBreak: row.money ? undefined : "break-word",
+            whiteSpace: row.money ? undefined : "pre-wrap"
           })
         });
       }), emptyChunk && /*#__PURE__*/React.createElement("td", {
