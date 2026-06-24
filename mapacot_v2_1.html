@@ -11,6 +11,7 @@
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4ff;min-height:100vh;}
 input{text-transform:uppercase;}
+.detalhe-field{field-sizing:content;max-width:100%;}
 input[type=password]{text-transform:none;}
 @media(max-width:640px){
   html{width:100%;overflow-x:hidden;}body,#root{width:100%;}
@@ -1450,6 +1451,7 @@ function EC(_ref0) {
     },
     onClick: function onClick(e) { e.stopPropagation(); },
     onFocus: function onFocus(e) { e.stopPropagation(); },
+    className: "detalhe-field",
     placeholder: "DETALHE (FABRICANTE, MARCA...)",
     style: {
       width: "100%",
@@ -1467,8 +1469,7 @@ function EC(_ref0) {
       textTransform: "uppercase",
       cursor: "text",
       display: "block",
-      outline: "none",
-      fieldSizing: "content"
+      outline: "none"
     },
     onInput: function(e){ e.target.style.height="auto"; e.target.style.height=(e.target.scrollHeight)+"px"; }
   }));
@@ -3641,10 +3642,7 @@ var _useState27 = useState(init),
             tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
               background: bg,
               borderLeft: bl,
-              borderRight: br,
-              maxWidth: 0,
-              overflowWrap: "break-word",
-              whiteSpace: "normal"
+              borderRight: br
             })
           });
         }
