@@ -1433,7 +1433,9 @@ function EC(_ref0) {
   return /*#__PURE__*/React.createElement("td", {
     style: _objectSpread(_objectSpread(_objectSpread({}, SC.td), tdSt), {}, {
       textAlign: align,
-      cursor: "text"
+      cursor: "text",
+      overflow: "hidden",
+      maxWidth: 0
     }),
     colSpan: colSpan,
     onClick: start
@@ -1449,6 +1451,7 @@ function EC(_ref0) {
     },
     onClick: function onClick(e) { e.stopPropagation(); },
     onFocus: function onFocus(e) { e.stopPropagation(); },
+    onInput: function onInput(e) { e.target.style.height="auto"; e.target.style.height=e.target.scrollHeight+"px"; },
     placeholder: "DETALHE (FABRICANTE, MARCA...)",
     rows: 1,
     style: {
@@ -1462,7 +1465,7 @@ function EC(_ref0) {
       background: "#f0f6ff",
       fontFamily: "inherit",
       resize: "none",
-      minHeight: 22,
+      minHeight: 60,
       whiteSpace: "pre-wrap",
       wordBreak: "break-word",
       textTransform: "uppercase",
