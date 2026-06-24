@@ -1400,9 +1400,11 @@ function EC(_ref0) {
     ref: ref,
     value: raw,
     onChange: function onChange(e) {
-      var v = (maxLen ? e.target.value.slice(0, maxLen) : e.target.value).toUpperCase();
+      var el=e.target; var ss=el.selectionStart; var se=el.selectionEnd;
+      var v = (maxLen ? el.value.slice(0, maxLen) : el.value).toUpperCase();
       if (numericOnly) v = v.replace(/[^0-9.,]/g, "");
       setRaw(v);
+      requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
     },
     onBlur: function onBlur() {
       return commit(raw);
@@ -1431,9 +1433,7 @@ function EC(_ref0) {
   return /*#__PURE__*/React.createElement("td", {
     style: _objectSpread(_objectSpread(_objectSpread({}, SC.td), tdSt), {}, {
       textAlign: align,
-      cursor: "text",
-      wordBreak: "break-word",
-      whiteSpace: "pre-wrap"
+      cursor: "text"
     }),
     colSpan: colSpan,
     onClick: start
