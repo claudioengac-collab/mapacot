@@ -1431,7 +1431,9 @@ function EC(_ref0) {
   return /*#__PURE__*/React.createElement("td", {
     style: _objectSpread(_objectSpread(_objectSpread({}, SC.td), tdSt), {}, {
       textAlign: align,
-      cursor: "text"
+      cursor: "text",
+      wordBreak: "break-word",
+      whiteSpace: "pre-wrap"
     }),
     colSpan: colSpan,
     onClick: start
