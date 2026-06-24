@@ -1451,7 +1451,6 @@ function EC(_ref0) {
     onClick: function onClick(e) { e.stopPropagation(); },
     onFocus: function onFocus(e) { e.stopPropagation(); },
     placeholder: "DETALHE (FABRICANTE, MARCA...)",
-    rows: 2,
     style: {
       width: "100%",
       marginTop: 3,
@@ -1462,13 +1461,15 @@ function EC(_ref0) {
       color: "#4a6080",
       background: "#f0f6ff",
       fontFamily: "inherit",
-      resize: "vertical",
-      minHeight: 38,
+      resize: "none",
+      minHeight: 22,
+      overflow: "hidden",
       textTransform: "uppercase",
       cursor: "text",
       display: "block",
       outline: "none"
-    }
+    },
+    onInput: function(e){ e.target.style.height="auto"; e.target.style.height=(e.target.scrollHeight)+"px"; }
   }));
 }
 
