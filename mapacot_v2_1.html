@@ -4485,6 +4485,26 @@ function Login(_ref18) {
     }
   }, "ENTRAR")));
 }
+var estaEmUso = function(tipo, valor, mapas) {
+  var v = normalize(valor);
+  for(var _i=0;_i<mapas.length;_i++){
+    var _m=mapas[_i];
+    if(tipo==="obras" && normalize(_m.obra||"")===v) return true;
+    if(tipo==="unidades"){
+      var _its=_m.itens||[];
+      for(var _j=0;_j<_its.length;_j++){ if(normalize(_its[_j].unid||"")===v) return true; }
+    }
+    if(tipo==="fornecedores"){
+      var _fns=_m.fornecedores||[];
+      for(var _j=0;_j<_fns.length;_j++){ if(normalize(_fns[_j].nome||"")===v) return true; }
+    }
+    if(tipo==="insumos"){
+      var _its2=_m.itens||[];
+      for(var _j=0;_j<_its2.length;_j++){ if(normalize(_its2[_j].descricao||"")===v) return true; }
+    }
+  }
+  return false;
+};
 var calcOrcComConsumo = function(orc, obra, assocs, mpas) {
   if(!orc) return orc;
   var base = Array.isArray(orc) ? orc : (orc.itens||[]);
@@ -4723,6 +4743,7 @@ function App() {
     });
   }, []);
   var removeCadastro = useCallback(function (tipo, valor) {
+    if(estaEmUso(tipo, valor, mapas)){ alert("NAO E POSSIVEL EXCLUIR: este item esta em uso em um ou mais mapas de cotacao."); return; }
     setCadastros(function (prev) {
       var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, (prev[tipo] || []).filter(function (x) {
         return normalize(x) !== normalize(valor);
@@ -4733,6 +4754,7 @@ function App() {
     });
   }, []);
   var editCadastro = useCallback(function (tipo, oldVal, newVal) {
+    if(estaEmUso(tipo, oldVal, mapas)){ alert("NAO E POSSIVEL EDITAR: este item esta em uso em um ou mais mapas de cotacao."); return; }
     var vOld = normalize(oldVal),
       vNew = normalize(newVal);
     if (!vNew || vOld === vNew) return;
