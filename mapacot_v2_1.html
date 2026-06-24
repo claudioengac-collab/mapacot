@@ -1361,6 +1361,10 @@ function EC(_ref0) {
     _useState8 = _slicedToArray(_useState7, 2),
     raw = _useState8[0],
     setRaw = _useState8[1];
+  var _useState9 = useState(false),
+    _useState10 = _slicedToArray(_useState9, 2),
+    showDetail = _useState10[0],
+    setShowDetail = _useState10[1];
   var ref = useRef();
   var hasSugg = suggestions.length > 0;
   var start = function start() {
@@ -1442,41 +1446,54 @@ function EC(_ref0) {
     style: {
       color: "#ccc"
     }
-  }, placeholder), detailValue !== undefined && detailValue !== null && /*#__PURE__*/React.createElement("textarea", {
-    value: detailValue || "",
-    onChange: function onChange(e) {
-      e.stopPropagation();
-      e.target.style.height="auto";
-      e.target.style.height=e.target.scrollHeight+"px";
-      if (onDetailChange) onDetailChange(e.target.value.toUpperCase());
-    },
-    onClick: function onClick(e) { e.stopPropagation(); },
-    onFocus: function onFocus(e) { e.stopPropagation(); },
-    onBlur: function onBlur(e) { e.stopPropagation(); e.target.scrollTop=0; },
-    placeholder: "DETALHE (FABRICANTE, MARCA...)",
-    rows: 1,
-    style: {
-      width: "100%",
-      marginTop: 3,
-      border: "1px dashed #a0b4d0",
-      borderRadius: 4,
-      padding: "2px 5px",
-      fontSize: 12,
-      color: "#4a6080",
-      background: "#f0f6ff",
-      fontFamily: "inherit",
-      resize: "none",
-      overflow: "hidden",
-      minHeight: 60,
-      whiteSpace: "pre-wrap",
-      wordBreak: "break-word",
-      textTransform: "uppercase",
-      cursor: "text",
-      display: "block",
-      outline: "none",
-      fontWeight: "bold"
-    }
-  }));
+  }, placeholder), detailValue !== undefined && detailValue !== null && (
+    (detailValue && !showDetail)
+      ? /*#__PURE__*/React.createElement("div", {
+          onClick: function(e){ e.stopPropagation(); setShowDetail(true); },
+          style: { marginTop:3, padding:"2px 5px", fontSize:12, color:"#4a6080", background:"#f0f6ff", border:"1px dashed #a0b4d0", borderRadius:4, fontWeight:"bold", wordBreak:"break-word", whiteSpace:"pre-wrap", textTransform:"uppercase", cursor:"text", minHeight:22 }
+        }, detailValue)
+      : (!detailValue && !showDetail)
+        ? /*#__PURE__*/React.createElement("span", {
+            onClick: function(e){ e.stopPropagation(); setShowDetail(true); },
+            style: { display:"inline-flex", alignItems:"center", gap:4, marginTop:3, padding:"2px 7px", fontSize:11, color:"#8a9bb0", background:"#f5f8ff", border:"1px dashed #c0cce0", borderRadius:4, cursor:"pointer" }
+          }, "✏ + DETALHE")
+        : /*#__PURE__*/React.createElement("textarea", {
+            value: detailValue || "",
+            autoFocus: true,
+            onChange: function onChange(e) {
+              e.stopPropagation();
+              e.target.style.height="auto";
+              e.target.style.height=e.target.scrollHeight+"px";
+              if (onDetailChange) onDetailChange(e.target.value.toUpperCase());
+            },
+            onClick: function onClick(e) { e.stopPropagation(); },
+            onFocus: function onFocus(e) { e.stopPropagation(); },
+            onBlur: function onBlur(e) { e.stopPropagation(); e.target.scrollTop=0; setShowDetail(false); },
+            placeholder: "DETALHE (FABRICANTE, MARCA...)",
+            rows: 1,
+            style: {
+              width: "100%",
+              marginTop: 3,
+              border: "1px dashed #a0b4d0",
+              borderRadius: 4,
+              padding: "2px 5px",
+              fontSize: 12,
+              color: "#4a6080",
+              background: "#f0f6ff",
+              fontFamily: "inherit",
+              resize: "none",
+              overflow: "hidden",
+              minHeight: 60,
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              textTransform: "uppercase",
+              cursor: "text",
+              display: "block",
+              outline: "none",
+              fontWeight: "bold"
+            }
+          })
+  ));
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
