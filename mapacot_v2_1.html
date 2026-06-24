@@ -4752,7 +4752,7 @@ function App() {
       else sbSaveCadastros(updated).catch(function(){});
       return updated;
     });
-  }, []);
+  }, [mapas]);
   var editCadastro = useCallback(function (tipo, oldVal, newVal) {
     if(estaEmUso(tipo, oldVal, mapas)){ alert("NAO E POSSIVEL EDITAR: este item esta em uso em um ou mais mapas de cotacao."); return; }
     var vOld = normalize(oldVal),
@@ -4767,7 +4767,7 @@ function App() {
       else sbSaveCadastros(updated).catch(function(){});
       return updated;
     });
-  }, []);
+  }, [mapas]);
   var handleCreate = /*#__PURE__*/function () {
     var _ref20 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(m) {
       return _regenerator().w(function (_context9) {
