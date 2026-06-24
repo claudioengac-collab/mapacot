@@ -1335,6 +1335,49 @@ function AutocompleteInput(_ref9) {
 }
 
 // ─── Editable Cell (with optional autocomplete) ───────────────────────────────
+function DetalheBtn(_ref_det) {
+  var value = _ref_det.value, onChange = _ref_det.onChange;
+  var _useStateD = useState(false),
+    _useStateD2 = _slicedToArray(_useStateD, 2),
+    ed = _useStateD2[0], setEd = _useStateD2[1];
+  var taRef = useRef();
+  if (ed) return /*#__PURE__*/React.createElement("textarea", {
+    ref: taRef,
+    value: value || "",
+    autoFocus: true,
+    onChange: function(e){
+      e.stopPropagation();
+      e.target.style.height="auto";
+      e.target.style.height=e.target.scrollHeight+"px";
+      if(onChange) onChange(e.target.value.toUpperCase());
+    },
+    onClick: function(e){ e.stopPropagation(); },
+    onFocus: function(e){ e.stopPropagation(); },
+    onBlur: function(e){ e.stopPropagation(); e.target.scrollTop=0; setEd(false); },
+    placeholder: "DETALHE (FABRICANTE, MARCA...)",
+    rows: 1,
+    style: {
+      width:"100%", marginTop:3, border:"1px dashed #a0b4d0", borderRadius:4,
+      padding:"2px 5px", fontSize:12, color:"#4a6080", background:"#f0f6ff",
+      fontFamily:"inherit", resize:"none", overflow:"hidden", minHeight:60,
+      whiteSpace:"pre-wrap", wordBreak:"break-word", textTransform:"uppercase",
+      cursor:"text", display:"block", outline:"none", fontWeight:"bold"
+    }
+  });
+  if (value) return /*#__PURE__*/React.createElement("div", {
+    onClick: function(e){ e.stopPropagation(); setEd(true); },
+    style:{marginTop:3, padding:"2px 5px", fontSize:12, color:"#4a6080",
+      background:"#f0f6ff", border:"1px dashed #a0b4d0", borderRadius:4,
+      fontWeight:"bold", wordBreak:"break-word", whiteSpace:"pre-wrap",
+      textTransform:"uppercase", cursor:"text", minHeight:22}
+  }, value);
+  return /*#__PURE__*/React.createElement("span", {
+    onClick: function(e){ e.stopPropagation(); setEd(true); },
+    style:{display:"inline-flex", alignItems:"center", gap:4, marginTop:3,
+      padding:"2px 7px", fontSize:11, color:"#8a9bb0", background:"#f5f8ff",
+      border:"1px dashed #c0cce0", borderRadius:4, cursor:"pointer"}
+  }, "✏ + DETALHE");
+}
 function EC(_ref0) {
   var value = _ref0.value,
     onChange = _ref0.onChange,
@@ -1362,7 +1405,6 @@ function EC(_ref0) {
     raw = _useState8[0],
     setRaw = _useState8[1];
   var ref = useRef();
-  var detailRef = useRef();
   var hasSugg = suggestions.length > 0;
   var start = function start() {
     setRaw(value !== null && value !== void 0 ? value : "");
@@ -1443,59 +1485,10 @@ function EC(_ref0) {
     style: {
       color: "#ccc"
     }
-  }, placeholder), detailValue !== undefined && detailValue !== null && /*#__PURE__*/React.createElement("div", {style:{marginTop:3}},
-    !detailValue && /*#__PURE__*/React.createElement("span", {
-      onClick: function(e){ e.stopPropagation(); if(detailRef.current){ detailRef.current.style.display="block"; detailRef.current.focus(); } },
-      style:{display:"inline-flex",alignItems:"center",gap:4,padding:"2px 7px",fontSize:11,color:"#8a9bb0",background:"#f5f8ff",border:"1px dashed #c0cce0",borderRadius:4,cursor:"pointer"}
-    }, "✏ + DETALHE"),
-    detailValue && /*#__PURE__*/React.createElement("div", {
-      onClick: function(e){ e.stopPropagation(); if(detailRef.current){ detailRef.current.style.display="block"; detailRef.current.focus(); } },
-      style:{padding:"2px 5px",fontSize:12,color:"#4a6080",background:"#f0f6ff",border:"1px dashed #a0b4d0",borderRadius:4,fontWeight:"bold",wordBreak:"break-word",whiteSpace:"pre-wrap",textTransform:"uppercase",cursor:"text",minHeight:22}
-    }, detailValue),
-    /*#__PURE__*/React.createElement("textarea", {
-      ref: detailRef,
-      value: detailValue || "",
-      onChange: function onChange(e) {
-        e.stopPropagation();
-        e.target.style.height="auto";
-        e.target.style.height=e.target.scrollHeight+"px";
-        if (onDetailChange) onDetailChange(e.target.value.toUpperCase());
-      },
-      onClick: function onClick(e) { e.stopPropagation(); },
-      onFocus: function onFocus(e) { e.stopPropagation(); },
-      onBlur: function onBlur(e) {
-        e.stopPropagation();
-        e.target.scrollTop=0;
-        e.target.style.display="none";
-      },
-      placeholder: "DETALHE (FABRICANTE, MARCA...)",
-      rows: 1,
-      style: {
-        width: "100%",
-        marginTop: 3,
-        border: "1px dashed #a0b4d0",
-        borderRadius: 4,
-        padding: "2px 5px",
-        fontSize: 12,
-        color: "#4a6080",
-        background: "#f0f6ff",
-        fontFamily: "inherit",
-        resize: "none",
-        overflow: "hidden",
-        height: 0,
-        minHeight: 0,
-        padding: 0,
-        border: "none",
-        margin: 0,
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word",
-        textTransform: "uppercase",
-        cursor: "text",
-        outline: "none",
-        fontWeight: "bold"
-      }
-    })
-  ));
+  }, placeholder), detailValue !== undefined && detailValue !== null && /*#__PURE__*/React.createElement(DetalheBtn, {
+    value: detailValue,
+    onChange: onDetailChange
+  }));
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
