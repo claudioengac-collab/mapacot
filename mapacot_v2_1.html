@@ -1340,22 +1340,25 @@ function DetalheBtn(_ref_det) {
   var _useStateD = useState(false),
     _useStateD2 = _slicedToArray(_useStateD, 2),
     ed = _useStateD2[0], setEd = _useStateD2[1];
+  var _useStateDraft = useState(""),
+    _useStateDraft2 = _slicedToArray(_useStateDraft, 2),
+    draft = _useStateDraft2[0], setDraft = _useStateDraft2[1];
   var taRef = useRef();
+  var openEdit = function openEdit() { setDraft((value || "").toUpperCase()); setEd(true); };
   if (ed) return /*#__PURE__*/React.createElement("textarea", {
     ref: taRef,
-    value: value || "",
+    value: draft,
     autoFocus: true,
     onChange: function(e){
-      var el=e.target, ss=el.selectionStart, se=el.selectionEnd;
       e.stopPropagation();
+      var el = e.target;
       el.style.height="auto";
       el.style.height=el.scrollHeight+"px";
-      if(onChange) onChange(el.value.toUpperCase());
-      requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
+      setDraft(el.value.toUpperCase());
     },
     onClick: function(e){ e.stopPropagation(); },
     onFocus: function(e){ e.stopPropagation(); },
-    onBlur: function(e){ e.stopPropagation(); e.target.scrollTop=0; setEd(false); },
+    onBlur: function(e){ e.stopPropagation(); e.target.scrollTop=0; if(onChange) onChange(draft); setEd(false); },
     placeholder: "DETALHE (FABRICANTE, MARCA...)",
     rows: 1,
     style: {
@@ -1367,14 +1370,14 @@ function DetalheBtn(_ref_det) {
     }
   });
   if (value) return /*#__PURE__*/React.createElement("div", {
-    onClick: function(e){ e.stopPropagation(); setEd(true); },
+    onClick: function(e){ e.stopPropagation(); openEdit(); },
     style:{marginTop:3, padding:"2px 5px", fontSize:12, color:"#4a6080",
       background:"#f0f6ff", border:"1px dashed #a0b4d0", borderRadius:4,
       fontWeight:"bold", wordBreak:"break-word", whiteSpace:"pre-wrap",
       textTransform:"uppercase", cursor:"text", minHeight:22}
   }, value);
   return /*#__PURE__*/React.createElement("span", {
-    onClick: function(e){ e.stopPropagation(); setEd(true); },
+    onClick: function(e){ e.stopPropagation(); openEdit(); },
     style:{display:"inline-flex", alignItems:"center", gap:4, marginTop:3,
       padding:"2px 7px", fontSize:11, color:"#8a9bb0", background:"#f5f8ff",
       border:"1px dashed #c0cce0", borderRadius:4, cursor:"pointer"}
