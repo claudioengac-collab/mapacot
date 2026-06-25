@@ -689,11 +689,18 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var itemRows = itens.map(function (item, idx) {
       var r = calcResumo(item, fns, precos);
       var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
+      var _pdfPrices = [];
+      fns.forEach(function(f) { var _v = parseMoney(precos[item.id + "_" + f.id]); if (_v !== null && _v > 0) _pdfPrices.push(_v); });
+      var _pdfUniq = _pdfPrices.filter(function(v, i, arr) { return arr.indexOf(v) === i; }).sort(function(a, b) { return a - b; });
+      var _pdfRank2 = _pdfUniq.length > 1 ? _pdfUniq[1] : null;
+      var _pdfRank3 = _pdfUniq.length > 2 ? _pdfUniq[2] : null;
       var fornCells = chunk.map(function (f) {
         var key = "".concat(item.id, "_").concat(f.id);
         var unit = parseMoney(precos[key]);
         var isMin = r.vlUnit !== null && unit !== null && unit > 0 && unit === r.vlUnit;
-        return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : bg, ";font-weight:").concat(isMin ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
+        var isPdfRank2 = !isMin && _pdfRank2 !== null && unit !== null && unit > 0 && unit === _pdfRank2;
+        var isPdfRank3 = !isMin && !isPdfRank2 && _pdfRank3 !== null && unit !== null && unit > 0 && unit === _pdfRank3;
+        return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : isPdfRank2 ? "#ffe4b0" : isPdfRank3 ? "#ffcece" : bg, ";font-weight:").concat(isMin ? "bold" : isPdfRank2 ? "bold" : isPdfRank3 ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : isPdfRank2 ? "#a05000" : isPdfRank3 ? "#a01010" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
       }).join("");
       var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
       return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;word-break:break-word;\">\u21b3 " + item.detalhe + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
@@ -1352,9 +1359,11 @@ function DetalheBtn(_ref_det) {
     onChange: function(e){
       e.stopPropagation();
       var el = e.target;
+      var ss = el.selectionStart, se = el.selectionEnd;
       el.style.height="auto";
       el.style.height=el.scrollHeight+"px";
       setDraft(el.value.toUpperCase());
+      requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
     },
     onClick: function(e){ e.stopPropagation(); },
     onFocus: function(e){ e.stopPropagation(); },
