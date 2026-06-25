@@ -1346,10 +1346,12 @@ function DetalheBtn(_ref_det) {
     value: value || "",
     autoFocus: true,
     onChange: function(e){
+      var el=e.target, ss=el.selectionStart, se=el.selectionEnd;
       e.stopPropagation();
-      e.target.style.height="auto";
-      e.target.style.height=e.target.scrollHeight+"px";
-      if(onChange) onChange(e.target.value.toUpperCase());
+      el.style.height="auto";
+      el.style.height=el.scrollHeight+"px";
+      if(onChange) onChange(el.value.toUpperCase());
+      requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
     },
     onClick: function(e){ e.stopPropagation(); },
     onFocus: function(e){ e.stopPropagation(); },
@@ -2006,7 +2008,9 @@ function CadastrosModal(_ref11) {
       ref: editRef,
       value: editVal,
       onChange: function onChange(e) {
-        return setEditVal(e.target.value.toUpperCase());
+        var el=e.target, ss=el.selectionStart, se=el.selectionEnd;
+        setEditVal(el.value.toUpperCase());
+        requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
       },
       onKeyDown: function onKeyDown(e) {
         if (e.key === "Enter") confirmEdit(item);
@@ -3367,6 +3371,11 @@ var _useState27 = useState(init),
       }
     }, "NENHUM ITEM \u2014 CLIQUE EM \"+ ADICIONAR ITEM\"")), filteredItens.map(function (item, idx) {
       var resumo = calcResumo(item, fornecedores, precos);
+      var _allPrices = [];
+      fornecedores.forEach(function(f) { var _v = parseMoney(precos[item.id + "_" + f.id]); if (_v !== null && _v > 0) _allPrices.push(_v); });
+      var _sortedUniq = _allPrices.filter(function(v, i, arr) { return arr.indexOf(v) === i; }).sort(function(a, b) { return a - b; });
+      var _rank2Price = _sortedUniq.length > 1 ? _sortedUniq[1] : null;
+      var _rank3Price = _sortedUniq.length > 2 ? _sortedUniq[2] : null;
       var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
       return /*#__PURE__*/React.createElement("tr", {
         key: item.id,
@@ -3496,6 +3505,8 @@ var _useState27 = useState(init),
         var key = "".concat(item.id, "_").concat(f.id);
         var unit = parseMoney(precos[key]);
         var isMin = resumo.vlUnit !== null && unit !== null && unit > 0 && unit === resumo.vlUnit;
+        var isRank2 = !isMin && _rank2Price !== null && unit !== null && unit > 0 && unit === _rank2Price;
+        var isRank3 = !isMin && !isRank2 && _rank3Price !== null && unit !== null && unit > 0 && unit === _rank3Price;
         return /*#__PURE__*/React.createElement(EC, {
           key: key,
           value: (_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "",
@@ -3507,9 +3518,9 @@ var _useState27 = useState(init),
           numericOnly: true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4",
-            background: isMin ? T.best : bg,
-            color: isMin ? "#1a6a1a" : undefined,
-            fontWeight: isMin ? 700 : 400
+            background: isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg,
+            color: isMin ? "#1a6a1a" : isRank2 ? "#a05000" : isRank3 ? "#a01010" : undefined,
+            fontWeight: isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400
           }),
           detailValue: (detalhes || {})[item.id + "_" + f.id] !== undefined ? (detalhes || {})[item.id + "_" + f.id] : "",
           onDetailChange: function onDetailChange(v) {
@@ -3776,7 +3787,9 @@ var _useState27 = useState(init),
     }, "OBSERVA\xC7\xC3O GERAL DO MAPA"), /*#__PURE__*/React.createElement("textarea", {
       value: mapa.obsGeral || "",
       onChange: function onChange(e) {
-        return setObsGeral(e.target.value.toUpperCase());
+        var el=e.target, ss=el.selectionStart, se=el.selectionEnd;
+        setObsGeral(el.value.toUpperCase());
+        requestAnimationFrame(function(){ el.selectionStart=ss; el.selectionEnd=se; });
       },
       maxLength: 5000,
       placeholder: "OBSERVA\xC7\xD5ES GERAIS SOBRE ESTE MAPA DE COTA\xC7\xC3O...",
