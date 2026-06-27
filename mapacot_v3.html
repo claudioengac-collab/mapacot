@@ -4772,6 +4772,19 @@ function MapCard(_ref16) {
       color: "#c0392b"
     })
   }, /*#__PURE__*/React.createElement(IcoPDF, null)), /*#__PURE__*/React.createElement("button", {
+    title: "DUPLICAR MAPA",
+    onClick: function onClick() { if (onDuplicate) onDuplicate(mapa); },
+    style: {
+      background: "#e6f4ea",
+      border: "1.5px solid #a8d5b5",
+      borderRadius: 8,
+      padding: "6px 10px",
+      cursor: "pointer",
+      color: "#1a6e2e",
+      display: "flex",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement(IcoCopy, null)), /*#__PURE__*/React.createElement("button", {
     style: SC.btnIco,
     onClick: function onClick() {
       return setConfirm(true);
