@@ -433,6 +433,29 @@ var sbGetMapas = function sbGetMapas() {
       });
   });
 };
+var sbGetDicionario = function() {
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.mapacot_dicionario", {headers: SB_GET})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ return (d && d[0] && d[0].dados) ? d[0].dados : {}; })
+    .catch(function(){ return {}; });
+};
+var sbSaveDicionario = function(dict) {
+  var body = JSON.stringify({ dados: dict, atualizado_em: new Date().toISOString() });
+  var doPatch2 = function() {
+    return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.mapacot_dicionario", {
+      method: "PATCH", headers: SB, body: body
+    }).then(function(r) {
+      if (!r.ok) return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
+        method: "POST", headers: SB,
+        body: JSON.stringify({ id: "mapacot_dicionario", dados: dict, atualizado_em: new Date().toISOString() })
+      });
+      return r;
+    });
+  };
+  return doPatch2().catch(function() {
+    return new Promise(function(res){ setTimeout(res, 1500); }).then(doPatch2);
+  });
+};
 var sbSaveMapa = /*#__PURE__*/function () {
   var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(m) {
     return _regenerator().w(function (_context2) {
@@ -2973,160 +2996,6 @@ function ReportsModal(_ref12) {
 }
 
 // ─── Map Editor ───────────────────────────────────────────────────────────────
-// ─── Modal Importar PDF do Fornecedor ─────────────────────────────────────────
-function ModalImportarPDF(_ref_imp) {
-  var mapa = _ref_imp.mapa, fornId = _ref_imp.fornId, itens = _ref_imp.itens, onClose = _ref_imp.onClose, onConfirm = _ref_imp.onConfirm;
-  var _sStep = React.useState(1), step = _slicedToArray(_sStep, 2)[0], setStep = _slicedToArray(_sStep, 2)[1];
-  var _sMat  = React.useState([]), matches = _slicedToArray(_sMat, 2)[0], setMatches = _slicedToArray(_sMat, 2)[1];
-  var _sChk  = React.useState({}), checked = _slicedToArray(_sChk, 2)[0], setChecked = _slicedToArray(_sChk, 2)[1];
-  var _sErr  = React.useState(null), errMsg = _slicedToArray(_sErr, 2)[0], setErrMsg = _slicedToArray(_sErr, 2)[1];
-  var _sInf  = React.useState(null), pdfInfo = _slicedToArray(_sInf, 2)[0], setPdfInfo = _slicedToArray(_sInf, 2)[1];
-  var forn = (mapa.fornecedores || []).find(function(f){ return f.id === fornId; }) || {};
-  var handleFile = function(file) {
-    if (!file) return;
-    if (file.type !== 'application/pdf') { setErrMsg('SELECIONE UM ARQUIVO PDF VÁLIDO.'); return; }
-    setStep(2); setErrMsg(null);
-    var reader = new FileReader();
-    reader.onload = function(e) { callAPI(e.target.result.split(',')[1]); };
-    reader.onerror = function() { setErrMsg('ERRO AO LER O ARQUIVO.'); setStep(1); };
-    reader.readAsDataURL(file);
-  };
-  var callAPI = function(b64) {
-    var itensStr = itens.map(function(it, idx) {
-      return idx + ': ' + it.descricao + (it.detalhe ? ' (' + it.detalhe + ')' : '') + ' [' + (it.qt||'') + ' ' + (it.unid||'') + ']';
-    }).join('\n');
-    var prompt = 'Você é especialista em materiais de construção. Analise este orçamento PDF de fornecedor.\n\nINSUMOS DO MAPA DE COTAÇÃO (índice: descrição [qt unid]):\n' + itensStr + '\n\nINSTRUÇÕES:\n1. Extraia todos os itens do PDF com preços unitários\n2. Para cada item do PDF, identifique o índice do insumo correspondente no mapa\n3. Retorne SOMENTE JSON válido, sem markdown, sem texto adicional\n4. Preço unitário: use sempre o valor LÍQUIDO (após desconto); se não explícito, calcule: Valor Total dividido por Quantidade\n\nFORMATO EXATO:\n{"fornecedor":"nome da empresa","data":"dd/mm/aaaa","itens":[{"itemIdx":0,"confianca":"alto","descMapa":"descrição do mapa","descPDF":"descrição exata do PDF","preco":60.70}]}\n\nREGRAS:\n- confianca "alto": produto claramente idêntico ou muito similar (ex: PA DE BICO = PÁ DE BICO C/CABO)\n- confianca "medio": provável mas com alguma dúvida\n- Omita itens com confianca "baixo" ou sem correspondência no mapa\n- preco = número decimal com ponto como separador (ex: 60.70)\n- PREÇO UNITÁRIO LÍQUIDO - siga esta prioridade: (1) se existir coluna com desconto já aplicado (ex: C/Desc., Preço Unit. C/ Desc.) use-a diretamente; (2) se existir coluna de desconto unitário separado (ex: Desc. Unit.) calcule: Preço Bruto MENOS Desc. Unit.; (3) se não houver coluna de desconto unitário, calcule: Valor Total DIVIDIDO POR Quantidade; (4) use preço bruto apenas quando não houver desconto algum\n- Se o preço vier com texto junto como BRL/RL ou BRL/PC extraia SOMENTE o número (ex: 1.666,80 BRL/RL = 1666.80)\n- Cuidado com coluna chamada P. LIQ.: pode ser preço bruto; se houver desconto total separado use Valor Total dividido por Quantidade\n- itemIdx = número inteiro (índice 0-based da lista acima)';
-    fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 2000,
-        messages: [{ role: 'user', content: [
-          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
-          { type: 'text', text: prompt }
-        ]}]
-      })
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      var txt = (data.content||[]).map(function(c){ return c.text||''; }).join('');
-      var clean = txt.replace(/```json|```/g,'').trim();
-      var parsed = JSON.parse(clean);
-      var items = (parsed.itens||[]).filter(function(it){
-        return typeof it.itemIdx === 'number' && it.itemIdx >= 0 && it.itemIdx < itens.length && it.preco > 0 && (it.confianca==='alto'||it.confianca==='medio');
-      });
-      var initChk = {};
-      items.forEach(function(it,i){ initChk[i] = it.confianca === 'alto'; });
-      setPdfInfo({ fornecedor: parsed.fornecedor||'', data: parsed.data||'' });
-      setMatches(items); setChecked(initChk); setStep(3);
-    })
-    .catch(function(err) { setErrMsg('ERRO AO PROCESSAR: ' + (err.message||'tente novamente')); setStep(1); });
-  };
-  var handleConfirm = function() { onConfirm(matches.filter(function(_,i){ return checked[i]; })); };
-  var alto = matches.filter(function(m){ return m.confianca==='alto'; }).length;
-  var medio = matches.filter(function(m){ return m.confianca==='medio'; }).length;
-  var temMarcado = Object.values(checked).some(Boolean);
-  var ovl = { position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9000, padding:16 };
-  var box = { background:'#fff', borderRadius:10, width:'100%', maxWidth:680, boxShadow:'0 8px 32px rgba(0,0,0,0.3)', overflow:'hidden', maxHeight:'92vh', display:'flex', flexDirection:'column' };
-  return /*#__PURE__*/React.createElement("div", { style: ovl, onClick: function(e){ if(e.target===e.currentTarget) onClose(); } },
-    /*#__PURE__*/React.createElement("div", { style: box },
-      /*#__PURE__*/React.createElement("div", { style:{background:'#1a3a6b',color:'#fff',padding:'14px 18px',display:'flex',alignItems:'center',justifyContent:'space-between'} },
-        /*#__PURE__*/React.createElement("div", null,
-          /*#__PURE__*/React.createElement("div", { style:{fontSize:14,fontWeight:700,letterSpacing:.4} }, "\uD83D\uDCC4 IMPORTAR PDF DO FORNECEDOR"),
-          /*#__PURE__*/React.createElement("div", { style:{fontSize:11,opacity:.8,marginTop:2} }, (forn.nome||'').toUpperCase())
-        ),
-        /*#__PURE__*/React.createElement("button", { onClick: onClose, style:{background:'none',border:'none',color:'#fff',fontSize:20,cursor:'pointer',lineHeight:1} }, "\u00D7")
-      ),
-      /*#__PURE__*/React.createElement("div", { style:{display:'flex',alignItems:'center',padding:'10px 18px',borderBottom:'1px solid #f0f0f0',gap:0} },
-        ['\uD83D\uDCC1 Selecionar PDF','\uD83E\uDD16 Processando','\u2714 Revisar'].map(function(lb,i){
-          var n=i+1, done=step>n, active=step===n, clr=done?'#186818':active?'#2a5298':'#bbb';
-          return /*#__PURE__*/React.createElement(React.Fragment, {key:n},
-            i>0 && /*#__PURE__*/React.createElement("div", {style:{flex:1,height:2,background:step>i?'#186818':'#eee'}}),
-            /*#__PURE__*/React.createElement("div", {style:{display:'flex',alignItems:'center',gap:5}},
-              /*#__PURE__*/React.createElement("div", {style:{width:22,height:22,borderRadius:'50%',background:clr,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700}}, done?'\u2713':n),
-              /*#__PURE__*/React.createElement("span", {style:{fontSize:11,color:clr,fontWeight:active?700:400,whiteSpace:'nowrap'}}, lb)
-            )
-          );
-        })
-      ),
-      /*#__PURE__*/React.createElement("div", { style:{padding:18,overflowY:'auto',flex:1} },
-        step === 1 && /*#__PURE__*/React.createElement(React.Fragment, null,
-          errMsg && /*#__PURE__*/React.createElement("div", {style:{background:'#fdeaea',border:'1px solid #e8a0a0',borderRadius:6,padding:'10px 12px',marginBottom:14,fontSize:12,color:'#c0392b',fontWeight:700}}, errMsg),
-          /*#__PURE__*/React.createElement("div", {
-            style:{border:'2px dashed #b0c0e0',borderRadius:8,padding:32,textAlign:'center',background:'#f5f8ff',cursor:'pointer'},
-            onClick: function(){ var el=document.getElementById('imp-pdf-input-'+fornId); if(el) el.click(); }
-          },
-            /*#__PURE__*/React.createElement("div", {style:{fontSize:36,marginBottom:8}}, "\uD83D\uDCC1"),
-            /*#__PURE__*/React.createElement("div", {style:{fontSize:14,fontWeight:700,color:'#2a5298',marginBottom:4}}, "Clique aqui para selecionar o PDF"),
-            /*#__PURE__*/React.createElement("div", {style:{fontSize:12,color:'#888'}}, "Or\xe7amento / proposta do fornecedor em formato PDF"),
-            /*#__PURE__*/React.createElement("input", {id:'imp-pdf-input-'+fornId,type:'file',accept:'.pdf,application/pdf',style:{display:'none'},onChange:function(e){ handleFile(e.target.files&&e.target.files[0]); e.target.value=''; }})
-          )
-        ),
-        step === 2 && /*#__PURE__*/React.createElement("div", {style:{textAlign:'center',padding:'40px 20px'}},
-          /*#__PURE__*/React.createElement("div", {style:{fontSize:40,marginBottom:16}}, "\uD83E\uDD16"),
-          /*#__PURE__*/React.createElement("div", {style:{fontSize:14,fontWeight:700,color:'#2a5298',marginBottom:8}}, "Processando o PDF..."),
-          /*#__PURE__*/React.createElement("div", {style:{fontSize:12,color:'#888'}}, "A IA est\xe1 lendo o or\xe7amento e casando com os insumos do mapa.")
-        ),
-        step === 3 && /*#__PURE__*/React.createElement(React.Fragment, null,
-          pdfInfo && (pdfInfo.fornecedor||pdfInfo.data) && /*#__PURE__*/React.createElement("div", {style:{background:'#f0f4ff',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,color:'#555'}},
-            pdfInfo.fornecedor && /*#__PURE__*/React.createElement("span", {style:{fontWeight:700}}, pdfInfo.fornecedor),
-            pdfInfo.data && /*#__PURE__*/React.createElement("span", {style:{marginLeft:8}}, "\u2014 ", pdfInfo.data)
-          ),
-          medio > 0 && /*#__PURE__*/React.createElement("div", {style:{background:'#fff3cd',border:'1px solid #f5c842',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,color:'#856404'}},
-            /*#__PURE__*/React.createElement("strong", null, "\u26A0\uFE0F "+medio+" "+(medio===1?'item precisa':'itens precisam')+" da sua confirma\xe7\xe3o"), " \u2014 verifique os itens amarelos antes de salvar."
-          ),
-          matches.length === 0 && /*#__PURE__*/React.createElement("div", {style:{textAlign:'center',padding:'24px',color:'#888',fontSize:13}}, "Nenhum item do PDF foi casado com os insumos do mapa."),
-          matches.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null,
-            /*#__PURE__*/React.createElement("div", {style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}},
-              /*#__PURE__*/React.createElement("span", {style:{fontSize:13,fontWeight:700,color:'#1a3a6b'}}, matches.length+" item"+(matches.length!==1?'s':'')+" encontrado"+(matches.length!==1?'s':'')),
-              /*#__PURE__*/React.createElement("div", {style:{display:'flex',gap:6}},
-                alto > 0 && /*#__PURE__*/React.createElement("span", {style:{background:'#d4edda',color:'#186818',padding:'2px 10px',borderRadius:12,fontSize:11,fontWeight:700}}, "\u2705 "+alto+" autom\xe1tico"+(alto!==1?'s':'')),
-                medio > 0 && /*#__PURE__*/React.createElement("span", {style:{background:'#fff3cd',color:'#856404',padding:'2px 10px',borderRadius:12,fontSize:11,fontWeight:700}}, "\u26A0\uFE0F "+medio+" confirmar")
-              )
-            ),
-            /*#__PURE__*/React.createElement("table", {style:{width:'100%',borderCollapse:'collapse',fontSize:12}},
-              /*#__PURE__*/React.createElement("thead", null,
-                /*#__PURE__*/React.createElement("tr", null,
-                  ["","INSUMO DO MAPA","DESCRIÇÃO NO PDF","PREÇO","STATUS"].map(function(h,hi){
-                    return /*#__PURE__*/React.createElement("th", {key:hi, style:{padding:'6px 8px',background:'#f0f4ff',borderBottom:'2px solid #dde',textAlign:hi===3?'right':hi===4?'center':'left',fontSize:11,color:'#555',width:hi===0?28:hi===3?80:hi===4?80:'auto'}}, h);
-                  })
-                )
-              ),
-              /*#__PURE__*/React.createElement("tbody", null,
-                matches.map(function(m,i){
-                  var isAlto=m.confianca==='alto';
-                  var rowBg=!isAlto?'#fffbee':(i%2===0?'#fff':'#f9fbff');
-                  return /*#__PURE__*/React.createElement("tr", {key:i, style:{background:rowBg}},
-                    /*#__PURE__*/React.createElement("td", {style:{padding:'6px 4px',textAlign:'center',borderBottom:'1px solid #f0f0f0'}},
-                      /*#__PURE__*/React.createElement("input", {type:'checkbox',checked:!!checked[i],onChange:function(){ var c=Object.assign({},checked); c[i]=!c[i]; setChecked(c); },style:{width:15,height:15,cursor:'pointer',accentColor:'#2a5298'}})
-                    ),
-                    /*#__PURE__*/React.createElement("td", {style:{padding:'6px 8px',borderBottom:'1px solid #f0f0f0',fontSize:12,color:isAlto?'#333':'#856404',fontWeight:isAlto?400:600}}, m.descMapa||((itens[m.itemIdx]||{}).descricao||'')),
-                    /*#__PURE__*/React.createElement("td", {style:{padding:'6px 8px',borderBottom:'1px solid #f0f0f0',fontSize:11,color:isAlto?'#888':'#856404'}}, m.descPDF),
-                    /*#__PURE__*/React.createElement("td", {style:{padding:'6px 8px',borderBottom:'1px solid #f0f0f0',textAlign:'right',fontWeight:700,color:'#1a3a6b'}}, "R$ "+(m.preco||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})),
-                    /*#__PURE__*/React.createElement("td", {style:{padding:'6px 8px',borderBottom:'1px solid #f0f0f0',textAlign:'center'}},
-                      isAlto
-                        ? /*#__PURE__*/React.createElement("span", {style:{background:'#d4edda',color:'#186818',padding:'2px 7px',borderRadius:10,fontSize:10,fontWeight:700}}, "\u2705 AUTO")
-                        : /*#__PURE__*/React.createElement("span", {style:{background:'#fff3cd',color:'#856404',padding:'2px 7px',borderRadius:10,fontSize:10,fontWeight:700}}, "\u26A0\uFE0F CONFIRME")
-                    )
-                  );
-                })
-              )
-            ),
-            /*#__PURE__*/React.createElement("p", {style:{fontSize:10,color:'#999',marginTop:10,fontStyle:'italic'}}, "* Desmarque o checkbox para n\xe3o importar um item. Itens \u26A0\uFE0F s\xf3 entram se voc\xea marcar o checkbox.")
-          )
-        )
-      ),
-      /*#__PURE__*/React.createElement("div", { style:{padding:'12px 18px',borderTop:'1px solid #eee',display:'flex',gap:10,justifyContent:'flex-end',background:'#fafafa'} },
-        /*#__PURE__*/React.createElement("button", { onClick: onClose, style:{padding:'8px 18px',borderRadius:6,fontSize:13,fontWeight:700,cursor:'pointer',border:'none',background:'#f0f0f0',color:'#666',fontFamily:'inherit'} }, "Cancelar"),
-        step === 3 && matches.length > 0 && /*#__PURE__*/React.createElement("button", {
-          onClick: handleConfirm,
-          disabled: !temMarcado,
-          style:{padding:'8px 18px',borderRadius:6,fontSize:13,fontWeight:700,cursor:temMarcado?'pointer':'not-allowed',border:'none',background:'#186818',color:'#fff',fontFamily:'inherit',opacity:temMarcado?1:0.5}
-        }, "\u2705 CONFIRMAR E SALVAR PRE\xc7OS")
-      )
-    )
-  );
-}
-
 function MapEditor(_ref15) {
   var init = _ref15.mapa,
     onBack = _ref15.onBack,
@@ -3143,6 +3012,8 @@ function MapEditor(_ref15) {
     onCriarAssociacao = _ref15.onCriarAssociacao || null,
     onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
     onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null,
+    dicionario = _ref15.dicionario || {},
+    onSaveDicionario = _ref15.onSaveDicionario || null,
     mapas = _ref15.mapas || [];
 var gerOrcMapEditor = onGerenciarOrcamento;
   var _useStateGerEd = useState(false);
@@ -3165,6 +3036,7 @@ var _useState27 = useState(init),
     _useState34 = _slicedToArray(_useState33, 2),
     showTheme = _useState34[0],
     setShowTheme = _useState34[1];
+  var _useStateCasar=useState(false),showCasar=_slicedToArray(_useStateCasar,2)[0],setShowCasar=_slicedToArray(_useStateCasar,2)[1];
   var _useState35 = useState(new Date()),
     _useState36 = _slicedToArray(_useState35, 2),
     clock = _useState36[0],
@@ -3202,8 +3074,7 @@ var _useState27 = useState(init),
     _useState40 = _slicedToArray(_useState39, 2),
     hiddenCols = _useState40[0],
     setHiddenCols = _useState40[1];
-  var _useStateImpPdf = useState(false), _useStateImpPdf2 = _slicedToArray(_useStateImpPdf, 2), showImportPdf = _useStateImpPdf2[0], setShowImportPdf = _useStateImpPdf2[1];
-  var _useStateImpForn = useState(null), _useStateImpForn2 = _slicedToArray(_useStateImpForn, 2), importFornId = _useStateImpForn2[0], setImportFornId = _useStateImpForn2[1];
+
   var toggleCol = function toggleCol(key) {
     return setHiddenCols(function (prev) {
       return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, key, !prev[key]));
@@ -3855,11 +3726,7 @@ var _useState27 = useState(init),
           padding: "4px 6px"
         })
       }, /*#__PURE__*/React.createElement("div", {style:{display:"flex",flexDirection:"column",alignItems:"center",gap:3}},
-        /*#__PURE__*/React.createElement("span", {style:{fontSize:10}}, "VL. UNIT."),
-        /*#__PURE__*/React.createElement("button", {
-          onClick: function(e){ e.stopPropagation(); setShowImportPdf(true); setImportFornId(f.id); },
-          style:{fontSize:9,padding:"2px 6px",background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.45)",color:"#fff",borderRadius:3,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit",fontWeight:700}
-        }, "\uD83D\uDCC4 PDF")
+        /*#__PURE__*/React.createElement("span", {style:{fontSize:10}}, "VL. UNIT.")
       ));
     }), emptyChunk && /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thS), {}, {
@@ -4500,7 +4367,11 @@ var _useState27 = useState(init),
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       gap: 5
     })
-  }, "\uD83C\uDFA8 COR"), /*#__PURE__*/React.createElement("span", {
+  }, "\uD83C\uDFA8 COR"), /*#__PURE__*/React.createElement("button", {
+    title: "CASAR INSUMOS COM OR\xC7AMENTO DO FORNECEDOR",
+    onClick: function onClick() { setShowCasar(true); },
+    style: { background: "#0d6e2e", color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
+  }, "\uD83D\uDD17 CASAR"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
       fontWeight: 600,
@@ -4633,13 +4504,174 @@ var _useState27 = useState(init),
     onLimparOrcamento: onLimparOrcamento,
     onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraGerEd(obra); setShowGerEd(true); }, 200); }
   }),
-  showImportPdf && importFornId && /*#__PURE__*/React.createElement(ModalImportarPDF, {
-    mapa: mapa,
-    fornId: importFornId,
-    itens: itens,
-    onClose: function(){ setShowImportPdf(false); setImportFornId(null); },
-    onConfirm: function(toApply){ toApply.forEach(function(m){ var it=itens[m.itemIdx]; if(it&&it.id) setPreco(it.id, importFornId, String(m.preco).replace('.',',')); }); setShowImportPdf(false); setImportFornId(null); }
-  }));
+  showCasar && /*#__PURE__*/React.createElement(ModalCasarInsumos, {
+    mapa: mapa, itens: itens, fornecedores: mapa.fornecedores || [],
+    dicionario: dicionario,
+    onClose: function(){ setShowCasar(false); },
+    onConfirm: function(ligacoes, novoDic) {
+      Object.keys(ligacoes).forEach(function(itemMapaId){
+        var lig=ligacoes[itemMapaId];
+        setPreco(itemMapaId, lig.fornId, String(lig.preco).replace(".",","));
+      });
+      if(onSaveDicionario) onSaveDicionario(novoDic);
+      setShowCasar(false);
+    }
+  })
+  );
+}
+
+// ─── Modal Casar Insumos ─────────────────────────────────────────────────────
+function ModalCasarInsumos(_ref_cas) {
+  var mapa=_ref_cas.mapa,itens=_ref_cas.itens,fornecedores=_ref_cas.fornecedores;
+  var dicionario=_ref_cas.dicionario||{},onConfirm=_ref_cas.onConfirm,onClose=_ref_cas.onClose;
+  var _sStep=React.useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
+  var _sForn=React.useState(""),fornId=_slicedToArray(_sForn,2)[0],setFornId=_slicedToArray(_sForn,2)[1];
+  var _sTxt=React.useState(""),textoOrc=_slicedToArray(_sTxt,2)[0],setTextoOrc=_slicedToArray(_sTxt,2)[1];
+  var _sItO=React.useState([]),itemsOrc=_slicedToArray(_sItO,2)[0],setItemsOrc=_slicedToArray(_sItO,2)[1];
+  var _sSM=React.useState(null),selMapaId=_slicedToArray(_sSM,2)[0],setSelMapaId=_slicedToArray(_sSM,2)[1];
+  var _sSO=React.useState(null),selOrcIdx=_slicedToArray(_sSO,2)[0],setSelOrcIdx=_slicedToArray(_sSO,2)[1];
+  var _sLig=React.useState({}),ligacoes=_slicedToArray(_sLig,2)[0],setLigacoes=_slicedToArray(_sLig,2)[1];
+  var _sB1=React.useState(""),busca1=_slicedToArray(_sB1,2)[0],setBusca1=_slicedToArray(_sB1,2)[1];
+  var _sB2=React.useState(""),busca2=_slicedToArray(_sB2,2)[0],setBusca2=_slicedToArray(_sB2,2)[1];
+  var forn=(fornecedores||[]).find(function(f){return f.id===fornId;})||{};
+  var fornNome=(forn.nome||"").toUpperCase();
+  var parsearTexto=function(txt){
+    var linhas=txt.split(/\n/).map(function(l){return l.trim();}).filter(function(l){return l.length>3;});
+    var parsed=[];
+    linhas.forEach(function(linha){
+      var nums=linha.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})|\d+,\d{2})/g);
+      if(!nums||nums.length===0)return;
+      var lastNum=nums[nums.length-1];
+      var preco=parseFloat(lastNum.replace(/\./g,"").replace(",","."));
+      if(preco<=0||preco>9999999)return;
+      var desc=linha.slice(0,linha.lastIndexOf(lastNum)).replace(/^\d+\s*/,"").replace(/\s{2,}/g," ").trim().toUpperCase();
+      if(desc.length>3)parsed.push({desc:desc,preco:preco});
+    });
+    return parsed;
+  };
+  var handleAvancar=function(){
+    if(!fornId){alert("SELECIONE O FORNECEDOR.");return;}
+    var parsed=parsearTexto(textoOrc);
+    if(parsed.length===0){alert("NENHUM ITEM ENCONTRADO. VERIFIQUE O TEXTO COLADO.");return;}
+    var autoLig={};
+    parsed.forEach(function(it,idx){
+      var key=fornNome+"::"+it.desc;
+      var mapaId=dicionario[key];
+      if(mapaId&&!autoLig[mapaId])autoLig[mapaId]={descPDF:it.desc,preco:it.preco,fornId:fornId,orcIdx:idx};
+    });
+    setItemsOrc(parsed);setLigacoes(autoLig);setStep(2);
+  };
+  var ligar=function(){
+    if(!selMapaId||selOrcIdx===null)return;
+    var orc=itemsOrc[selOrcIdx];if(!orc)return;
+    var novas=Object.assign({},ligacoes);
+    novas[selMapaId]={descPDF:orc.desc,preco:orc.preco,fornId:fornId,orcIdx:selOrcIdx};
+    setLigacoes(novas);setSelMapaId(null);setSelOrcIdx(null);
+  };
+  var desligar=function(mapaId){var novas=Object.assign({},ligacoes);delete novas[mapaId];setLigacoes(novas);};
+  var confirmar=function(){
+    var keys=Object.keys(ligacoes);
+    if(keys.length===0){alert("NENHUMA LIGA\xC7\xC3O CRIADA.");return;}
+    var novoDic=Object.assign({},dicionario);
+    keys.forEach(function(mid){var l=ligacoes[mid];novoDic[fornNome+"::"+l.descPDF]=mid;});
+    onConfirm(ligacoes,novoDic);
+  };
+  var nLig=Object.keys(ligacoes).length;
+  var podeLinkar=!!(selMapaId&&selOrcIdx!==null);
+  var filtM=itens.filter(function(it){return !busca1||(it.descricao||"").toUpperCase().includes(busca1);});
+  var filtO=itemsOrc.map(function(it,idx){return{it:it,idx:idx};}).filter(function(x){return !busca2||x.it.desc.includes(busca2);});
+  var stLink={background:podeLinkar?"#2a5298":"#bbb",color:"#fff",border:"none",borderRadius:8,padding:"10px 6px",cursor:podeLinkar?"pointer":"not-allowed",display:"flex",flexDirection:"column",alignItems:"center",gap:3,width:38};
+  if(step===1)return /*#__PURE__*/React.createElement(Modal,{open:true,onClose:onClose,maxWidth:520},
+    /*#__PURE__*/React.createElement("div",{style:SC.mHdr},
+      /*#__PURE__*/React.createElement("span",{style:SC.mTitle},"\uD83D\uDD17 CASAR INSUMOS COM OR\xC7AMENTO"),
+      /*#__PURE__*/React.createElement("button",{style:{background:"none",border:"none",color:"#999",cursor:"pointer"},onClick:onClose},/*#__PURE__*/React.createElement(IcoClose,null))),
+    /*#__PURE__*/React.createElement("div",{style:{padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}},
+      /*#__PURE__*/React.createElement("div",null,
+        /*#__PURE__*/React.createElement("label",{style:SC.lbl},"FORNECEDOR"),
+        /*#__PURE__*/React.createElement("select",{value:fornId,onChange:function(e){setFornId(e.target.value);},style:{width:"100%",border:"1.5px solid #dde1e9",borderRadius:8,padding:"9px 12px",fontSize:13,outline:"none",background:"#fff",fontFamily:"inherit"}},
+          /*#__PURE__*/React.createElement("option",{value:""},"\u2014 SELECIONE \u2014"),
+          (fornecedores||[]).map(function(f){return /*#__PURE__*/React.createElement("option",{key:f.id,value:f.id},f.nome);})
+        )
+      ),
+      /*#__PURE__*/React.createElement("div",null,
+        /*#__PURE__*/React.createElement("label",{style:SC.lbl},"COLE O OR\xC7AMENTO AQUI"),
+        /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:"#888",marginBottom:6}},"Copie a tabela do PDF/planilha do fornecedor e cole abaixo. O sistema detecta descri\xE7\xF5es e pre\xE7os automaticamente."),
+        /*#__PURE__*/React.createElement("textarea",{value:textoOrc,onChange:function(e){setTextoOrc(e.target.value);},placeholder:"Ex:\nTRELICA TB 8L 12M  54  106,00  15,90  4.865,40\nPERFIL 68X30  34  129,65  19,44  3.746,89",style:{width:"100%",minHeight:180,border:"1.5px solid #dde1e9",borderRadius:8,padding:"10px 12px",fontSize:11,fontFamily:"monospace",outline:"none",resize:"vertical",boxSizing:"border-box"}})
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
+        /*#__PURE__*/React.createElement("button",{style:SC.btnSec,onClick:onClose},"CANCELAR"),
+        /*#__PURE__*/React.createElement("button",{style:SC.btnPri,onClick:handleAvancar},"\u2192 AVAN\xC7AR")
+      )
+    )
+  );
+  return /*#__PURE__*/React.createElement(Modal,{open:true,onClose:onClose,maxWidth:900},
+    /*#__PURE__*/React.createElement("div",{style:SC.mHdr},
+      /*#__PURE__*/React.createElement("span",{style:SC.mTitle},"\uD83D\uDD17 CASAMENTO \u2014 "+(forn.nome||"").toUpperCase()),
+      /*#__PURE__*/React.createElement("button",{style:Object.assign({},SC.btnSec,{marginLeft:"auto",fontSize:11,padding:"4px 10px"}),onClick:function(){setStep(1);}},"← VOLTAR"),
+      /*#__PURE__*/React.createElement("button",{style:{background:"none",border:"none",color:"#999",cursor:"pointer",marginLeft:8},onClick:onClose},/*#__PURE__*/React.createElement(IcoClose,null))
+    ),
+    /*#__PURE__*/React.createElement("div",{style:{display:"flex",height:400,overflow:"hidden"}},
+      /*#__PURE__*/React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column",borderRight:"2px solid #e4e8f5"}},
+        /*#__PURE__*/React.createElement("div",{style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",display:"flex",alignItems:"center",gap:6}},
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:11,fontWeight:800,color:"#2a5298",flex:1}},"\uD83D\uDCCB INSUMOS DO MAPA"),
+          /*#__PURE__*/React.createElement("span",{style:{background:"#e8f0fe",color:"#2a5298",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}},itens.length+" ITENS")
+        ),
+        /*#__PURE__*/React.createElement("input",{value:busca1,onChange:function(e){setBusca1(e.target.value.toUpperCase());},placeholder:"\uD83D\uDD0D BUSCAR...",style:{margin:"5px 10px",border:"1.5px solid #dde4f5",borderRadius:6,padding:"4px 9px",fontSize:11,outline:"none",fontFamily:"inherit"}}),
+        /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:"#7a6010",textAlign:"center",padding:"3px 8px",background:"#fffbe8"}},"\u2460 CLIQUE NUM INSUMO DO MAPA"),
+        /*#__PURE__*/React.createElement("div",{style:{overflowY:"auto",flex:1}},
+          filtM.map(function(it){
+            var lig=ligacoes[it.id],isSel=selMapaId===it.id;
+            return /*#__PURE__*/React.createElement("div",{key:it.id,onClick:function(){if(!lig)setSelMapaId(isSel?null:it.id);},style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",cursor:lig?"default":"pointer",background:lig?"#e6f4ea":isSel?"#dbeafe":"transparent",borderLeft:lig?"3px solid #186818":isSel?"3px solid #2a5298":"3px solid transparent",display:"flex",alignItems:"center",gap:7}},
+              /*#__PURE__*/React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:lig?"#186818":isSel?"#2a5298":"#d0d8e8",flexShrink:0}}),
+              /*#__PURE__*/React.createElement("div",{style:{flex:1}},
+                /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:600,color:lig?"#186818":isSel?"#1a3a78":"#1a2a4a"}},it.descricao),
+                /*#__PURE__*/React.createElement("div",{style:{fontSize:9,color:"#888",marginTop:1}},it.qt+" "+(it.unid||""))
+              ),
+              lig?/*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:3}},
+                /*#__PURE__*/React.createElement("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713"),
+                /*#__PURE__*/React.createElement("span",{style:{fontSize:9,color:"#186818",fontWeight:700}},"R$ "+lig.preco.toLocaleString("pt-BR",{minimumFractionDigits:2})),
+                /*#__PURE__*/React.createElement("button",{onClick:function(e){e.stopPropagation();desligar(it.id);},style:{background:"#fdecea",border:"none",borderRadius:3,padding:"1px 5px",fontSize:9,color:"#c0392b",cursor:"pointer"}},"\u2702")
+              ):null
+            );
+          })
+        )
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{width:52,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,background:"#f8f9ff"}},
+        /*#__PURE__*/React.createElement("button",{onClick:ligar,disabled:!podeLinkar,title:"LIGAR",style:stLink},
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:16}},"\uD83D\uDD17"),
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:8,fontWeight:800}},"LIGAR")
+        ),
+        /*#__PURE__*/React.createElement("span",{style:{fontSize:13,color:"#bbb"}},"\u2194")
+      ),
+      /*#__PURE__*/React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column"}},
+        /*#__PURE__*/React.createElement("div",{style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",display:"flex",alignItems:"center",gap:6}},
+          /*#__PURE__*/React.createElement("span",{style:{fontSize:11,fontWeight:800,color:"#2a5298",flex:1}},"\uD83D\uDCC4 OR\xC7AMENTO"),
+          /*#__PURE__*/React.createElement("span",{style:{background:"#e8f0fe",color:"#2a5298",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}},itemsOrc.length+" ITENS")
+        ),
+        /*#__PURE__*/React.createElement("input",{value:busca2,onChange:function(e){setBusca2(e.target.value.toUpperCase());},placeholder:"\uD83D\uDD0D BUSCAR...",style:{margin:"5px 10px",border:"1.5px solid #dde4f5",borderRadius:6,padding:"4px 9px",fontSize:11,outline:"none",fontFamily:"inherit"}}),
+        /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:"#7a6010",textAlign:"center",padding:"3px 8px",background:"#fffbe8"}},"\u2461 CLIQUE NUM ITEM DO OR\xC7AMENTO"),
+        /*#__PURE__*/React.createElement("div",{style:{overflowY:"auto",flex:1}},
+          filtO.map(function(x){
+            var it=x.it,idx=x.idx,isSel=selOrcIdx===idx;
+            var isLig=Object.values(ligacoes).some(function(l){return l.orcIdx===idx;});
+            return /*#__PURE__*/React.createElement("div",{key:idx,onClick:function(){if(!isLig)setSelOrcIdx(isSel?null:idx);},style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",cursor:isLig?"default":"pointer",background:isLig?"#e6f4ea":isSel?"#fef3c7":"transparent",borderLeft:isLig?"3px solid #186818":isSel?"3px solid #f0a500":"3px solid transparent",display:"flex",alignItems:"center",gap:7}},
+              /*#__PURE__*/React.createElement("div",{style:{flex:1}},
+                /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:600,color:isLig?"#186818":isSel?"#92400e":"#1a2a4a"}},it.desc),
+                /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:800,color:"#186818",marginTop:2}},"R$ "+it.preco.toLocaleString("pt-BR",{minimumFractionDigits:2}))
+              ),
+              isLig?/*#__PURE__*/React.createElement("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713"):null
+            );
+          })
+        )
+      )
+    ),
+    /*#__PURE__*/React.createElement("div",{style:{padding:"10px 18px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10}},
+      /*#__PURE__*/React.createElement("span",{style:{fontSize:12,color:"#555"}},"Liga\xE7\xF5es:"),
+      /*#__PURE__*/React.createElement("span",{style:{background:nLig>0?"#186818":"#ccc",color:"#fff",borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700}},nLig+" "+(nLig===1?"CASADA":"CASADAS")),
+      /*#__PURE__*/React.createElement("button",{style:Object.assign({},SC.btnSec,{marginLeft:"auto"}),onClick:onClose},"CANCELAR"),
+      /*#__PURE__*/React.createElement("button",{style:Object.assign({},SC.btnPri,{opacity:nLig>0?1:0.4}),disabled:nLig===0,onClick:confirmar},"\u2705 SALVAR E PREENCHER PRE\xC7OS")
+    )
+  );
 }
 
 // ─── Map Card ─────────────────────────────────────────────────────────────────
@@ -5240,6 +5272,11 @@ function App() {
     }))();
   }, []);
 
+  // Carregar dicionário de casamento
+  React.useEffect(function() {
+    sbGetDicionario().then(function(d){ if(d&&Object.keys(d).length) setDicionario(d); }).catch(function(){});
+  }, []);
+
   // Carregar associações em background
   React.useEffect(function() {
     sbCarregarAssociacoes().then(function(lista){ if(lista.length) setAssociacoes(lista); }).catch(function(){});
@@ -5262,6 +5299,8 @@ function App() {
   }, [cadastros, loading, cadastrosOk]);
 
   // ── Funções de orçamento ──────────────────────────────────────────────────
+  var _useState_dic=React.useState({}),dicionario=_slicedToArray(_useState_dic,2)[0],setDicionario=_slicedToArray(_useState_dic,2)[1];
+  var saveDicionario=React.useCallback(function(novoDic){setDicionario(novoDic);sbSaveDicionario(novoDic).catch(function(){});}, []);
   var saveOrcamento = React.useCallback(function(obraId, dados) {
     setOrcamentos(function(prev){ return Object.assign({}, prev, _defineProperty({}, obraId, dados)); });
     return sbSaveOrcamento(obraId, dados).catch(function(){});
@@ -5420,6 +5459,8 @@ function App() {
     orcamentos: orcamentos,
     associacoes: associacoes,
     onSaveOrcamento: saveOrcamento,
+    dicionario: dicionario,
+    onSaveDicionario: saveDicionario,
     onLimparOrcamento: limparOrcamento,
     onGerenciarOrcamento: function(obra){ setObraGerenciando(obra); setShowGerenciarOrc(true); },
     onCriarAssociacao: criarAssociacao,
