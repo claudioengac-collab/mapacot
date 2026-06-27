@@ -434,7 +434,7 @@ var sbGetMapas = function sbGetMapas() {
   });
 };
 var sbGetDicionario = function() {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.mapacot_dicionario", {headers: SB_GET})
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.mapacot_dicionario", {headers: SB})
     .then(function(r){ return r.json(); })
     .then(function(d){ return (d && d[0] && d[0].dados) ? d[0].dados : {}; })
     .catch(function(){ return {}; });
