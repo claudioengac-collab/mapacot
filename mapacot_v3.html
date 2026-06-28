@@ -4520,30 +4520,112 @@ function ModalCasarInsumos(_ref_cas) {
     });
     return parsed;
   };
+  // Extrai texto de blocos BT/ET de um stream PDF descomprimido
+  var _pdfBTET = function(txt) {
+    var partes = [];
+    var bt = /BT[\s\S]*?ET/g, m;
+    while ((m = bt.exec(txt)) !== null) {
+      var pr = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g, p;
+      while ((p = pr.exec(m[0])) !== null) {
+        var t = p[1].replace(/\\n/g," ").replace(/\\r/g," ")
+          .replace(/\\\\/g,"\\").replace(/\\\(/g,"(").replace(/\\\)/g,")");
+        if (t.trim()) partes.push(t.trim());
+      }
+    }
+    return partes.join(" ");
+  };
+
+  // Parser inteligente para PDF: casa descricao+total com qtd×unit por calculo
+  var parsearPDFTexto = function(texto) {
+    var descTotais = [], unidades = [], items = [], usados = [];
+    // Padrão 1: texto descritivo + R$ total (coluna direita)
+    var re1 = /([A-Z\u00C0-\u00FF][A-Za-z\u00C0-\u00FF\s\d\/()\.\-,;"°º']{5,}?)\s+R?\$\s*([\d]{1,3}(?:\.[\d]{3})*,[\d]{2})/g;
+    var m1;
+    while ((m1 = re1.exec(texto)) !== null) {
+      var desc = m1[1].trim().toUpperCase();
+      var total = parseFloat(m1[2].replace(/\./g,"").replace(",","."));
+      if (desc.length > 5 && /[a-zA-Z]/.test(m1[1]) && total > 0)
+        descTotais.push({desc:desc, total:total});
+    }
+    // Padrão 2: número(s) + R$ preço unitário (coluna esquerda — ex: "230 R$ 60,00")
+    var re2 = /\b(\d{1,5})\s+R?\$\s*([\d]{1,3}(?:\.[\d]{3})*,[\d]{2})\b/g;
+    var m2;
+    while ((m2 = re2.exec(texto)) !== null) {
+      var qty = parseFloat(m2[1]);
+      var unit = parseFloat(m2[2].replace(/\./g,"").replace(",","."));
+      if (qty > 0 && qty < 100000 && unit > 0 && unit < 99999)
+        unidades.push({qty:qty, unit:unit});
+    }
+    // Casa descricoes com precos unitarios via qtd x unit ≈ total
+    descTotais.forEach(function(dt) {
+      for (var i = 0; i < unidades.length; i++) {
+        if (usados.indexOf(i) >= 0) continue;
+        var exp = unidades[i].qty * unidades[i].unit;
+        if (exp > 0 && Math.abs(exp - dt.total) / Math.max(dt.total,1) < 0.02) {
+          items.push({desc:dt.desc, preco:unidades[i].unit});
+          usados.push(i); return;
+        }
+      }
+      // Fallback: usa preco total se nao achou unitario correspondente
+      if (dt.desc.length > 5) items.push({desc:dt.desc, preco:dt.total});
+    });
+    return items;
+  };
+
   var parsearPDF = function(file, cb) {
     var rd = new FileReader();
     rd.onload = function(e) {
       try {
         var bytes = new Uint8Array(e.target.result);
         var raw = "";
-        for (var i = 0; i < bytes.length; i++) { raw += String.fromCharCode(bytes[i]); }
-        var linhas = [];
-        var btReg = /BT[\s\S]*?ET/g;
-        var bloco;
-        while ((bloco = btReg.exec(raw)) !== null) {
-          var textos = [];
-          var parenReg = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
-          var pm;
-          while ((pm = parenReg.exec(bloco[0])) !== null) {
-            var t = pm[1]
-              .replace(/\\n/g," ").replace(/\\r/g," ")
-              .replace(/\\\\/g,"\\").replace(/\\\(/g,"(").replace(/\\\)/g,")");
-            if (t.trim().length > 1) textos.push(t.trim());
-          }
-          if (textos.length) linhas.push(textos.join(" "));
+        for (var i = 0; i < bytes.length; i++) raw += String.fromCharCode(bytes[i]);
+        var simples = _pdfBTET(raw);
+        // Encontrar streams FlateDecode comprimidos
+        var positions = [];
+        var p = 0;
+        while (p < raw.length) {
+          var fd = raw.indexOf("/FlateDecode", p); if (fd < 0) break;
+          var sk = raw.indexOf("stream", fd); if (sk < 0) break;
+          var ds = sk + 6;
+          if (raw[ds] === "\r") ds++; if (raw[ds] === "\n") ds++;
+          var es = raw.indexOf("endstream", ds);
+          if (es > ds && es - ds < 2000000) positions.push({s:ds, e:es});
+          p = es > 0 ? es + 1 : fd + 1;
         }
-        cb(linhas.join("\n"), null);
-      } catch(err) { cb("", err); }
+        if (!positions.length || typeof DecompressionStream === "undefined") {
+          cb(simples, null); return;
+        }
+        var textos = [simples];
+        var count = positions.length;
+        positions.forEach(function(pos) {
+          var sbytes = bytes.slice(pos.s, pos.e);
+          var concluir = function() { count--; if (count===0) cb(textos.join(" "), null); };
+          var tentar = function(modo, onFail) {
+            try {
+              var dstr = new DecompressionStream(modo);
+              var wr = dstr.writable.getWriter();
+              var reader = dstr.readable.getReader();
+              var chunks = [];
+              var lerChunk = function() {
+                reader.read().then(function(r) {
+                  if (r.done) {
+                    var total = 0; chunks.forEach(function(c){total+=c.length;});
+                    var arr = new Uint8Array(total); var off = 0;
+                    chunks.forEach(function(c){arr.set(c,off);off+=c.length;});
+                    var decoded = ""; for(var i=0;i<arr.length;i++) decoded+=String.fromCharCode(arr[i]);
+                    var t = _pdfBTET(decoded); if (t.trim()) textos.push(t);
+                    concluir();
+                  } else { chunks.push(r.value); lerChunk(); }
+                }).catch(function(){ onFail ? onFail() : concluir(); });
+              };
+              wr.write(sbytes).catch(function(){});
+              wr.close().catch(function(){});
+              lerChunk();
+            } catch(err2) { onFail ? onFail() : concluir(); }
+          };
+          tentar("deflate-raw", function(){ tentar("deflate", function(){ concluir(); }); });
+        });
+      } catch(e2) { cb("", e2); }
     };
     rd.onerror = function(){ cb("", new Error("Erro")); };
     rd.readAsArrayBuffer(file);
@@ -4581,8 +4663,9 @@ function ModalCasarInsumos(_ref_cas) {
       parsearPDF(file, function(texto, err) {
         setCarregando(false);
         if (err || !texto.trim()) { alert("N\xC3O FOI POSS\xCDVEL EXTRAIR TEXTO DO PDF.\nVerifique se o PDF tem texto selecion\xE1vel (n\xE3o pode ser imagem escaneada)."); return; }
-        var items = parsearTexto(texto);
-        if (!items.length) { alert("NENHUM ITEM COM PRE\xC7O ENCONTRADO NO PDF.\nTente salvar o PDF como Excel ou CSV e carregar novamente."); return; }
+        var items = parsearPDFTexto(texto);
+        if (!items.length) { items = parsearTexto(texto); }
+        if (!items.length) { alert("NENHUM ITEM COM PRE\xC7O ENCONTRADO NO PDF.\nTente converter o PDF em Excel ou CSV."); return; }
         setItemsOrc(items);
       });
     } else if (ext === "xlsx" || ext === "xls") {
