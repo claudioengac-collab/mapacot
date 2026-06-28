@@ -4497,8 +4497,7 @@ var _useState27 = useState(init),
 function ModalCasarInsumos(_ref_cas) {
   var mapa=_ref_cas.mapa, itens=_ref_cas.itens, onClose=_ref_cas.onClose, onConfirm=_ref_cas.onConfirm;
   var _sF=useState(""),   fornId=_slicedToArray(_sF,2)[0],    setFornId=_slicedToArray(_sF,2)[1];
-  var _sT=useState(false),showTxt=_slicedToArray(_sT,2)[0],   setShowTxt=_slicedToArray(_sT,2)[1];
-  var _sX=useState(""),   textoIn=_slicedToArray(_sX,2)[0],   setTextoIn=_slicedToArray(_sX,2)[1];
+  var _sCarr=useState(false),carregando=_slicedToArray(_sCarr,2)[0],setCarregando=_slicedToArray(_sCarr,2)[1];
   var _sI=useState([]),   itemsOrc=_slicedToArray(_sI,2)[0],  setItemsOrc=_slicedToArray(_sI,2)[1];
   var _sL=useState(null), selMId=_slicedToArray(_sL,2)[0],    setSelMId=_slicedToArray(_sL,2)[1];
   var _sR=useState(null), selOIdx=_slicedToArray(_sR,2)[0],   setSelOIdx=_slicedToArray(_sR,2)[1];
@@ -4521,10 +4520,47 @@ function ModalCasarInsumos(_ref_cas) {
     });
     return parsed;
   };
-  var handleAnalisar = function() {
-    var parsed = parsearTexto(textoIn);
-    if (!parsed.length) { alert("NENHUM ITEM ENCONTRADO. VERIFIQUE SE O TEXTO CONT\xC9M PRE\xC7OS NO FORMATO 00,00 OU 0.000,00."); return; }
-    setItemsOrc(parsed); setShowTxt(false);
+  var parsearXLSX = function(file, cb) {
+    var rd = new FileReader();
+    rd.onload = function(e) {
+      try {
+        var wb = XLSX.read(new Uint8Array(e.target.result), {type:"array"});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
+        var items = [];
+        aoa.forEach(function(row) {
+          var numCols = [];
+          row.forEach(function(cell, i) {
+            var n = typeof cell === "number" ? cell : parseFloat(String(cell).replace(/\./g,"").replace(",","."));
+            if (!isNaN(n) && n > 0 && n < 9999999) numCols.push({val:n, idx:i});
+          });
+          if (!numCols.length) return;
+          var lastN = numCols[numCols.length-1];
+          var desc = row.slice(0, lastN.idx).map(function(v){return String(v).trim();}).filter(function(v){return v&&isNaN(parseFloat(v));}).join(" ").trim().toUpperCase();
+          if (desc.length > 3) items.push({desc:desc, preco:lastN.val});
+        });
+        cb(items, null);
+      } catch(err) { cb([], err); }
+    };
+    rd.onerror = function(){ cb([], new Error("Erro")); };
+    rd.readAsArrayBuffer(file);
+  };
+  var handleFile = function(ev) {
+    var file = ev.target.files[0]; ev.target.value=""; if (!file) return;
+    var ext = file.name.split(".").pop().toLowerCase();
+    setCarregando(true);
+    if (ext === "xlsx" || ext === "xls") {
+      parsearXLSX(file, function(items, err) {
+        setCarregando(false);
+        if (err || !items.length) { alert("NENHUM ITEM ENCONTRADO. VERIFIQUE SE O EXCEL CONT\xC9M COLUNAS DE DESCRI\xC7\xC3O E PRE\xC7O."); return; }
+        setItemsOrc(items);
+      });
+    } else {
+      var rd2 = new FileReader();
+      rd2.onload = function(e2){ setCarregando(false); var items=parsearTexto(e2.target.result); if(!items.length){alert("NENHUM ITEM ENCONTRADO NO ARQUIVO.");return;} setItemsOrc(items); };
+      rd2.onerror = function(){ setCarregando(false); alert("ERRO AO LER O ARQUIVO."); };
+      rd2.readAsText(file, "UTF-8");
+    }
   };
   var ligar = function() {
     if (!fornId) { alert("SELECIONE O FORNECEDOR ANTES DE LIGAR."); return; }
@@ -4607,16 +4643,22 @@ function ModalCasarInsumos(_ref_cas) {
           CE("div",{style:stPHdr},CE("span",{style:stPTit},"\uD83D\uDCC4 OR\xC7AMENTO"+(fornNome?" \u2014 "+fornNome:"")),CE("span",{style:stCnt},itemsOrc.length+" ITENS")),
           CE("input",{value:busca2,onChange:function(e){setBusca2(e.target.value.toUpperCase());},placeholder:"\uD83D\uDD0D Buscar...",style:stSrch}),
           CE("div",{style:stInst},"\u2461 Clique no item e pressione LIGAR"),
-          !itemsOrc.length&&!showTxt?CE("div",{style:stLoad,onClick:function(){setShowTxt(true);}},
-            CE("div",{style:{fontSize:22,marginBottom:4}},"\uD83D\uDCC2"),
-            CE("div",{style:{fontWeight:700,color:"#2a5298"}},"Carregar or\xE7amento"),
-            CE("div",{style:{marginTop:2}},"Cole o texto do or\xE7amento do fornecedor")
-          ):null,
-          showTxt?CE("div",{style:{margin:"6px 10px",display:"flex",flexDirection:"column",gap:6}},
-            CE("textarea",{value:textoIn,onChange:function(e){setTextoIn(e.target.value);},placeholder:"Cole aqui o texto do or\xE7amento...",style:{border:"1.5px solid #c5d8f0",borderRadius:6,padding:"8px 10px",fontSize:11,fontFamily:"monospace",minHeight:120,resize:"vertical",outline:"none",width:"100%",boxSizing:"border-box"}}),
-            CE("button",{onClick:handleAnalisar,style:{background:"#2a5298",color:"#fff",border:"none",borderRadius:6,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer"}},"ANALISAR \u2192")
-          ):null,
-          itemsOrc.length>0&&!showTxt?CE("button",{onClick:function(){setShowTxt(true);setTextoIn("");setItemsOrc([]);},style:{margin:"0 10px 6px",background:"none",border:"none",color:"#7a9abf",fontSize:10,cursor:"pointer",textAlign:"left",padding:0}},"\u21BA Alterar or\xE7amento"):null,
+          CE("label",{style:Object.assign({},stLoad,{display:"flex",flexDirection:"column",alignItems:"center",margin:"8px 10px",opacity:carregando?0.6:1})},
+            CE("input",{type:"file",accept:".xlsx,.xls,.csv,.txt",style:{display:"none"},onChange:handleFile}),
+            carregando
+              ?CE("div",{style:{fontSize:11,color:"#2a5298",fontWeight:700}},"Lendo arquivo...")
+              :itemsOrc.length>0
+                ?CE("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:3}},
+                    CE("div",{style:{fontSize:20}},"\uD83D\uDCC2"),
+                    CE("div",{style:{fontWeight:700,color:"#2a5298",fontSize:11}},"Alterar arquivo"),
+                    CE("div",{style:{fontSize:10,color:"#888",marginTop:1}},itemsOrc.length+" itens carregados")
+                  )
+                :CE("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:3}},
+                    CE("div",{style:{fontSize:22,marginBottom:2}},"\uD83D\uDCC2"),
+                    CE("div",{style:{fontWeight:700,color:"#2a5298"}},"Carregar arquivo"),
+                    CE("div",{style:{marginTop:2,color:"#888",fontSize:10}},"Excel (.xlsx), CSV ou TXT")
+                  )
+          ),
           CE("div",{style:stList},filtO.map(function(x){
             var it=x.it,idx=x.i,isSel=selOIdx===idx;
             var isLig=Object.values(ligs).some(function(l){return l.orcIdx===idx;});
