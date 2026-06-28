@@ -691,6 +691,21 @@ var sbCarregarAssociacoes = function() {
     .then(function(rows){ return (rows && rows[0] && rows[0].dados && rows[0].dados.lista) ? rows[0].dados.lista : []; })
     .catch(function(){ return []; });
 };
+// ─── IA Uso — funções Supabase ────────────────────────────────────────────────
+var sbSaveIaUso = function(dados) {
+  return fetch(SUPABASE_URL + "/rest/v1/ia_uso", {
+    method: "POST", headers: SB, body: JSON.stringify(dados)
+  }).catch(function(){});
+};
+var sbGetIaUsoDia = function() {
+  var hoje = new Date().toISOString().slice(0,10);
+  return fetch(SUPABASE_URL + "/rest/v1/ia_uso?select=custo_brl,itens_lidos&created_at=gte." + hoje + "T00:00:00", { headers: SB })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      var total = rows.reduce(function(a,r){ return a + (parseFloat(r.custo_brl)||0); }, 0);
+      return { leituras: rows.length, custo: total };
+    }).catch(function(){ return { leituras:0, custo:0 }; });
+};
 
 var CHUNK_SIZE = 4;
 var DEFAULT_UNIDADES = ["BD", "CX", "FD", "FX", "GL", "JG", "KG", "L", "M", "M²", "M³", "ML", "PAR", "PC", "PR", "RL", "SC", "T", "UN", "VB"];
@@ -3037,6 +3052,9 @@ var _useState27 = useState(init),
     showTheme = _useState34[0],
     setShowTheme = _useState34[1];
   var _useStateCasar=useState(false),showCasar=_slicedToArray(_useStateCasar,2)[0],setShowCasar=_slicedToArray(_useStateCasar,2)[1];
+  var _useStateIA=useState(false),showLerIA=_slicedToArray(_useStateIA,2)[0],setShowLerIA=_slicedToArray(_useStateIA,2)[1];
+  var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
+  useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
   var _useState35 = useState(new Date()),
     _useState36 = _slicedToArray(_useState35, 2),
     clock = _useState36[0],
@@ -4368,10 +4386,13 @@ var _useState27 = useState(init),
       gap: 5
     })
   }, "\uD83C\uDFA8 COR"), /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() { setShowCasar(true); },
-    title: "CASAR INSUMOS COM OR\xC7AMENTO",
-    style: { background: "#f0a500", color: "#1a1a1a", border: "none", borderRadius: 7, padding: "6px 13px", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
-  }, "\uD83D\uDD17 CASAR INSUMOS"), /*#__PURE__*/React.createElement("span", {
+    onClick: function onClick() { setShowLerIA(true); },
+    title: "LER OR\xC7AMENTO COM INTELIG\xCANCIA ARTIFICIAL",
+    style: { background: "#534AB7", color: "#fff", border: "none", borderRadius: 7, padding: "6px 13px", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
+  }, "\uD83E\uDD16 LER COM IA"), /*#__PURE__*/React.createElement("span", {
+    style: { fontSize: 10, color: "#AFA9EC", marginLeft: 2, cursor: "pointer", whiteSpace: "nowrap" },
+    onClick: function(){ setShowLerIA(true); }
+  }, iaUsoDia.leituras > 0 ? ("\uD83D\uDCB0\u00A0R$\u00A0" + iaUsoDia.custo.toFixed(3).replace(".",",")) : ""), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
       fontWeight: 600,
@@ -4514,6 +4535,18 @@ var _useState27 = useState(init),
       });
       setShowCasar(false);
     }
+  }),
+  showLerIA && /*#__PURE__*/React.createElement(ModalLerComIA, {
+    mapa: mapa, itens: itens,
+    onClose: function(){ setShowLerIA(false); },
+    onConfirm: function(ligs) {
+      Object.keys(ligs).forEach(function(itemMapaId) {
+        var lig=ligs[itemMapaId];
+        setPreco(itemMapaId, lig.fornId, Number(lig.preco).toFixed(2).replace(".",","));
+      });
+      setShowLerIA(false);
+    },
+    onIaUso: function(d){ setIaUsoDia(function(prev){ return { leituras: prev.leituras+1, custo: prev.custo+(d.custo||0) }; }); }
   })
   );
 }
@@ -4807,6 +4840,197 @@ function ModalCasarInsumos(_ref_cas) {
         CE("span",{style:{background:nLig>0?"#186818":"#ccc",color:"#fff",borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700}},nLig+" "+(nLig===1?"CASADA":"CASADAS")),
         CE("button",{style:{background:"none",border:"1.5px solid #dde4f5",borderRadius:8,padding:"9px 16px",fontSize:12,fontWeight:600,color:"#666",cursor:"pointer"},onClick:onClose},"CANCELAR"),
         CE("button",{style:stSalv,disabled:nLig===0,onClick:confirmar},"\u2705 SALVAR E PREENCHER PRE\xC7OS")
+      )
+    )
+  );
+}
+
+// ─── Modal Ler Com IA ─────────────────────────────────────────────────────────
+function ModalLerComIA(_ref_ia) {
+  var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso;
+  var CE=React.createElement;
+  var _sStep=useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
+  var _sArq=useState(null),arquivo=_slicedToArray(_sArq,2)[0],setArquivo=_slicedToArray(_sArq,2)[1];
+  var _sForn=useState(""),fornId=_slicedToArray(_sForn,2)[0],setFornId=_slicedToArray(_sForn,2)[1];
+  var _sRes=useState(null),resultado=_slicedToArray(_sRes,2)[0],setResultado=_slicedToArray(_sRes,2)[1];
+  var _sMatch=useState({}),matchs=_slicedToArray(_sMatch,2)[0],setMatchs=_slicedToArray(_sMatch,2)[1];
+  var _sErro=useState(""),erro=_slicedToArray(_sErro,2)[0],setErro=_slicedToArray(_sErro,2)[1];
+  var _sCusto=useState(null),custo=_slicedToArray(_sCusto,2)[0],setCusto=_slicedToArray(_sCusto,2)[1];
+  var _sMsg=useState("Preparando..."),msg=_slicedToArray(_sMsg,2)[0],setMsg=_slicedToArray(_sMsg,2)[1];
+  var forns=mapa.fornecedores||[];
+  var normalizar=function(s){return (s||"").toUpperCase().replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();};
+  var wordScore=function(a,b){
+    var wa=normalizar(a).split(" ").filter(function(w){return w.length>2;});
+    var wb=normalizar(b).split(" ").filter(function(w){return w.length>2;});
+    if(!wa.length||!wb.length)return 0;
+    var m=wa.filter(function(w){return wb.indexOf(w)>=0;}).length;
+    return m/Math.max(wa.length,wb.length);
+  };
+  var fazerMatchs=function(orcItens){
+    var result={};
+    orcItens.forEach(function(oi,idx){
+      var best=0,bestId="";
+      itens.forEach(function(mi){var sc=wordScore(oi.descricao,mi.descricao);if(sc>best){best=sc;bestId=mi.id;}});
+      result[idx]=best>=0.35?bestId:"";
+    });
+    return result;
+  };
+  var lerComIA=function(){
+    if(!arquivo){setErro("Selecione um PDF primeiro.");return;}
+    if(!fornId){setErro("Selecione o fornecedor.");return;}
+    setErro("");setStep(2);setMsg("Convertendo PDF...");
+    var reader=new FileReader();
+    reader.onload=function(){
+      var b64=reader.result.split(",")[1];
+      setMsg("IA lendo o or\xE7amento...");
+      fetch(SUPABASE_URL+"/functions/v1/parse-orcamento",{
+        method:"POST",
+        headers:Object.assign({},SB,{"Content-Type":"application/json"}),
+        body:JSON.stringify({pdf_base64:b64,filename:arquivo.name})
+      })
+      .then(function(r){return r.json();})
+      .then(function(data){
+        if(data.error)throw new Error(data.error.message||"Erro na IA");
+        var txt=(data.content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
+        var clean=txt.replace(/```json|```/g,"").trim();
+        var parsed=JSON.parse(clean);
+        var usage=data.usage||{};
+        var inp=usage.input_tokens||0,out=usage.output_tokens||0;
+        var custoBRL=((inp*3+out*15)/1e6)*6;
+        setCusto({inp:inp,out:out,brl:custoBRL});
+        sbSaveIaUso({
+          fornecedor:parsed.fornecedor||"",arquivo:arquivo.name,
+          tokens_input:inp,tokens_output:out,custo_brl:custoBRL,
+          itens_lidos:(parsed.itens||[]).length,obra_id:mapa.obra||""
+        }).then(function(){if(onIaUso)onIaUso({custo:custoBRL});});
+        setResultado(parsed);
+        var ms=fazerMatchs(parsed.itens||[]);
+        setMatchs(ms);setStep(3);
+      })
+      .catch(function(e){setErro("Erro: "+(e.message||"Verifique se a Edge Function est\xE1 ativa no Supabase."));setStep(1);});
+    };
+    reader.onerror=function(){setErro("Erro ao ler o arquivo.");setStep(1);};
+    reader.readAsDataURL(arquivo);
+  };
+  var confirmar=function(){
+    if(!resultado)return;
+    var ligs={};
+    (resultado.itens||[]).forEach(function(oi,idx){
+      var mapaItemId=matchs[idx];
+      if(mapaItemId)ligs[mapaItemId]={descPDF:oi.descricao,preco:oi.preco,fornId:fornId,orcIdx:idx};
+    });
+    if(!Object.keys(ligs).length){setErro("Nenhum item casado para salvar.");return;}
+    onConfirm(ligs);
+  };
+  var stOvl={position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(10,20,50,0.65)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"};
+  var stMod={background:"#fff",borderRadius:12,width:"92%",maxWidth:720,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"};
+  var stHdr={background:"#1a3a78",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",gap:10};
+  var stFtr={padding:"12px 18px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10};
+  var qtCasados=Object.values(matchs).filter(function(v){return !!v;}).length;
+  var qtSem=resultado?((resultado.itens||[]).length-qtCasados):0;
+  return CE("div",{style:stOvl},
+    CE("div",{style:stMod},
+      CE("div",{style:stHdr},
+        CE("span",{style:{fontSize:18}},"\uD83E\uDD16"),
+        CE("h2",{style:{fontSize:14,fontWeight:800,flex:1,margin:0}},"LER OR\xC7AMENTO COM IA"),
+        CE("span",{style:{background:"rgba(255,255,255,0.18)",borderRadius:5,padding:"3px 10px",fontSize:11,fontWeight:600}},"MP N\xBA "+mapa.numero),
+        CE("button",{style:{background:"none",border:"none",color:"#fff",fontSize:22,cursor:"pointer",lineHeight:1},onClick:onClose},"\xD7")
+      ),
+      CE("div",{style:{padding:"8px 18px",background:"#f5f7ff",borderBottom:"1px solid #e0e4f0",display:"flex",alignItems:"center",gap:6}},
+        [{l:"1",t:"Upload"},{l:"2",t:"Lendo"},{l:"3",t:"Casamento"}].map(function(s,i){
+          var done=i+1<step,active=i+1===step;
+          return CE(React.Fragment,{key:i},
+            i>0&&CE("div",{style:{height:1,flex:1,background:done?"#2a5298":"#d0d8f0"}}),
+            CE("div",{style:{width:22,height:22,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,background:done?"#2a5298":active?"#1a3a78":"#e0e4f0",color:done||active?"#fff":"#888"}},done?"\u2713":s.l),
+            CE("span",{style:{fontSize:9,color:active?"#1a3a78":"#aaa",fontWeight:active?700:400,marginRight:4}},s.t)
+          );
+        })
+      ),
+      step===1&&CE("div",{style:{padding:"18px",flex:1,overflow:"auto"}},
+        erro&&CE("div",{style:{background:"#fdecea",border:"1px solid #f5c6c2",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#c0392b"}},erro),
+        CE("div",{style:{marginBottom:14}},
+          CE("label",{style:{fontSize:11,fontWeight:700,color:"#555",display:"block",marginBottom:6}},"FORNECEDOR"),
+          CE("select",{value:fornId,onChange:function(e){setFornId(e.target.value);},style:{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid #d0d8f0",background:"#f8faff",fontSize:13}},
+            CE("option",{value:""},"\u2014 SELECIONE O FORNECEDOR \u2014"),
+            forns.map(function(f){return CE("option",{key:f.id,value:f.id},f.nome);})
+          )
+        ),
+        CE("div",{
+          style:{border:"2px dashed "+(arquivo?"#2a5298":"#b0c4e8"),borderRadius:10,padding:"28px 16px",textAlign:"center",cursor:"pointer",background:arquivo?"#f0f8ff":"#f0f5ff"},
+          onClick:function(){document.getElementById("ia-pdf-inp").click();}
+        },
+          CE("input",{id:"ia-pdf-inp",type:"file",accept:".pdf",style:{display:"none"},onChange:function(e){if(e.target.files[0]){setArquivo(e.target.files[0]);setErro("");}e.target.value="";}}),
+          CE("div",{style:{fontSize:28,marginBottom:8}},"\uD83D\uDCC4"),
+          CE("div",{style:{fontSize:13,fontWeight:700,color:"#2a5298"}},arquivo?arquivo.name:"Clique ou arraste o PDF do or\xE7amento"),
+          CE("div",{style:{fontSize:11,color:"#888",marginTop:4}},arquivo?"PDF selecionado \u2713 \u2014 clique para trocar":"Aceita PDF com texto e PDF escaneado")
+        ),
+        custo&&CE("div",{style:{marginTop:12,background:"#f0f8f0",border:"1px solid #c0e0c0",borderRadius:8,padding:"8px 14px",fontSize:11,display:"flex",gap:16,flexWrap:"wrap"}},
+          CE("span",null,"Tokens: ",CE("b",null,(custo.inp||0)+(custo.out||0))),
+          CE("span",null,"Custo: ",CE("b",{style:{color:"#186818"}},"R$ "+custo.brl.toFixed(3).replace(".",",")))
+        )
+      ),
+      step===2&&CE("div",{style:{padding:"44px 18px",textAlign:"center",flex:1}},
+        CE("div",{style:{fontSize:36,marginBottom:12}},"\u23F3"),
+        CE("div",{style:{fontSize:14,fontWeight:800,color:"#1a3a78"}},msg),
+        CE("div",{style:{fontSize:11,color:"#888",marginTop:6}},arquivo?arquivo.name:"")
+      ),
+      step===3&&resultado&&CE("div",{style:{flex:1,overflow:"auto",padding:"12px 18px"}},
+        erro&&CE("div",{style:{background:"#fdecea",border:"1px solid #f5c6c2",borderRadius:8,padding:"10px 14px",marginBottom:10,fontSize:12,color:"#c0392b"}},erro),
+        CE("div",{style:{display:"flex",gap:8,marginBottom:10,fontSize:11,flexWrap:"wrap"}},
+          resultado.fornecedor&&CE("div",{style:{background:"#e6f0ff",borderRadius:6,padding:"4px 12px",color:"#2a5298",fontWeight:700}},"Fornecedor: "+resultado.fornecedor),
+          CE("div",{style:{background:"#e6f4ea",borderRadius:6,padding:"4px 12px",color:"#186818",fontWeight:700}},qtCasados+" casados automaticamente"),
+          qtSem>0&&CE("div",{style:{background:"#fff3e0",borderRadius:6,padding:"4px 12px",color:"#e65100",fontWeight:700}},qtSem+" sem correspond\xEAncia")
+        ),
+        CE("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
+          CE("colgroup",null,CE("col",{style:{width:"48%"}}),CE("col",{style:{width:"88px"}}),CE("col",null)),
+          CE("thead",null,CE("tr",{style:{background:"#eef1fa"}},
+            CE("th",{style:{padding:"7px 10px",textAlign:"left"}},"Item do or\xE7amento"),
+            CE("th",{style:{padding:"7px 10px",textAlign:"right"}},"Pre\xE7o unit."),
+            CE("th",{style:{padding:"7px 10px",textAlign:"left"}},"Insumo no mapa")
+          )),
+          CE("tbody",null,(resultado.itens||[]).map(function(oi,idx){
+            var matched=matchs[idx];
+            return CE("tr",{key:idx,style:{borderBottom:"1px solid #f0f2f8",background:idx%2?"#f8faff":"#fff"}},
+              CE("td",{style:{padding:"7px 10px",color:"#222"}},oi.descricao),
+              CE("td",{style:{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#186818",whiteSpace:"nowrap"}},"R$ "+Number(oi.preco).toFixed(2).replace(".",",")),
+              CE("td",{style:{padding:"7px 10px"}},
+                CE("select",{
+                  value:matched||"",
+                  onChange:function(e){var v=e.target.value;setMatchs(function(prev){var n=Object.assign({},prev);n[idx]=v;return n;});},
+                  style:{width:"100%",fontSize:10,padding:"3px 6px",borderRadius:4,border:"1px solid "+(matched?"#b0d0b0":"#f0b080"),background:matched?"#f0f8f0":"#fff8f0"}
+                },
+                  CE("option",{value:""},"\u2014 n\xE3o usar \u2014"),
+                  itens.map(function(mi){return CE("option",{key:mi.id,value:mi.id},mi.descricao);})
+                )
+              )
+            );
+          }))
+        )
+      ),
+      CE("div",{style:stFtr},
+        step===1&&CE(React.Fragment,null,
+          CE("span",{style:{fontSize:10,color:"#888"}},"Claude Haiku 4.5 \u00B7 ~R$ 0,01/or\xE7amento"),
+          CE("div",{style:{flex:1}}),
+          CE("button",{style:{background:"none",border:"1px solid #d0d8e8",borderRadius:7,padding:"7px 16px",fontSize:12,cursor:"pointer"},onClick:onClose},"CANCELAR"),
+          CE("button",{
+            style:{background:arquivo&&fornId?"#534AB7":"#bbb",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:12,fontWeight:800,cursor:arquivo&&fornId?"pointer":"not-allowed"},
+            onClick:lerComIA,disabled:!arquivo||!fornId
+          },"\uD83E\uDD16 LER COM IA \u2192")
+        ),
+        step===2&&CE(React.Fragment,null,
+          CE("span",{style:{fontSize:11,color:"#888"}},"Aguarde, a IA est\xE1 lendo o or\xE7amento..."),
+          CE("div",{style:{flex:1}}),
+          CE("button",{style:{background:"none",border:"1px solid #d0d8e8",borderRadius:7,padding:"7px 16px",fontSize:12,cursor:"pointer"},onClick:onClose},"CANCELAR")
+        ),
+        step===3&&CE(React.Fragment,null,
+          custo&&CE("span",{style:{fontSize:10,color:"#888"}},"Custo: R$ "+custo.brl.toFixed(3).replace(".",",")),
+          CE("div",{style:{flex:1}}),
+          CE("button",{style:{background:"none",border:"1px solid #d0d8e8",borderRadius:7,padding:"7px 16px",fontSize:12,cursor:"pointer"},onClick:function(){setStep(1);}}, "VOLTAR"),
+          CE("button",{
+            style:{background:"#186818",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:12,fontWeight:800,cursor:"pointer"},
+            onClick:confirmar
+          },"\u2705 PREENCHER MAPA")
+        )
       )
     )
   );
