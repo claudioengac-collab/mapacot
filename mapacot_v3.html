@@ -5273,7 +5273,7 @@ function App() {
   }, []);
 
   // Carregar dicionário de casamento
-  React.useEffect(function() {
+  useEffect(function() {
     sbGetDicionario().then(function(d){ if(d&&Object.keys(d).length) setDicionario(d); }).catch(function(){});
   }, []);
 
@@ -5300,7 +5300,7 @@ function App() {
 
   // ── Funções de orçamento ──────────────────────────────────────────────────
   var _useState_dic=React.useState({}),dicionario=_slicedToArray(_useState_dic,2)[0],setDicionario=_slicedToArray(_useState_dic,2)[1];
-  var saveDicionario=React.useCallback(function(novoDic){setDicionario(novoDic);sbSaveDicionario(novoDic).catch(function(){});}, []);
+  var saveDicionario=useCallback(function(novoDic){setDicionario(novoDic);sbSaveDicionario(novoDic).catch(function(){});}, []);
   var saveOrcamento = React.useCallback(function(obraId, dados) {
     setOrcamentos(function(prev){ return Object.assign({}, prev, _defineProperty({}, obraId, dados)); });
     return sbSaveOrcamento(obraId, dados).catch(function(){});
