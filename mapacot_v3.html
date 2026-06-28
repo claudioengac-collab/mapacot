@@ -4520,6 +4520,34 @@ function ModalCasarInsumos(_ref_cas) {
     });
     return parsed;
   };
+  var parsearPDF = function(file, cb) {
+    var rd = new FileReader();
+    rd.onload = function(e) {
+      try {
+        var bytes = new Uint8Array(e.target.result);
+        var raw = "";
+        for (var i = 0; i < bytes.length; i++) { raw += String.fromCharCode(bytes[i]); }
+        var linhas = [];
+        var btReg = /BT[\s\S]*?ET/g;
+        var bloco;
+        while ((bloco = btReg.exec(raw)) !== null) {
+          var textos = [];
+          var parenReg = /\(([^)\\]*(?:\\.[^)\\]*)*)\)/g;
+          var pm;
+          while ((pm = parenReg.exec(bloco[0])) !== null) {
+            var t = pm[1]
+              .replace(/\\n/g," ").replace(/\\r/g," ")
+              .replace(/\\\\/g,"\\").replace(/\\\(/g,"(").replace(/\\\)/g,")");
+            if (t.trim().length > 1) textos.push(t.trim());
+          }
+          if (textos.length) linhas.push(textos.join(" "));
+        }
+        cb(linhas.join("\n"), null);
+      } catch(err) { cb("", err); }
+    };
+    rd.onerror = function(){ cb("", new Error("Erro")); };
+    rd.readAsArrayBuffer(file);
+  };
   var parsearXLSX = function(file, cb) {
     var rd = new FileReader();
     rd.onload = function(e) {
@@ -4549,7 +4577,15 @@ function ModalCasarInsumos(_ref_cas) {
     var file = ev.target.files[0]; ev.target.value=""; if (!file) return;
     var ext = file.name.split(".").pop().toLowerCase();
     setCarregando(true);
-    if (ext === "xlsx" || ext === "xls") {
+    if (ext === "pdf") {
+      parsearPDF(file, function(texto, err) {
+        setCarregando(false);
+        if (err || !texto.trim()) { alert("N\xC3O FOI POSS\xCDVEL EXTRAIR TEXTO DO PDF.\nVerifique se o PDF tem texto selecion\xE1vel (n\xE3o pode ser imagem escaneada)."); return; }
+        var items = parsearTexto(texto);
+        if (!items.length) { alert("NENHUM ITEM COM PRE\xC7O ENCONTRADO NO PDF.\nTente salvar o PDF como Excel ou CSV e carregar novamente."); return; }
+        setItemsOrc(items);
+      });
+    } else if (ext === "xlsx" || ext === "xls") {
       parsearXLSX(file, function(items, err) {
         setCarregando(false);
         if (err || !items.length) { alert("NENHUM ITEM ENCONTRADO. VERIFIQUE SE O EXCEL CONT\xC9M COLUNAS DE DESCRI\xC7\xC3O E PRE\xC7O."); return; }
@@ -4644,7 +4680,7 @@ function ModalCasarInsumos(_ref_cas) {
           CE("input",{value:busca2,onChange:function(e){setBusca2(e.target.value.toUpperCase());},placeholder:"\uD83D\uDD0D Buscar...",style:stSrch}),
           CE("div",{style:stInst},"\u2461 Clique no item e pressione LIGAR"),
           CE("label",{style:Object.assign({},stLoad,{display:"flex",flexDirection:"column",alignItems:"center",margin:"8px 10px",opacity:carregando?0.6:1})},
-            CE("input",{type:"file",accept:".xlsx,.xls,.csv,.txt",style:{display:"none"},onChange:handleFile}),
+            CE("input",{type:"file",accept:".pdf,.xlsx,.xls,.csv,.txt",style:{display:"none"},onChange:handleFile}),
             carregando
               ?CE("div",{style:{fontSize:11,color:"#2a5298",fontWeight:700}},"Lendo arquivo...")
               :itemsOrc.length>0
@@ -4656,7 +4692,7 @@ function ModalCasarInsumos(_ref_cas) {
                 :CE("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",gap:3}},
                     CE("div",{style:{fontSize:22,marginBottom:2}},"\uD83D\uDCC2"),
                     CE("div",{style:{fontWeight:700,color:"#2a5298"}},"Carregar arquivo"),
-                    CE("div",{style:{marginTop:2,color:"#888",fontSize:10}},"Excel (.xlsx), CSV ou TXT")
+                    CE("div",{style:{marginTop:2,color:"#888",fontSize:10}},"PDF, Excel (.xlsx), CSV ou TXT")
                   )
           ),
           CE("div",{style:stList},filtO.map(function(x){
