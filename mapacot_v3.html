@@ -4859,6 +4859,13 @@ function ModalLerComIA(_ref_ia) {
   var _sMsg=useState("Preparando..."),msg=_slicedToArray(_sMsg,2)[0],setMsg=_slicedToArray(_sMsg,2)[1];
   var _sB3=useState(""),busca3=_slicedToArray(_sB3,2)[0],setBusca3=_slicedToArray(_sB3,2)[1];
   var _sFiltro=useState("todos"),filtroTipo=_slicedToArray(_sFiltro,2)[0],setFiltroTipo=_slicedToArray(_sFiltro,2)[1];
+  var _sMD=useState({}),matchDesc=_slicedToArray(_sMD,2)[0],setMatchDesc=_slicedToArray(_sMD,2)[1];
+  var getMatchDesc=function(idx){
+    if(matchDesc[idx]!==undefined)return matchDesc[idx];
+    var id=matchs[idx]; if(!id)return "";
+    var found=(itens||[]).find(function(m){return m.id===id;});
+    return found?found.descricao:"";
+  };
   var forns=mapa.fornecedores||[];
   var normalizar=function(s){return (s||"").toUpperCase().replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();};
   var wordScore=function(a,b){
@@ -5006,6 +5013,9 @@ function ModalLerComIA(_ref_ia) {
         ),
         CE("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
           CE("colgroup",null,CE("col",{style:{width:"48%"}}),CE("col",{style:{width:"88px"}}),CE("col",null)),
+        CE("datalist",{id:"ia-mapa-dl"},
+          (itens||[]).map(function(mi){return CE("option",{key:mi.id,value:mi.descricao});})
+        ),
           CE("thead",null,CE("tr",{style:{background:"#eef1fa"}},
             CE("th",{style:{padding:"7px 10px",textAlign:"left"}},"Item do or\xE7amento"),
             CE("th",{style:{padding:"7px 10px",textAlign:"right"}},"Pre\xE7o unit."),
@@ -5022,14 +5032,19 @@ function ModalLerComIA(_ref_ia) {
               CE("td",{style:{padding:"7px 10px",color:"#222"}},oi.descricao),
               CE("td",{style:{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#186818",whiteSpace:"nowrap"}},"R$ "+Number(oi.preco).toFixed(2).replace(".",",")),
               CE("td",{style:{padding:"7px 10px"}},
-                CE("select",{
-                  value:matched||"",
-                  onChange:function(e){var v=e.target.value;setMatchs(function(prev){var n=Object.assign({},prev);n[idx]=v;return n;});},
-                  style:{width:"100%",fontSize:10,padding:"3px 6px",borderRadius:4,border:"1px solid "+(matched?"#b0d0b0":"#f0b080"),background:matched?"#f0f8f0":"#fff8f0"}
-                },
-                  CE("option",{value:""},"\u2014 n\xE3o usar \u2014"),
-                  itens.map(function(mi){return CE("option",{key:mi.id,value:mi.id},mi.descricao);})
-                )
+                CE("input",{
+                  type:"text",
+                  list:"ia-mapa-dl",
+                  value:getMatchDesc(idx),
+                  placeholder:"\uD83D\uDD0D digitar para buscar...",
+                  onChange:function(e){
+                    var txt=e.target.value;
+                    setMatchDesc(function(prev){var n=Object.assign({},prev);n[idx]=txt;return n;});
+                    var found=(itens||[]).find(function(m){return m.descricao===txt;});
+                    setMatchs(function(prev){var n=Object.assign({},prev);n[idx]=found?found.id:"";return n;});
+                  },
+                  style:{width:"100%",fontSize:10,padding:"4px 7px",borderRadius:4,border:"1.5px solid "+(matchs[idx]?"#b0d0b0":"#f0b080"),background:matchs[idx]?"#f0f8f0":"#fff8f0"}
+                })
               )
             );
           }))
