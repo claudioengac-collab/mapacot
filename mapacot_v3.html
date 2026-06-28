@@ -4857,6 +4857,8 @@ function ModalLerComIA(_ref_ia) {
   var _sErro=useState(""),erro=_slicedToArray(_sErro,2)[0],setErro=_slicedToArray(_sErro,2)[1];
   var _sCusto=useState(null),custo=_slicedToArray(_sCusto,2)[0],setCusto=_slicedToArray(_sCusto,2)[1];
   var _sMsg=useState("Preparando..."),msg=_slicedToArray(_sMsg,2)[0],setMsg=_slicedToArray(_sMsg,2)[1];
+  var _sB3=useState(""),busca3=_slicedToArray(_sB3,2)[0],setBusca3=_slicedToArray(_sB3,2)[1];
+  var _sFiltro=useState("todos"),filtroTipo=_slicedToArray(_sFiltro,2)[0],setFiltroTipo=_slicedToArray(_sFiltro,2)[1];
   var forns=mapa.fornecedores||[];
   var normalizar=function(s){return (s||"").toUpperCase().replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();};
   var wordScore=function(a,b){
@@ -4981,6 +4983,27 @@ function ModalLerComIA(_ref_ia) {
           CE("div",{style:{background:"#e6f4ea",borderRadius:6,padding:"4px 12px",color:"#186818",fontWeight:700}},qtCasados+" casados automaticamente"),
           qtSem>0&&CE("div",{style:{background:"#fff3e0",borderRadius:6,padding:"4px 12px",color:"#e65100",fontWeight:700}},qtSem+" sem correspond\xEAncia")
         ),
+        CE("div",{style:{display:"flex",gap:8,marginBottom:10,alignItems:"center",flexWrap:"wrap"}},
+          CE("input",{
+            value:busca3,
+            onChange:function(e){setBusca3(e.target.value);},
+            placeholder:"\uD83D\uDD0D Buscar item do or\xE7amento...",
+            style:{flex:1,minWidth:180,padding:"7px 10px",borderRadius:7,border:"1px solid #d0d8f0",fontSize:12,background:"#f8faff"}
+          }),
+          CE("select",{
+            value:filtroTipo,
+            onChange:function(e){setFiltroTipo(e.target.value);},
+            style:{padding:"7px 10px",borderRadius:7,border:"1px solid #d0d8f0",fontSize:11,background:"#f8faff",color:"#555"}
+          },
+            CE("option",{value:"todos"},"Todos ("+((resultado.itens||[]).length)+")"),
+            CE("option",{value:"casados"},"Casados ("+qtCasados+")"),
+            CE("option",{value:"sem"},"Sem correspond\xEAncia ("+qtSem+")")
+          ),
+          busca3&&CE("button",{
+            onClick:function(){setBusca3("");},
+            style:{padding:"7px 10px",borderRadius:7,border:"1px solid #d0d8f0",fontSize:11,cursor:"pointer",background:"#fff",color:"#888"}
+          },"\u2715 Limpar")
+        ),
         CE("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
           CE("colgroup",null,CE("col",{style:{width:"48%"}}),CE("col",{style:{width:"88px"}}),CE("col",null)),
           CE("thead",null,CE("tr",{style:{background:"#eef1fa"}},
@@ -4988,7 +5011,12 @@ function ModalLerComIA(_ref_ia) {
             CE("th",{style:{padding:"7px 10px",textAlign:"right"}},"Pre\xE7o unit."),
             CE("th",{style:{padding:"7px 10px",textAlign:"left"}},"Insumo no mapa")
           )),
-          CE("tbody",null,(resultado.itens||[]).map(function(oi,idx){
+          CE("tbody",null,(resultado.itens||[]).map(function(oi,originalIdx){return {oi:oi,originalIdx:originalIdx};}).filter(function(item){
+            var buscaOk=!busca3||normalizar(item.oi.descricao).indexOf(normalizar(busca3))>=0;
+            var tipoOk=filtroTipo==="todos"||(filtroTipo==="casados"&&!!matchs[item.originalIdx])||(filtroTipo==="sem"&&!matchs[item.originalIdx]);
+            return buscaOk&&tipoOk;
+          }).map(function(item){
+            var oi=item.oi, idx=item.originalIdx;
             var matched=matchs[idx];
             return CE("tr",{key:idx,style:{borderBottom:"1px solid #f0f2f8",background:idx%2?"#f8faff":"#fff"}},
               CE("td",{style:{padding:"7px 10px",color:"#222"}},oi.descricao),
