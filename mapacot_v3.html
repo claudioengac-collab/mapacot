@@ -4585,7 +4585,7 @@ function ModalCasarInsumos(_ref_cas) {
       pdfjsLib.getDocument({data: new Uint8Array(e.target.result)}).promise
         .then(function(pdf) { return pdf.getPage(1).then(function(pg){ return pg.getTextContent(); }); })
         .then(function(content) {
-          var txts = (content.items||[]).map(function(it){ return it.str||""; });
+          var txts = (content.items||[]).map(function(it){ return it.str||""; }).filter(function(s){ return s.trim()!==""; });
           cb(txts, null);
         })
         .catch(function(err){ cb([], err); });
