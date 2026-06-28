@@ -433,29 +433,6 @@ var sbGetMapas = function sbGetMapas() {
       });
   });
 };
-var sbGetDicionario = function() {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.mapacot_dicionario", {headers: SB})
-    .then(function(r){ return r.json(); })
-    .then(function(d){ return (d && d[0] && d[0].dados) ? d[0].dados : {}; })
-    .catch(function(){ return {}; });
-};
-var sbSaveDicionario = function(dict) {
-  var body = JSON.stringify({ dados: dict, atualizado_em: new Date().toISOString() });
-  var doPatch2 = function() {
-    return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.mapacot_dicionario", {
-      method: "PATCH", headers: SB, body: body
-    }).then(function(r) {
-      if (!r.ok) return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
-        method: "POST", headers: SB,
-        body: JSON.stringify({ id: "mapacot_dicionario", dados: dict, atualizado_em: new Date().toISOString() })
-      });
-      return r;
-    });
-  };
-  return doPatch2().catch(function() {
-    return new Promise(function(res){ setTimeout(res, 1500); }).then(doPatch2);
-  });
-};
 var sbSaveMapa = /*#__PURE__*/function () {
   var _ref2 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee2(m) {
     return _regenerator().w(function (_context2) {
@@ -3012,8 +2989,6 @@ function MapEditor(_ref15) {
     onCriarAssociacao = _ref15.onCriarAssociacao || null,
     onRemoverAssociacao = _ref15.onRemoverAssociacao || null,
     onSubstituirAssociacoes = _ref15.onSubstituirAssociacoes || null,
-    dicionario = _ref15.dicionario || {},
-    onSaveDicionario = _ref15.onSaveDicionario || null,
     mapas = _ref15.mapas || [];
 var gerOrcMapEditor = onGerenciarOrcamento;
   var _useStateGerEd = useState(false);
@@ -4368,10 +4343,10 @@ var _useState27 = useState(init),
       gap: 5
     })
   }, "\uD83C\uDFA8 COR"), /*#__PURE__*/React.createElement("button", {
-    title: "CASAR INSUMOS COM OR\xC7AMENTO DO FORNECEDOR",
     onClick: function onClick() { setShowCasar(true); },
-    style: { background: "#0d6e2e", color: "#fff", border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
-  }, "\uD83D\uDD17 CASAR"), /*#__PURE__*/React.createElement("span", {
+    title: "CASAR INSUMOS COM OR\xC7AMENTO",
+    style: { background: "#f0a500", color: "#1a1a1a", border: "none", borderRadius: 7, padding: "6px 13px", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
+  }, "\uD83D\uDD17 CASAR INSUMOS"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
       fontWeight: 600,
@@ -4505,174 +4480,166 @@ var _useState27 = useState(init),
     onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraGerEd(obra); setShowGerEd(true); }, 200); }
   }),
   showCasar && /*#__PURE__*/React.createElement(ModalCasarInsumos, {
-    mapa: mapa, itens: itens, fornecedores: mapa.fornecedores || [],
-    dicionario: dicionario,
+    mapa: mapa, itens: itens,
     onClose: function(){ setShowCasar(false); },
-    onConfirm: function(ligacoes, novoDic) {
-      Object.keys(ligacoes).forEach(function(itemMapaId){
-        var lig=ligacoes[itemMapaId];
+    onConfirm: function(ligs) {
+      Object.keys(ligs).forEach(function(itemMapaId) {
+        var lig=ligs[itemMapaId];
         setPreco(itemMapaId, lig.fornId, String(lig.preco).replace(".",","));
       });
-      if(onSaveDicionario) onSaveDicionario(novoDic);
       setShowCasar(false);
     }
   })
   );
 }
 
-// ─── Modal Casar Insumos ─────────────────────────────────────────────────────
+// ─── Modal Casar Insumos ────────────────────────────────────────────────────
 function ModalCasarInsumos(_ref_cas) {
-  var mapa=_ref_cas.mapa,itens=_ref_cas.itens,fornecedores=_ref_cas.fornecedores;
-  var dicionario=_ref_cas.dicionario||{},onConfirm=_ref_cas.onConfirm,onClose=_ref_cas.onClose;
-  var _sStep=React.useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
-  var _sForn=React.useState(""),fornId=_slicedToArray(_sForn,2)[0],setFornId=_slicedToArray(_sForn,2)[1];
-  var _sTxt=React.useState(""),textoOrc=_slicedToArray(_sTxt,2)[0],setTextoOrc=_slicedToArray(_sTxt,2)[1];
-  var _sItO=React.useState([]),itemsOrc=_slicedToArray(_sItO,2)[0],setItemsOrc=_slicedToArray(_sItO,2)[1];
-  var _sSM=React.useState(null),selMapaId=_slicedToArray(_sSM,2)[0],setSelMapaId=_slicedToArray(_sSM,2)[1];
-  var _sSO=React.useState(null),selOrcIdx=_slicedToArray(_sSO,2)[0],setSelOrcIdx=_slicedToArray(_sSO,2)[1];
-  var _sLig=React.useState({}),ligacoes=_slicedToArray(_sLig,2)[0],setLigacoes=_slicedToArray(_sLig,2)[1];
-  var _sB1=React.useState(""),busca1=_slicedToArray(_sB1,2)[0],setBusca1=_slicedToArray(_sB1,2)[1];
-  var _sB2=React.useState(""),busca2=_slicedToArray(_sB2,2)[0],setBusca2=_slicedToArray(_sB2,2)[1];
-  var forn=(fornecedores||[]).find(function(f){return f.id===fornId;})||{};
-  var fornNome=(forn.nome||"").toUpperCase();
-  var parsearTexto=function(txt){
-    var linhas=txt.split(/\n/).map(function(l){return l.trim();}).filter(function(l){return l.length>3;});
-    var parsed=[];
-    linhas.forEach(function(linha){
-      var nums=linha.match(/(\d{1,3}(?:\.\d{3})*(?:,\d{1,2})|\d+,\d{2})/g);
-      if(!nums||nums.length===0)return;
-      var lastNum=nums[nums.length-1];
-      var preco=parseFloat(lastNum.replace(/\./g,"").replace(",","."));
-      if(preco<=0||preco>9999999)return;
-      var desc=linha.slice(0,linha.lastIndexOf(lastNum)).replace(/^\d+\s*/,"").replace(/\s{2,}/g," ").trim().toUpperCase();
-      if(desc.length>3)parsed.push({desc:desc,preco:preco});
+  var mapa=_ref_cas.mapa, itens=_ref_cas.itens, onClose=_ref_cas.onClose, onConfirm=_ref_cas.onConfirm;
+  var _sF=useState(""),   fornId=_slicedToArray(_sF,2)[0],    setFornId=_slicedToArray(_sF,2)[1];
+  var _sT=useState(false),showTxt=_slicedToArray(_sT,2)[0],   setShowTxt=_slicedToArray(_sT,2)[1];
+  var _sX=useState(""),   textoIn=_slicedToArray(_sX,2)[0],   setTextoIn=_slicedToArray(_sX,2)[1];
+  var _sI=useState([]),   itemsOrc=_slicedToArray(_sI,2)[0],  setItemsOrc=_slicedToArray(_sI,2)[1];
+  var _sL=useState(null), selMId=_slicedToArray(_sL,2)[0],    setSelMId=_slicedToArray(_sL,2)[1];
+  var _sR=useState(null), selOIdx=_slicedToArray(_sR,2)[0],   setSelOIdx=_slicedToArray(_sR,2)[1];
+  var _sLig=useState({}), ligs=_slicedToArray(_sLig,2)[0],    setLigs=_slicedToArray(_sLig,2)[1];
+  var _sB1=useState(""),  busca1=_slicedToArray(_sB1,2)[0],   setBusca1=_slicedToArray(_sB1,2)[1];
+  var _sB2=useState(""),  busca2=_slicedToArray(_sB2,2)[0],   setBusca2=_slicedToArray(_sB2,2)[1];
+  var forns = mapa.fornecedores || [];
+  var fornNome = (forns.find(function(f){return f.id===fornId;})||{}).nome || "";
+  var parsearTexto = function(txt) {
+    var parsed = [];
+    txt.split("\n").forEach(function(linha) {
+      linha = linha.trim(); if (linha.length < 4) return;
+      var nums = linha.match(/(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/g);
+      if (!nums || !nums.length) return;
+      var lastNum = nums[nums.length-1];
+      var preco = parseFloat(lastNum.replace(/\./g,"").replace(",","."));
+      if (preco <= 0 || preco > 9999999) return;
+      var desc = linha.slice(0,linha.lastIndexOf(lastNum)).replace(/^\d+\s*/,"").replace(/\s{2,}/g," ").trim().toUpperCase();
+      if (desc.length > 3) parsed.push({desc:desc,preco:preco});
     });
     return parsed;
   };
-  var handleAvancar=function(){
-    if(!fornId){alert("SELECIONE O FORNECEDOR.");return;}
-    var parsed=parsearTexto(textoOrc);
-    if(parsed.length===0){alert("NENHUM ITEM ENCONTRADO. VERIFIQUE O TEXTO COLADO.");return;}
-    var autoLig={};
-    parsed.forEach(function(it,idx){
-      var key=fornNome+"::"+it.desc;
-      var mapaId=dicionario[key];
-      if(mapaId&&!autoLig[mapaId])autoLig[mapaId]={descPDF:it.desc,preco:it.preco,fornId:fornId,orcIdx:idx};
-    });
-    setItemsOrc(parsed);setLigacoes(autoLig);setStep(2);
+  var handleAnalisar = function() {
+    var parsed = parsearTexto(textoIn);
+    if (!parsed.length) { alert("NENHUM ITEM ENCONTRADO. VERIFIQUE SE O TEXTO CONT\xC9M PRE\xC7OS NO FORMATO 00,00 OU 0.000,00."); return; }
+    setItemsOrc(parsed); setShowTxt(false);
   };
-  var ligar=function(){
-    if(!selMapaId||selOrcIdx===null)return;
-    var orc=itemsOrc[selOrcIdx];if(!orc)return;
-    var novas=Object.assign({},ligacoes);
-    novas[selMapaId]={descPDF:orc.desc,preco:orc.preco,fornId:fornId,orcIdx:selOrcIdx};
-    setLigacoes(novas);setSelMapaId(null);setSelOrcIdx(null);
+  var ligar = function() {
+    if (!fornId) { alert("SELECIONE O FORNECEDOR ANTES DE LIGAR."); return; }
+    if (!selMId || selOIdx === null) return;
+    var orc = itemsOrc[selOIdx]; if (!orc) return;
+    var novo = Object.assign({},ligs);
+    novo[selMId]={descPDF:orc.desc,preco:orc.preco,fornId:fornId,orcIdx:selOIdx};
+    setLigs(novo); setSelMId(null); setSelOIdx(null);
   };
-  var desligar=function(mapaId){var novas=Object.assign({},ligacoes);delete novas[mapaId];setLigacoes(novas);};
-  var confirmar=function(){
-    var keys=Object.keys(ligacoes);
-    if(keys.length===0){alert("NENHUMA LIGA\xC7\xC3O CRIADA.");return;}
-    var novoDic=Object.assign({},dicionario);
-    keys.forEach(function(mid){var l=ligacoes[mid];novoDic[fornNome+"::"+l.descPDF]=mid;});
-    onConfirm(ligacoes,novoDic);
+  var desligar = function(mid){var n=Object.assign({},ligs);delete n[mid];setLigs(n);};
+  var confirmar = function(){
+    if(!Object.keys(ligs).length){alert("NENHUMA LIGA\xC7\xC3O CRIADA.");return;}
+    onConfirm(ligs);
   };
-  var nLig=Object.keys(ligacoes).length;
-  var podeLinkar=!!(selMapaId&&selOrcIdx!==null);
-  var filtM=itens.filter(function(it){return !busca1||(it.descricao||"").toUpperCase().includes(busca1);});
-  var filtO=itemsOrc.map(function(it,idx){return{it:it,idx:idx};}).filter(function(x){return !busca2||x.it.desc.includes(busca2);});
-  var stLink={background:podeLinkar?"#2a5298":"#bbb",color:"#fff",border:"none",borderRadius:8,padding:"10px 6px",cursor:podeLinkar?"pointer":"not-allowed",display:"flex",flexDirection:"column",alignItems:"center",gap:3,width:38};
-  if(step===1)return /*#__PURE__*/React.createElement(Modal,{open:true,onClose:onClose,maxWidth:520},
-    /*#__PURE__*/React.createElement("div",{style:SC.mHdr},
-      /*#__PURE__*/React.createElement("span",{style:SC.mTitle},"\uD83D\uDD17 CASAR INSUMOS COM OR\xC7AMENTO"),
-      /*#__PURE__*/React.createElement("button",{style:{background:"none",border:"none",color:"#999",cursor:"pointer"},onClick:onClose},/*#__PURE__*/React.createElement(IcoClose,null))),
-    /*#__PURE__*/React.createElement("div",{style:{padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}},
-      /*#__PURE__*/React.createElement("div",null,
-        /*#__PURE__*/React.createElement("label",{style:SC.lbl},"FORNECEDOR"),
-        /*#__PURE__*/React.createElement("select",{value:fornId,onChange:function(e){setFornId(e.target.value);},style:{width:"100%",border:"1.5px solid #dde1e9",borderRadius:8,padding:"9px 12px",fontSize:13,outline:"none",background:"#fff",fontFamily:"inherit"}},
-          /*#__PURE__*/React.createElement("option",{value:""},"\u2014 SELECIONE \u2014"),
-          (fornecedores||[]).map(function(f){return /*#__PURE__*/React.createElement("option",{key:f.id,value:f.id},f.nome);})
-        )
+  var nLig=Object.keys(ligs).length;
+  var podeLinkar=!!(fornId&&selMId&&selOIdx!==null);
+  var filtM=itens.filter(function(it){return !busca1||(it.descricao||"").toUpperCase().includes(busca1.toUpperCase());});
+  var filtO=itemsOrc.map(function(it,i){return{it:it,i:i};}).filter(function(x){return !busca2||x.it.desc.includes(busca2.toUpperCase());});
+  var CE=React.createElement;
+  var stOvl={position:"fixed",inset:0,background:"rgba(10,20,50,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200};
+  var stMod={background:"#fff",borderRadius:14,width:"96vw",maxWidth:900,maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"};
+  var stHdr={background:"#2a5298",color:"#fff",padding:"14px 20px",display:"flex",alignItems:"center",gap:10};
+  var stFBar={background:"#f0f4ff",borderBottom:"1px solid #dde4f5",padding:"10px 20px",display:"flex",alignItems:"center",gap:10,fontSize:12};
+  var stSel={border:"1.5px solid #c5d8f0",borderRadius:6,padding:"5px 10px",fontSize:12,color:"#2a5298",fontWeight:700,background:"#fff",outline:"none",cursor:"pointer"};
+  var stPan={flex:1,display:"flex",flexDirection:"column",overflow:"hidden",borderRight:"2px solid #e4e8f5"};
+  var stPanR={flex:1,display:"flex",flexDirection:"column",overflow:"hidden"};
+  var stPHdr={padding:"10px 14px 8px",borderBottom:"1px solid #eef0f8",display:"flex",alignItems:"center",gap:8};
+  var stPTit={fontSize:11,fontWeight:800,color:"#2a5298",flex:1,letterSpacing:0.5};
+  var stCnt={background:"#e8f0fe",color:"#2a5298",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700};
+  var stSrch={margin:"6px 10px",border:"1.5px solid #dde4f5",borderRadius:6,padding:"4px 9px",fontSize:11,outline:"none",fontFamily:"inherit"};
+  var stInst={background:"#fffbe8",border:"1px solid #f0d060",borderRadius:6,padding:"5px 10px",fontSize:10,color:"#7a6010",textAlign:"center",margin:"0 10px 6px",lineHeight:1.4};
+  var stList={overflowY:"auto",flex:1,padding:"2px 0"};
+  var stLnkZ={display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",width:56,flexShrink:0,background:"#f8f9ff",borderLeft:"1px solid #e4e8f5",borderRight:"1px solid #e4e8f5",gap:12};
+  var stBtnL={background:podeLinkar?"#2a5298":"#bbb",color:"#fff",border:"none",borderRadius:8,padding:"10px 6px",cursor:podeLinkar?"pointer":"not-allowed",display:"flex",flexDirection:"column",alignItems:"center",gap:3,width:40};
+  var stLoad={margin:"8px 10px",border:"2px dashed #c5d8f0",borderRadius:8,padding:"14px 10px",textAlign:"center",cursor:"pointer",color:"#7a9abf",fontSize:11,background:"#f8faff"};
+  var stFtr={padding:"12px 20px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10};
+  var stSalv={background:nLig>0?"#186818":"#bbb",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12,fontWeight:800,cursor:nLig>0?"pointer":"not-allowed",marginLeft:"auto",display:"flex",alignItems:"center",gap:6};
+  return CE("div",{style:stOvl},
+    CE("div",{style:stMod},
+      CE("div",{style:stHdr},
+        CE("span",{style:{fontSize:18}},"\uD83D\uDD17"),
+        CE("h2",{style:{fontSize:14,fontWeight:800,flex:1,margin:0}},"CASAR INSUMOS COM OR\xC7AMENTO"),
+        CE("span",{style:{background:"rgba(255,255,255,0.18)",borderRadius:5,padding:"3px 10px",fontSize:11,fontWeight:600}},"MP N\xBA "+mapa.numero),
+        CE("button",{style:{background:"none",border:"none",color:"#fff",fontSize:22,cursor:"pointer",lineHeight:1},onClick:onClose},"\xD7")
       ),
-      /*#__PURE__*/React.createElement("div",null,
-        /*#__PURE__*/React.createElement("label",{style:SC.lbl},"COLE O OR\xC7AMENTO AQUI"),
-        /*#__PURE__*/React.createElement("div",{style:{fontSize:11,color:"#888",marginBottom:6}},"Copie a tabela do PDF/planilha do fornecedor e cole abaixo. O sistema detecta descri\xE7\xF5es e pre\xE7os automaticamente."),
-        /*#__PURE__*/React.createElement("textarea",{value:textoOrc,onChange:function(e){setTextoOrc(e.target.value);},placeholder:"Ex:\nTRELICA TB 8L 12M  54  106,00  15,90  4.865,40\nPERFIL 68X30  34  129,65  19,44  3.746,89",style:{width:"100%",minHeight:180,border:"1.5px solid #dde1e9",borderRadius:8,padding:"10px 12px",fontSize:11,fontFamily:"monospace",outline:"none",resize:"vertical",boxSizing:"border-box"}})
-      ),
-      /*#__PURE__*/React.createElement("div",{style:{display:"flex",gap:8,justifyContent:"flex-end"}},
-        /*#__PURE__*/React.createElement("button",{style:SC.btnSec,onClick:onClose},"CANCELAR"),
-        /*#__PURE__*/React.createElement("button",{style:SC.btnPri,onClick:handleAvancar},"\u2192 AVAN\xC7AR")
-      )
-    )
-  );
-  return /*#__PURE__*/React.createElement(Modal,{open:true,onClose:onClose,maxWidth:900},
-    /*#__PURE__*/React.createElement("div",{style:SC.mHdr},
-      /*#__PURE__*/React.createElement("span",{style:SC.mTitle},"\uD83D\uDD17 CASAMENTO \u2014 "+(forn.nome||"").toUpperCase()),
-      /*#__PURE__*/React.createElement("button",{style:Object.assign({},SC.btnSec,{marginLeft:"auto",fontSize:11,padding:"4px 10px"}),onClick:function(){setStep(1);}},"← VOLTAR"),
-      /*#__PURE__*/React.createElement("button",{style:{background:"none",border:"none",color:"#999",cursor:"pointer",marginLeft:8},onClick:onClose},/*#__PURE__*/React.createElement(IcoClose,null))
-    ),
-    /*#__PURE__*/React.createElement("div",{style:{display:"flex",height:400,overflow:"hidden"}},
-      /*#__PURE__*/React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column",borderRight:"2px solid #e4e8f5"}},
-        /*#__PURE__*/React.createElement("div",{style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",display:"flex",alignItems:"center",gap:6}},
-          /*#__PURE__*/React.createElement("span",{style:{fontSize:11,fontWeight:800,color:"#2a5298",flex:1}},"\uD83D\uDCCB INSUMOS DO MAPA"),
-          /*#__PURE__*/React.createElement("span",{style:{background:"#e8f0fe",color:"#2a5298",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}},itens.length+" ITENS")
+      CE("div",{style:stFBar},
+        CE("span",{style:{fontWeight:700,color:"#2a5298"}},"FORNECEDOR:"),
+        CE("select",{value:fornId,onChange:function(e){setFornId(e.target.value);},style:stSel},
+          CE("option",{value:""},"\u2014 SELECIONE \u2014"),
+          forns.map(function(f){return CE("option",{key:f.id,value:f.id},f.nome);})
         ),
-        /*#__PURE__*/React.createElement("input",{value:busca1,onChange:function(e){setBusca1(e.target.value.toUpperCase());},placeholder:"\uD83D\uDD0D BUSCAR...",style:{margin:"5px 10px",border:"1.5px solid #dde4f5",borderRadius:6,padding:"4px 9px",fontSize:11,outline:"none",fontFamily:"inherit"}}),
-        /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:"#7a6010",textAlign:"center",padding:"3px 8px",background:"#fffbe8"}},"\u2460 CLIQUE NUM INSUMO DO MAPA"),
-        /*#__PURE__*/React.createElement("div",{style:{overflowY:"auto",flex:1}},
-          filtM.map(function(it){
-            var lig=ligacoes[it.id],isSel=selMapaId===it.id;
-            return /*#__PURE__*/React.createElement("div",{key:it.id,onClick:function(){if(!lig)setSelMapaId(isSel?null:it.id);},style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",cursor:lig?"default":"pointer",background:lig?"#e6f4ea":isSel?"#dbeafe":"transparent",borderLeft:lig?"3px solid #186818":isSel?"3px solid #2a5298":"3px solid transparent",display:"flex",alignItems:"center",gap:7}},
-              /*#__PURE__*/React.createElement("div",{style:{width:7,height:7,borderRadius:"50%",background:lig?"#186818":isSel?"#2a5298":"#d0d8e8",flexShrink:0}}),
-              /*#__PURE__*/React.createElement("div",{style:{flex:1}},
-                /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:600,color:lig?"#186818":isSel?"#1a3a78":"#1a2a4a"}},it.descricao),
-                /*#__PURE__*/React.createElement("div",{style:{fontSize:9,color:"#888",marginTop:1}},it.qt+" "+(it.unid||""))
+        CE("span",{style:{color:"#888",marginLeft:6,fontSize:11}},"Selecione e carregue o or\xE7amento \u2192")
+      ),
+      CE("div",{style:{display:"flex",flex:1,overflow:"hidden"}},
+        CE("div",{style:stPan},
+          CE("div",{style:stPHdr},CE("span",{style:stPTit},"\uD83D\uDCCB INSUMOS DO MAPA"),CE("span",{style:stCnt},itens.length+" ITENS")),
+          CE("input",{value:busca1,onChange:function(e){setBusca1(e.target.value);},placeholder:"\uD83D\uDD0D Buscar insumo...",style:stSrch}),
+          CE("div",{style:stInst},"\u2460 Clique em um insumo do mapa"),
+          CE("div",{style:stList},filtM.map(function(it){
+            var lig=ligs[it.id],isSel=selMId===it.id;
+            return CE("div",{key:it.id,onClick:function(){if(!lig)setSelMId(isSel?null:it.id);},style:{padding:"8px 14px",borderBottom:"1px solid #f0f2f8",cursor:lig?"default":"pointer",background:lig?"#e6f4ea":isSel?"#dbeafe":"transparent",borderLeft:lig?"3px solid #186818":isSel?"3px solid #2a5298":"3px solid transparent",display:"flex",alignItems:"center",gap:8}},
+              CE("div",{style:{width:8,height:8,borderRadius:"50%",background:lig?"#186818":isSel?"#2a5298":"#d0d8e8",flexShrink:0}}),
+              CE("div",{style:{flex:1}},
+                CE("div",{style:{fontSize:11,fontWeight:600,color:lig?"#186818":isSel?"#1a3a78":"#1a2a4a"}},it.descricao),
+                CE("div",{style:{fontSize:10,color:"#888",marginTop:1}},it.qt+" "+(it.unid||""))
               ),
-              lig?/*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:3}},
-                /*#__PURE__*/React.createElement("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713"),
-                /*#__PURE__*/React.createElement("span",{style:{fontSize:9,color:"#186818",fontWeight:700}},"R$ "+lig.preco.toLocaleString("pt-BR",{minimumFractionDigits:2})),
-                /*#__PURE__*/React.createElement("button",{onClick:function(e){e.stopPropagation();desligar(it.id);},style:{background:"#fdecea",border:"none",borderRadius:3,padding:"1px 5px",fontSize:9,color:"#c0392b",cursor:"pointer"}},"\u2702")
+              lig?CE("div",{style:{display:"flex",alignItems:"center",gap:4}},
+                CE("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713 CASADO"),
+                CE("button",{onClick:function(e){e.stopPropagation();desligar(it.id);},style:{background:"#fdecea",border:"none",borderRadius:3,padding:"1px 6px",fontSize:10,color:"#c0392b",cursor:"pointer",fontWeight:700}},"\u2702")
               ):null
             );
-          })
-        )
-      ),
-      /*#__PURE__*/React.createElement("div",{style:{width:52,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,background:"#f8f9ff"}},
-        /*#__PURE__*/React.createElement("button",{onClick:ligar,disabled:!podeLinkar,title:"LIGAR",style:stLink},
-          /*#__PURE__*/React.createElement("span",{style:{fontSize:16}},"\uD83D\uDD17"),
-          /*#__PURE__*/React.createElement("span",{style:{fontSize:8,fontWeight:800}},"LIGAR")
+          }))
         ),
-        /*#__PURE__*/React.createElement("span",{style:{fontSize:13,color:"#bbb"}},"\u2194")
-      ),
-      /*#__PURE__*/React.createElement("div",{style:{flex:1,display:"flex",flexDirection:"column"}},
-        /*#__PURE__*/React.createElement("div",{style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",display:"flex",alignItems:"center",gap:6}},
-          /*#__PURE__*/React.createElement("span",{style:{fontSize:11,fontWeight:800,color:"#2a5298",flex:1}},"\uD83D\uDCC4 OR\xC7AMENTO"),
-          /*#__PURE__*/React.createElement("span",{style:{background:"#e8f0fe",color:"#2a5298",borderRadius:10,padding:"1px 8px",fontSize:10,fontWeight:700}},itemsOrc.length+" ITENS")
+        CE("div",{style:stLnkZ},
+          CE("button",{onClick:ligar,disabled:!podeLinkar,title:"LIGAR",style:stBtnL},CE("span",{style:{fontSize:16}},"\uD83D\uDD17"),CE("small",{style:{fontSize:8,fontWeight:800}},"LIGAR")),
+          CE("span",{style:{fontSize:14,color:"#bbb"}},"\u2194"),
+          CE("button",{onClick:function(){if(selMId&&ligs[selMId])desligar(selMId);},title:"REMOVER",style:{background:"#fdecea",color:"#c0392b",border:"1px solid #f5c6c2",borderRadius:8,padding:"8px 6px",cursor:"pointer",fontSize:10,fontWeight:700,width:40,textAlign:"center"}},"\u2702 DEL")
         ),
-        /*#__PURE__*/React.createElement("input",{value:busca2,onChange:function(e){setBusca2(e.target.value.toUpperCase());},placeholder:"\uD83D\uDD0D BUSCAR...",style:{margin:"5px 10px",border:"1.5px solid #dde4f5",borderRadius:6,padding:"4px 9px",fontSize:11,outline:"none",fontFamily:"inherit"}}),
-        /*#__PURE__*/React.createElement("div",{style:{fontSize:10,color:"#7a6010",textAlign:"center",padding:"3px 8px",background:"#fffbe8"}},"\u2461 CLIQUE NUM ITEM DO OR\xC7AMENTO"),
-        /*#__PURE__*/React.createElement("div",{style:{overflowY:"auto",flex:1}},
-          filtO.map(function(x){
-            var it=x.it,idx=x.idx,isSel=selOrcIdx===idx;
-            var isLig=Object.values(ligacoes).some(function(l){return l.orcIdx===idx;});
-            return /*#__PURE__*/React.createElement("div",{key:idx,onClick:function(){if(!isLig)setSelOrcIdx(isSel?null:idx);},style:{padding:"7px 12px",borderBottom:"1px solid #f0f2f8",cursor:isLig?"default":"pointer",background:isLig?"#e6f4ea":isSel?"#fef3c7":"transparent",borderLeft:isLig?"3px solid #186818":isSel?"3px solid #f0a500":"3px solid transparent",display:"flex",alignItems:"center",gap:7}},
-              /*#__PURE__*/React.createElement("div",{style:{flex:1}},
-                /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:600,color:isLig?"#186818":isSel?"#92400e":"#1a2a4a"}},it.desc),
-                /*#__PURE__*/React.createElement("div",{style:{fontSize:11,fontWeight:800,color:"#186818",marginTop:2}},"R$ "+it.preco.toLocaleString("pt-BR",{minimumFractionDigits:2}))
+        CE("div",{style:stPanR},
+          CE("div",{style:stPHdr},CE("span",{style:stPTit},"\uD83D\uDCC4 OR\xC7AMENTO"+(fornNome?" \u2014 "+fornNome:"")),CE("span",{style:stCnt},itemsOrc.length+" ITENS")),
+          CE("input",{value:busca2,onChange:function(e){setBusca2(e.target.value.toUpperCase());},placeholder:"\uD83D\uDD0D Buscar...",style:stSrch}),
+          CE("div",{style:stInst},"\u2461 Clique no item e pressione LIGAR"),
+          !itemsOrc.length&&!showTxt?CE("div",{style:stLoad,onClick:function(){setShowTxt(true);}},
+            CE("div",{style:{fontSize:22,marginBottom:4}},"\uD83D\uDCC2"),
+            CE("div",{style:{fontWeight:700,color:"#2a5298"}},"Carregar or\xE7amento"),
+            CE("div",{style:{marginTop:2}},"Cole o texto do or\xE7amento do fornecedor")
+          ):null,
+          showTxt?CE("div",{style:{margin:"6px 10px",display:"flex",flexDirection:"column",gap:6}},
+            CE("textarea",{value:textoIn,onChange:function(e){setTextoIn(e.target.value);},placeholder:"Cole aqui o texto do or\xE7amento...",style:{border:"1.5px solid #c5d8f0",borderRadius:6,padding:"8px 10px",fontSize:11,fontFamily:"monospace",minHeight:120,resize:"vertical",outline:"none",width:"100%",boxSizing:"border-box"}}),
+            CE("button",{onClick:handleAnalisar,style:{background:"#2a5298",color:"#fff",border:"none",borderRadius:6,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer"}},"ANALISAR \u2192")
+          ):null,
+          itemsOrc.length>0&&!showTxt?CE("button",{onClick:function(){setShowTxt(true);setTextoIn("");setItemsOrc([]);},style:{margin:"0 10px 6px",background:"none",border:"none",color:"#7a9abf",fontSize:10,cursor:"pointer",textAlign:"left",padding:0}},"\u21BA Alterar or\xE7amento"):null,
+          CE("div",{style:stList},filtO.map(function(x){
+            var it=x.it,idx=x.i,isSel=selOIdx===idx;
+            var isLig=Object.values(ligs).some(function(l){return l.orcIdx===idx;});
+            return CE("div",{key:idx,onClick:function(){if(!isLig)setSelOIdx(isSel?null:idx);},style:{padding:"8px 14px",borderBottom:"1px solid #f0f2f8",cursor:isLig?"default":"pointer",background:isLig?"#e6f4ea":isSel?"#fef3c7":"transparent",borderLeft:isLig?"3px solid #186818":isSel?"3px solid #f0a500":"3px solid transparent",display:"flex",alignItems:"center",gap:8}},
+              CE("div",{style:{flex:1}},
+                CE("div",{style:{fontSize:11,fontWeight:600,color:isLig?"#186818":isSel?"#92400e":"#1a2a4a"}},it.desc),
+                CE("div",{style:{fontSize:11,fontWeight:800,color:"#186818",marginTop:2}},"R$ "+it.preco.toLocaleString("pt-BR",{minimumFractionDigits:2}))
               ),
-              isLig?/*#__PURE__*/React.createElement("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713"):null
+              isLig?CE("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713"):null
             );
-          })
+          }))
         )
+      ),
+      CE("div",{style:stFtr},
+        CE("span",{style:{fontSize:12,color:"#555"}},"Liga\xE7\xF5es:"),
+        CE("span",{style:{background:nLig>0?"#186818":"#ccc",color:"#fff",borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700}},nLig+" "+(nLig===1?"CASADA":"CASADAS")),
+        CE("button",{style:{background:"none",border:"1.5px solid #dde4f5",borderRadius:8,padding:"9px 16px",fontSize:12,fontWeight:600,color:"#666",cursor:"pointer"},onClick:onClose},"CANCELAR"),
+        CE("button",{style:stSalv,disabled:nLig===0,onClick:confirmar},"\u2705 SALVAR E PREENCHER PRE\xC7OS")
       )
-    ),
-    /*#__PURE__*/React.createElement("div",{style:{padding:"10px 18px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10}},
-      /*#__PURE__*/React.createElement("span",{style:{fontSize:12,color:"#555"}},"Liga\xE7\xF5es:"),
-      /*#__PURE__*/React.createElement("span",{style:{background:nLig>0?"#186818":"#ccc",color:"#fff",borderRadius:20,padding:"3px 12px",fontSize:11,fontWeight:700}},nLig+" "+(nLig===1?"CASADA":"CASADAS")),
-      /*#__PURE__*/React.createElement("button",{style:Object.assign({},SC.btnSec,{marginLeft:"auto"}),onClick:onClose},"CANCELAR"),
-      /*#__PURE__*/React.createElement("button",{style:Object.assign({},SC.btnPri,{opacity:nLig>0?1:0.4}),disabled:nLig===0,onClick:confirmar},"\u2705 SALVAR E PREENCHER PRE\xC7OS")
     )
   );
 }
+
 
 // ─── Map Card ─────────────────────────────────────────────────────────────────
 function MapCard(_ref16) {
@@ -5272,11 +5239,6 @@ function App() {
     }))();
   }, []);
 
-  // Carregar dicionário de casamento
-  useEffect(function() {
-    sbGetDicionario().then(function(d){ if(d&&Object.keys(d).length) setDicionario(d); }).catch(function(){});
-  }, []);
-
   // Carregar associações em background
   React.useEffect(function() {
     sbCarregarAssociacoes().then(function(lista){ if(lista.length) setAssociacoes(lista); }).catch(function(){});
@@ -5299,8 +5261,6 @@ function App() {
   }, [cadastros, loading, cadastrosOk]);
 
   // ── Funções de orçamento ──────────────────────────────────────────────────
-  var _useState_dic=React.useState({}),dicionario=_slicedToArray(_useState_dic,2)[0],setDicionario=_slicedToArray(_useState_dic,2)[1];
-  var saveDicionario=useCallback(function(novoDic){setDicionario(novoDic);sbSaveDicionario(novoDic).catch(function(){});}, []);
   var saveOrcamento = React.useCallback(function(obraId, dados) {
     setOrcamentos(function(prev){ return Object.assign({}, prev, _defineProperty({}, obraId, dados)); });
     return sbSaveOrcamento(obraId, dados).catch(function(){});
@@ -5459,8 +5419,6 @@ function App() {
     orcamentos: orcamentos,
     associacoes: associacoes,
     onSaveOrcamento: saveOrcamento,
-    dicionario: dicionario,
-    onSaveDicionario: saveDicionario,
     onLimparOrcamento: limparOrcamento,
     onGerenciarOrcamento: function(obra){ setObraGerenciando(obra); setShowGerenciarOrc(true); },
     onCriarAssociacao: criarAssociacao,
