@@ -4860,12 +4860,9 @@ function ModalLerComIA(_ref_ia) {
   var _sB3=useState(""),busca3=_slicedToArray(_sB3,2)[0],setBusca3=_slicedToArray(_sB3,2)[1];
   var _sFiltro=useState("todos"),filtroTipo=_slicedToArray(_sFiltro,2)[0],setFiltroTipo=_slicedToArray(_sFiltro,2)[1];
   var _sMD=useState({}),matchDesc=_slicedToArray(_sMD,2)[0],setMatchDesc=_slicedToArray(_sMD,2)[1];
-  var getMatchDesc=function(idx){
-    if(matchDesc[idx]!==undefined)return matchDesc[idx];
-    var id=matchs[idx]; if(!id)return "";
-    var found=(itens||[]).find(function(m){return m.id===id;});
-    return found?found.descricao:"";
-  };
+  var _sSA=useState(null),seletorAberto=_slicedToArray(_sSA,2)[0],setSeletorAberto=_slicedToArray(_sSA,2)[1];
+  var _sSB=useState(""),seletorBusca=_slicedToArray(_sSB,2)[0],setSeletorBusca=_slicedToArray(_sSB,2)[1];
+  var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); return f?f.descricao:""; };
   var forns=mapa.fornecedores||[];
   var normalizar=function(s){return (s||"").toUpperCase().replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();};
   var wordScore=function(a,b){
@@ -5013,9 +5010,6 @@ function ModalLerComIA(_ref_ia) {
         ),
         CE("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
           CE("colgroup",null,CE("col",{style:{width:"48%"}}),CE("col",{style:{width:"88px"}}),CE("col",null)),
-        CE("datalist",{id:"ia-mapa-dl"},
-          (itens||[]).map(function(mi){return CE("option",{key:mi.id,value:mi.descricao});})
-        ),
           CE("thead",null,CE("tr",{style:{background:"#eef1fa"}},
             CE("th",{style:{padding:"7px 10px",textAlign:"left"}},"Item do or\xE7amento"),
             CE("th",{style:{padding:"7px 10px",textAlign:"right"}},"Pre\xE7o unit."),
@@ -5031,20 +5025,21 @@ function ModalLerComIA(_ref_ia) {
             return CE("tr",{key:idx,style:{borderBottom:"1px solid #f0f2f8",background:idx%2?"#f8faff":"#fff"}},
               CE("td",{style:{padding:"7px 10px",color:"#222"}},oi.descricao),
               CE("td",{style:{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#186818",whiteSpace:"nowrap"}},"R$ "+Number(oi.preco).toFixed(2).replace(".",",")),
-              CE("td",{style:{padding:"7px 10px"}},
-                CE("input",{
-                  type:"text",
-                  list:"ia-mapa-dl",
-                  value:getMatchDesc(idx),
-                  placeholder:"\uD83D\uDD0D digitar para buscar...",
-                  onChange:function(e){
-                    var txt=e.target.value;
-                    setMatchDesc(function(prev){var n=Object.assign({},prev);n[idx]=txt;return n;});
-                    var found=(itens||[]).find(function(m){return m.descricao===txt;});
-                    setMatchs(function(prev){var n=Object.assign({},prev);n[idx]=found?found.id:"";return n;});
-                  },
-                  style:{width:"100%",fontSize:10,padding:"4px 7px",borderRadius:4,border:"1.5px solid "+(matchs[idx]?"#b0d0b0":"#f0b080"),background:matchs[idx]?"#f0f8f0":"#fff8f0"}
-                })
+              CE("td",{style:{padding:"6px 8px"}},
+                CE("div",{
+                  onClick:function(){setSeletorAberto(idx);setSeletorBusca("");},
+                  style:{
+                    padding:"6px 10px",borderRadius:5,cursor:"pointer",fontSize:10,
+                    border:"1.5px solid "+(matchs[idx]?"#b0d0b0":"#f0b080"),
+                    background:matchs[idx]?"#f0f8f0":"#fff8f0",
+                    display:"flex",alignItems:"center",gap:4,minHeight:28
+                  }
+                },
+                  CE("span",{style:{flex:1,color:matchs[idx]?"#186818":"#aaa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
+                    matchs[idx] ? getItemDesc(matchs[idx]) : "toque para selecionar..."
+                  ),
+                  CE("span",{style:{color:"#aaa",fontSize:9,flexShrink:0}},"\u25BC")
+                )
               )
             );
           }))
@@ -5073,6 +5068,56 @@ function ModalLerComIA(_ref_ia) {
             style:{background:"#186818",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:12,fontWeight:800,cursor:"pointer"},
             onClick:confirmar
           },"\u2705 PREENCHER MAPA")
+        )
+      ),
+      seletorAberto!==null&&CE("div",{style:{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.92)",zIndex:2000,display:"flex",flexDirection:"column"}},
+        CE("div",{style:{background:"#1a1a2e",padding:"12px 16px",borderBottom:"1px solid #333",flexShrink:0}},
+          CE("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:10}},
+            CE("span",{style:{color:"#aaa",fontSize:11,flex:1}},
+              seletorAberto!==null&&resultado&&resultado.itens&&resultado.itens[seletorAberto]
+                ? resultado.itens[seletorAberto].descricao.slice(0,40)+"..."
+                : "Selecionar insumo"
+            ),
+            CE("button",{
+              onClick:function(){setSeletorAberto(null);setSeletorBusca("");},
+              style:{background:"none",border:"none",color:"#fff",fontSize:22,cursor:"pointer",lineHeight:1,padding:"0 4px"}
+            },"\xD7")
+          ),
+          CE("input",{
+            type:"text",
+            value:seletorBusca,
+            onChange:function(e){setSeletorBusca(e.target.value);},
+            placeholder:"\uD83D\uDD0D Digitar para filtrar a lista...",
+            style:{width:"100%",padding:"10px 14px",borderRadius:8,border:"none",background:"#fff",fontSize:13,boxSizing:"border-box"}
+          })
+        ),
+        CE("div",{style:{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch"}},
+          CE("div",{
+            onClick:function(){
+              var idx=seletorAberto;
+              setMatchs(function(prev){var n=Object.assign({},prev);n[idx]="";return n;});
+              setSeletorAberto(null);setSeletorBusca("");
+            },
+            style:{padding:"14px 16px",borderBottom:"1px solid #222",color:"#888",fontSize:12,cursor:"pointer"}
+          },"\u2014 n\xE3o usar \u2014"),
+          (itens||[]).filter(function(mi){
+            return !seletorBusca||normalizar(mi.descricao).indexOf(normalizar(seletorBusca))>=0;
+          }).map(function(mi){
+            var isSelected=seletorAberto!==null&&matchs[seletorAberto]===mi.id;
+            return CE("div",{
+              key:mi.id,
+              onClick:function(){
+                var idx=seletorAberto;
+                setMatchs(function(prev){var n=Object.assign({},prev);n[idx]=mi.id;return n;});
+                setSeletorAberto(null);setSeletorBusca("");
+              },
+              style:{
+                padding:"14px 16px",borderBottom:"1px solid #222",
+                color:isSelected?"#3ECF8E":"#fff",fontSize:12,cursor:"pointer",
+                background:isSelected?"rgba(62,207,142,0.1)":"transparent"
+              }
+            },mi.descricao);
+          })
         )
       )
     )
