@@ -2538,7 +2538,12 @@ function ModalGerenciarOrcamento(_ref_ger) {
   if (!open) return null;
 
   var upd = function(novos) { itensRef.current = novos; setItens(novos); };
-  var temAssoc = function(idx) { return associacoes ? associacoes.some(function(a){ return a.orcItemIndex === idx; }) : false; };
+  // FIX: pré-computa IDs dos mapas desta obra para evitar ASSOC. cruzado entre obras diferentes
+  var mapasDaObra = (mapas||[]).filter(function(m){ return (m.obra||'') === (obra||''); }).map(function(m){ return m.id; });
+  var temAssoc = function(idx) {
+    if (!associacoes || !mapasDaObra.length) return false;
+    return associacoes.some(function(a){ return a.orcItemIndex === idx && mapasDaObra.indexOf(a.mapaId) >= 0; });
+  };
   var calcSaldo = function(it) { return (parseFloat(it.quantidade)||0) - (parseFloat(it.consumido)||0); };
   var fmtN = function(v) { return (parseFloat(v)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); };
 
