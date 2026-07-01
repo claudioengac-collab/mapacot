@@ -894,16 +894,20 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
         +'<span class="albg al-sem">\u2014 SEM COTA\u00c7\u00c3O</span></div>'
         +'<div class="alr al-sem-cot">NENHUM FORNECEDOR ENVIOU PRE\u00c7O PARA ESTE ITEM</div></div>';
     }
-    // Acumula totais — MESMA FÓRMULA DO LUCRO: só itens comprado=true, usa qtCompra se definida
-    if (temOrc && item.comprado && rkgs.length > 0) {
-      var qtCompraAssoc = parseFloat(String((assoc&&assoc.qtCompra)||'').replace(',','.')) || 0;
-      var qtParaCalc = (qtCompraAssoc > 0 && qtCompraAssoc < qt) ? qtCompraAssoc : qt;
-      var fatorAssoc = parseFloat((assoc&&assoc.fator)) || 1;
-      var vlOrcUnit = orcItem ? (parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0) : 0;
-      // resultado = vlOrc × (qtParaCalc × fator) − bestPrice × qtParaCalc
-      var diff1 = vlOrcUnit * (qtParaCalc * fatorAssoc) - rkgs[0].preco * qtParaCalc;
-      if (diff1 >= 0) { totEco += diff1; ctEco++; }
-      else { totPrej += Math.abs(diff1); ctPrej++; }
+    // Acumula totais — MESMA FÓRMULA de calcResMulti (tela):
+    // vlOrcTotal = vlOrç × fator × qtCompra; vlCotadoTotal = bestPrice × qtCompra
+    // Só conta quando qtCompra > 0 (igual ao comportamento do TOTAL row)
+    if (temOrc && assoc && rkgs.length > 0) {
+      var qtCompraVal = parseFloat(String((assoc.qtCompra)||'').replace(',','.')) || 0;
+      if (qtCompraVal > 0) {
+        var vlOrcRaw = parseFloat(orcItem.valorUnitario||orcItem.vl_unitario) || 0;
+        var fatorVal = parseFloat(assoc.fator) || 1;
+        var vlOrcTot = vlOrcRaw * fatorVal * qtCompraVal;
+        var vlCotTot = rkgs[0].preco * qtCompraVal;
+        var resCMR = vlOrcTot - vlCotTot;
+        if (resCMR >= 0) { totEco += resCMR; ctEco++; }
+        else { totPrej += Math.abs(resCMR); ctPrej++; }
+      }
     }
     // Badge
     var badge = temOrc
