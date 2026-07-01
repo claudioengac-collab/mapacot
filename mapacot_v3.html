@@ -855,149 +855,113 @@ var getTheme = function getTheme(id) {
 
 // ─── ANÁLISE DE PREÇOS ────────────────────────────────────────────────────────
 var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associacoes) {
-  now = now || new Date();
-  orcamentos = orcamentos || {};
-  associacoes = associacoes || [];
-  var T = getTheme(mapa.corTema);
-  var hdrColor = T.hdr;
-  var fns = mapa.fornecedores || [];
-  var itens = mapa.itens || [];
-  var precos = mapa.precos || {};
+  now = now || new Date(); orcamentos = orcamentos || {}; associacoes = associacoes || [];
+  var T = getTheme(mapa.corTema); var hdrColor = T.hdr;
+  var fns = mapa.fornecedores || []; var itens = mapa.itens || []; var precos = mapa.precos || {};
   var fmtR = function(v){ return 'R$\u00a0' + fmtMoney(v); };
-  // Orçamento
   var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
   var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
-  // Totais para cards — mesma fórmula do LUCRO (só itens comprado=true)
-  var totEco = 0, totPrej = 0, ctEco = 0, ctPrej = 0;
-  // Gera HTML dos itens
-  var itensHTML = itens.map(function(item, idx) {
+
+  // ── Totais COM orçado (fórmula: vlOrc×fator − melhorPreço) × qt ──
+  var totEco=0, totPrej=0, ctEco=0, ctPrej=0, ctComOrc=0, ctSemOrc=0, ctSemCot=0, ctSemCotOrc=0;
+
+  // ── Gera HTML de cada item ──
+  var itensHTML = itens.map(function(item, idx){
     var qt = parseFloat(String(item.qt).replace(',','.')) || 0;
     // Orçado
     var assoc = mapaAssocs.find(function(a){ return a.itemMapaId === item.id; });
-    var orcItem = assoc ? obraOrcItens.find(function(o){ return o.codigo === assoc.orcItemCodigo; }) : null;
-    var vlOrc = orcItem ? (parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0)*(parseFloat((assoc&&assoc.fator))||1) : null;
-    var temOrc = vlOrc !== null && vlOrc > 0;
-    // Rankings: todos fornecedores com preço, ordenado crescente
+    var orcItem = assoc ? obraOrcItens.find(function(o,i){
+      return assoc.orcItemIndex != null ? i === assoc.orcItemIndex : o.codigo === assoc.orcItemCodigo;
+    }) : null;
+    var vlOrcUnit = orcItem ? (parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0) : 0;
+    var fatorA = assoc ? (parseFloat(assoc.fator)||1) : 1;
+    var vlOrc = vlOrcUnit * fatorA; // preço orçado por unidade do mapa
+    var temOrc = vlOrc > 0;
+    // Rankings
     var rkgs = [];
     fns.forEach(function(f){
       var v = parseMoney(precos[item.id+'_'+f.id]);
-      if (v !== null && v > 0) rkgs.push({ forn: (f.nome||'—').toUpperCase(), preco: v });
+      if (v !== null && v > 0) rkgs.push({ forn:(f.nome||'—').toUpperCase(), preco:v });
     });
-    rkgs.sort(function(a,b){ return a.preco - b.preco; });
-    var nItem = (idx+1);
-    var desc = (item.descricao||'').toUpperCase();
-    // Sem cotação
-    if (rkgs.length === 0) {
-      return '<div class="alb"><div class="aln" style="background:'+hdrColor+';">'
-        +'<span>'+nItem+' \u2014 '+desc+' \u00b7 QT: '+item.qt+' '+(item.unid||'')+'</span>'
-        +'<span class="albg al-sem">\u2014 SEM COTA\u00c7\u00c3O</span></div>'
-        +'<div class="alr al-sem-cot">NENHUM FORNECEDOR ENVIOU PRE\u00c7O PARA ESTE ITEM</div></div>';
-    }
-    // ─── TOTAIS: réplica EXATA de calcResMulti (mesma lógica do TOTAL LUCRO da tela) ───
-    if (rkgs.length > 0) {
-      var aesItem = mapaAssocs.filter(function(a){ return a.itemMapaId === item.id; });
-      if (aesItem.length > 0) {
-        var qtCompraTotal2 = 0;
-        var vlOrcTotal2 = aesItem.reduce(function(ac, a2){
-          var idx2 = (a2.orcItemIndex != null)
-            ? a2.orcItemIndex
-            : obraOrcItens.findIndex(function(it){ return it.codigo === a2.orcItemCodigo; });
-          var oi2 = obraOrcItens[idx2];
-          if (!oi2) return ac;
-          var fator2 = parseFloat(a2.fator) || 1;
-          var qt2 = parseFloat(String(a2.qtCompra||'').replace(',','.')) || 0;
-          qtCompraTotal2 += qt2;
-          return ac + (parseFloat(oi2.valorUnitario||oi2.vl_unitario)||0) * fator2 * qt2;
-        }, 0);
-        if (vlOrcTotal2 > 0) {
-          var qtBase2 = qtCompraTotal2 > 0 ? qtCompraTotal2 : qt;
-          var vlCotTot2 = rkgs[0].preco * qtBase2;
-          var resCMR2 = vlOrcTotal2 - vlCotTot2;
-          if (resCMR2 >= 0) { totEco += resCMR2; ctEco++; }
-          else { totPrej += Math.abs(resCMR2); ctPrej++; }
-        }
+    rkgs.sort(function(a,b){ return a.preco-b.preco; });
+    // Contadores
+    if (temOrc) {
+      ctComOrc++;
+      if (rkgs.length === 0) { ctSemCotOrc++; }
+      else {
+        var diff = (vlOrc - rkgs[0].preco) * qt;
+        if (diff >= 0) { totEco += diff; ctEco++; } else { totPrej += Math.abs(diff); ctPrej++; }
       }
+    } else {
+      if (rkgs.length === 0) ctSemCot++; else ctSemOrc++;
     }
     // Badge
-    var badge = temOrc
-      ? (rkgs[0].preco <= vlOrc
-          ? '<span class="albg al-eco">\u2713 ECONOMIA</span>'
-          : '<span class="albg al-prej">\u2717 ACIMA DO OR\u00c7ADO</span>')
-      : '<span class="albg al-men">\u2605 MENOR PRE\u00c7O: '+rkgs[0].forn+'</span>';
-    // Linha orçado
-    var rows = '';
-    if (temOrc) {
-      var bwOrc = Math.round(vlOrc / rkgs[rkgs.length-1].preco * 100);
-      rows += '<div class="alr al-orc">'
-        +'<div class="all"><div class="alt">OR\u00c7ADO</div><div class="alf">REFER\u00caNCIA BASE</div></div>'
-        +'<div class="albo"><div class="albi al-orc-b" style="width:'+bwOrc+'%;">'+fmtR(vlOrc)+'</div></div>'
-        +'<div class="alv al-ref">'+fmtR(vlOrc)+'</div>'
-        +'<div class="ald"><span class="al-dref">REFER\u00caNCIA \u2014 SEM COMPARA\u00c7\u00c3O</span></div>'
-        +'</div>';
+    var badge = '';
+    if (rkgs.length === 0) {
+      badge = '<span class="albg al-sem">\u2014 SEM COTA\u00c7\u00c3O</span>';
+    } else if (temOrc) {
+      badge = rkgs[0].preco <= vlOrc
+        ? '<span class="albg al-eco">\u2713 ECONOMIA</span>'
+        : '<span class="albg al-prej">\u2717 ACIMA DO OR\u00c7ADO</span>';
+    } else {
+      badge = '<span class="albg al-men">\u2605 MENOR: '+rkgs[0].forn+'</span>';
     }
-    // Linhas de ranking
-    var maxBar = rkgs[rkgs.length-1].preco || 1;
-    rkgs.slice(0,5).forEach(function(rk, i){
-      var bw = Math.max(10, Math.round(rk.preco / maxBar * 100));
-      var barCls = i===0 ? (temOrc ? (rk.preco<=vlOrc?'al-eco-b':'al-prej-b') : 'al-eco-b')
-                         : i===1 ? 'al-r2-b' : 'al-r3-b';
-      var valCls = i===0 ? (temOrc ? (rk.preco<=vlOrc?'al-eco-v':'al-prej-v') : 'al-eco-v') : 'al-rx-v';
-      var ord = ['\u00ba','\u00ba','\u00ba','\u00ba','\u00ba'];
-      var ordN = (i+1)+'\u00ba';
-      // Deltas
-      var dlts = '';
-      if (i===0) {
-        if (temOrc) {
-          var d0 = rk.preco - vlOrc, p0 = d0/vlOrc*100;
-          dlts = d0<=0
-            ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(d0))+' (\u2212'+Math.abs(p0).toFixed(1)+'%)</span>'
-            : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(d0)+' (+'+p0.toFixed(1)+'%)</span>';
-        } else {
-          dlts = '<span class="al-dmen">\u2605 MENOR PRE\u00c7O DA COTA\u00c7\u00c3O</span>';
-        }
-      } else if (i===1) {
-        if (temOrc) {
-          var d1=rk.preco-vlOrc,p1=d1/vlOrc*100;
-          dlts += d1<=0
-            ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(d1))+' (\u2212'+Math.abs(p1).toFixed(1)+'%)</span>'
-            : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(d1)+' (+'+p1.toFixed(1)+'%)</span>';
-        }
-        var dr1=rk.preco-rkgs[0].preco,pr1=dr1/rkgs[0].preco*100;
-        dlts += '<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(dr1)+' (+'+pr1.toFixed(1)+'%)</span>';
-      } else if (i===2) {
-        if (temOrc) {
-          var d2=rk.preco-vlOrc,p2=d2/vlOrc*100;
-          dlts += d2<=0
-            ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(d2))+' (\u2212'+Math.abs(p2).toFixed(1)+'%)</span>'
-            : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(d2)+' (+'+p2.toFixed(1)+'%)</span>';
-        }
-        var dr2a=rk.preco-rkgs[0].preco,pr2a=dr2a/rkgs[0].preco*100;
-        var dr2b=rk.preco-rkgs[1].preco,pr2b=dr2b/rkgs[1].preco*100;
-        dlts += '<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(dr2a)+' (+'+pr2a.toFixed(1)+'%)</span>';
-        dlts += '<span class="al-dr2">\u25b2 VS 2\u00ba RANK: + '+fmtR(dr2b)+' (+'+pr2b.toFixed(1)+'%)</span>';
-      } else {
-        var drn=rk.preco-rkgs[0].preco,prn=drn/rkgs[0].preco*100;
-        dlts = '<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(drn)+' (+'+prn.toFixed(1)+'%)</span>';
+    // Linhas
+    var rows = '';
+    if (rkgs.length === 0) {
+      rows = '<div class="alr al-sem-cot">NENHUM FORNECEDOR ENVIOU PRE\u00c7O PARA ESTE ITEM</div>';
+    } else {
+      var maxBar = Math.max(rkgs[rkgs.length-1].preco, temOrc ? vlOrc : 0) || 1;
+      // Linha ORÇADO (só se tiver)
+      if (temOrc) {
+        var bwOrc = Math.max(10, Math.round(vlOrc / maxBar * 100));
+        rows += '<div class="alr al-orc">'
+          +'<div class="all"><div class="alt">OR\u00c7ADO</div><div class="alf">REFER\u00caNCIA BASE</div></div>'
+          +'<div class="albo"><div class="albi al-orc-b" style="width:'+bwOrc+'%;">'+fmtR(vlOrc)+'</div></div>'
+          +'<div class="alv al-ref">'+fmtR(vlOrc)+'</div>'
+          +'<div class="ald"><span class="al-dref">REFER\u00caNCIA \u2014 SEM COMPARA\u00c7\u00c3O</span></div>'
+          +'</div>';
       }
-      var alt = i%2===0?' alalt':'';
-      rows += '<div class="alr'+alt+'">'
-        +'<div class="all"><div class="alt">'+(i+1)+'\u00ba RANKING</div><div class="alf">'+rk.forn+'</div></div>'
-        +'<div class="albo"><div class="albi '+barCls+'" style="width:'+bw+'%;">'+fmtR(rk.preco)+'</div></div>'
-        +'<div class="alv '+valCls+'">'+fmtR(rk.preco)+'</div>'
-        +'<div class="ald">'+dlts+'</div>'
-        +'</div>';
-    });
+      // Linhas de ranking
+      rkgs.slice(0,5).forEach(function(rk, i){
+        var bw = Math.max(10, Math.round(rk.preco / maxBar * 100));
+        var barCls = i===0?(temOrc?(rk.preco<=vlOrc?'al-eco-b':'al-prej-b'):'al-eco-b'):i===1?'al-r2-b':'al-r3-b';
+        var valCls = i===0?(temOrc?(rk.preco<=vlOrc?'al-eco-v':'al-prej-v'):'al-eco-v'):'al-rx-v';
+        var dlts = '';
+        if (temOrc) {
+          // Comparação vs ORÇADO sempre
+          var dO = rk.preco - vlOrc, pO = dO/vlOrc*100;
+          dlts += dO<=0
+            ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(dO))+' (\u2212'+Math.abs(pO).toFixed(1)+'%)</span>'
+            : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(dO)+' (+'+pO.toFixed(1)+'%)</span>';
+          // Comparação vs ranks anteriores
+          if (i>=1) { var d1=rk.preco-rkgs[0].preco,p1=d1/rkgs[0].preco*100; dlts+='<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(d1)+' (+'+p1.toFixed(1)+'%)</span>'; }
+          if (i>=2) { var d2=rk.preco-rkgs[1].preco,p2=d2/rkgs[1].preco*100; dlts+='<span class="al-dr2">\u25b2 VS 2\u00ba RANK: + '+fmtR(d2)+' (+'+p2.toFixed(1)+'%)</span>'; }
+        } else {
+          if (i===0) dlts='<span class="al-dmen">\u2605 MENOR PRE\u00c7O DA COTA\u00c7\u00c3O</span>';
+          if (i>=1) { var dr1=rk.preco-rkgs[0].preco,pr1=dr1/rkgs[0].preco*100; dlts='<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(dr1)+' (+'+pr1.toFixed(1)+'%)</span>'; }
+          if (i>=2) { var dr2=rk.preco-rkgs[1].preco,pr2=dr2/rkgs[1].preco*100; dlts+='<span class="al-dr2">\u25b2 VS 2\u00ba RANK: + '+fmtR(dr2)+' (+'+pr2.toFixed(1)+'%)</span>'; }
+        }
+        var alt = i%2===0?' alalt':'';
+        rows += '<div class="alr'+alt+'">'
+          +'<div class="all"><div class="alt">'+(i+1)+'\u00ba RANKING</div><div class="alf">'+rk.forn+'</div></div>'
+          +'<div class="albo"><div class="albi '+barCls+'" style="width:'+bw+'%;">'+fmtR(rk.preco)+'</div></div>'
+          +'<div class="alv '+valCls+'">'+fmtR(rk.preco)+'</div>'
+          +'<div class="ald">'+dlts+'</div>'
+          +'</div>';
+      });
+    }
     return '<div class="alb"><div class="aln" style="background:'+hdrColor+';">'
-      +'<span>'+nItem+' \u2014 '+desc+' \u00b7 QT: '+item.qt+' '+(item.unid||'')+'</span>'
+      +'<span>'+(idx+1)+' \u2014 '+(item.descricao||'').toUpperCase()+' \u00b7 QT: '+item.qt+' '+(item.unid||'')+'</span>'
       +badge+'</div>'+rows+'</div>';
   }).join('');
-  // Cards
-  var temAlgumOrc = ctEco > 0 || ctPrej > 0;
+
+  // ── CARDS ──
   var resultado = totEco - totPrej;
-  var cards;
-  if (temAlgumOrc) {
-    cards = '<div class="al-cards">'
+  var cardsComOrc = ctComOrc > 0
+    ? '<div class="al-sec-title">\ud83d\udcca ITENS COM OR\u00c7AMENTO DE REFER\u00caNCIA ('+ctComOrc+' ITENS)</div>'
+      +'<div class="al-cards">'
       +'<div class="al-card"><div class="al-cl">\u25cf ECONOMIA</div>'
       +'<div class="al-cn" style="color:#186818;font-size:16px;">'+ctEco+' ITENS</div>'
       +'<div class="al-cn" style="color:#186818;font-size:18px;margin:2px 0;">\u2212 '+fmtR(totEco)+'</div>'
@@ -1009,29 +973,68 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
       +'<div class="al-card"><div class="al-cl">RESULTADO L\u00cdQUIDO</div>'
       +'<div class="al-cn" style="color:'+(resultado>=0?'#186818':'#c0392b')+';font-size:20px;margin:3px 0;">'+(resultado>=0?'+ ':'\u2212 ')+fmtR(Math.abs(resultado))+'</div>'
       +'<div class="al-cs" style="color:#555;">ECONOMIA \u2212 PREJU\u00cdZO</div></div>'
-      +'</div>';
-  } else {
-    // Sem orçado: cards mostram ranking puro
-    var totMenor = itens.reduce(function(acc,item){
-      var r=calcResumo(item,fns,precos);
-      return acc+(r.vlTotal||0);
-    },0);
-    var ctComPreco = itens.filter(function(item){
-      return fns.some(function(f){ return parseMoney(precos[item.id+'_'+f.id])!==null; });
-    }).length;
-    cards = '<div class="al-cards">'
+      +'</div>' : '';
+
+  var totMenorSemOrc = itens.reduce(function(ac,item){
+    var r=calcResumo(item,fns,precos);
+    var assocI=mapaAssocs.find(function(a){return a.itemMapaId===item.id;});
+    var orcI=assocI?obraOrcItens.find(function(o,i){ return assocI.orcItemIndex!=null?i===assocI.orcItemIndex:o.codigo===assocI.orcItemCodigo; }):null;
+    var vlOI=orcI?(parseFloat(orcI.valorUnitario||orcI.vl_unitario)||0)*(parseFloat(assocI.fator)||1):0;
+    if (vlOI>0) return ac;
+    return ac+(r.vlTotal||0);
+  },0);
+
+  var cardsSemOrc = (ctSemOrc > 0 || ctSemCot > 0)
+    ? '<div class="al-sec-title" style="background:#888;">\ud83d\udcc5 ITENS SEM OR\u00c7AMENTO DE REFER\u00caNCIA ('+(ctSemOrc+ctSemCot)+' ITENS)</div>'
+      +'<div class="al-cards">'
       +'<div class="al-card"><div class="al-cl">ITENS COM COTA\u00c7\u00c3O</div>'
-      +'<div class="al-cn" style="color:#2a5298;font-size:22px;margin:3px 0;">'+ctComPreco+'</div>'
-      +'<div class="al-cs" style="color:#555;">DE '+itens.length+' ITENS DO MAPA</div></div>'
+      +'<div class="al-cn" style="color:#2a5298;font-size:22px;">'+ctSemOrc+'</div>'
+      +'<div class="al-cs" style="color:#555;">DE '+(ctSemOrc+ctSemCot)+' ITENS SEM OR\u00c7ADO</div></div>'
       +'<div class="al-card"><div class="al-cl">MENOR PRE\u00c7O TOTAL</div>'
-      +'<div class="al-cn" style="color:#186818;font-size:18px;margin:3px 0;">'+fmtR(totMenor)+'</div>'
+      +'<div class="al-cn" style="color:#186818;font-size:18px;margin:3px 0;">'+fmtR(totMenorSemOrc)+'</div>'
       +'<div class="al-cs" style="color:#555;">SOMA DOS MENORES PRE\u00c7OS</div></div>'
-      +'<div class="al-card"><div class="al-cl">OR\u00c7AMENTO DE REFER\u00caNCIA</div>'
-      +'<div class="al-cn" style="color:#b8730a;font-size:16px;margin:3px 0;">N\u00c3O ASSOCIADO</div>'
-      +'<div class="al-cs" style="color:#b8730a;">RANKING APENAS POR PRE\u00c7O</div></div>'
-      +'</div>';
-  }
-  // Legenda
+      +'<div class="al-card"><div class="al-cl">SEM OR\u00c7AMENTO</div>'
+      +'<div class="al-cn" style="color:#b8730a;font-size:14px;margin:3px 0;">RANKING APENAS POR PRE\u00c7O</div>'
+      +'<div class="al-cs" style="color:#b8730a;">ASSOCIE O OR\u00c7AMENTO PARA COMPARAR</div></div>'
+      +'</div>' : '';
+
+  // ── CSS ──
+  var css = '<style>'
+    +'.al-sec-title{background:#2a5298;color:#fff;font-size:11px;font-weight:700;padding:6px 12px;margin-bottom:8px;border-radius:4px;letter-spacing:.3px;}'
+    +'.al-cards{display:flex;gap:10px;margin-bottom:14px;}'
+    +'.al-card{flex:1;border:1px solid #ccd8eb;border-radius:4px;padding:8px 12px;text-align:center;background:#f0f5ff;}'
+    +'.al-cl{font-size:8px;color:#666;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}'
+    +'.al-cn{font-weight:800;} .al-cs{font-size:9px;font-weight:600;}'
+    +'.al-leg{display:flex;gap:12px;margin-bottom:10px;font-size:10px;color:#444;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid #e8edf5;border-bottom:1px solid #e8edf5;}'
+    +'.al-li{display:flex;align-items:center;gap:5px;} .al-lb{width:14px;height:14px;border-radius:2px;flex-shrink:0;}'
+    +'.alb{margin-bottom:8px;border:1px solid #d0dcea;border-radius:4px;overflow:hidden;}'
+    +'.aln{color:#fff;font-size:11px;font-weight:700;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;}'
+    +'.albg{border-radius:3px;padding:2px 8px;font-size:9px;font-weight:700;white-space:nowrap;}'
+    +'.al-eco{background:#1baf7a;color:#fff;} .al-prej{background:#e34948;color:#fff;} .al-men{background:#1baf7a;color:#fff;} .al-sem{background:#888;color:#fff;}'
+    +'.alr{display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid #edf0f8;min-height:34px;}'
+    +'.alr:last-child{border-bottom:none;} .alalt{background:#f8faff;}'
+    +'.al-orc{background:#eeeff3;} .al-sem-cot{justify-content:center;color:#999;font-size:10px;font-weight:600;background:#f5f5f5;}'
+    +'.all{width:140px;flex-shrink:0;} .alt{font-size:10px;font-weight:700;color:#333;} .alf{font-size:9px;color:#888;display:block;margin-top:1px;}'
+    +'.albo{flex:1;background:#e8ecf4;border-radius:3px;height:20px;overflow:hidden;}'
+    +'.albi{height:20px;border-radius:3px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10px;color:#fff;font-weight:800;white-space:nowrap;}'
+    +'.al-orc-b{background:#888780;} .al-eco-b{background:#1baf7a;} .al-prej-b{background:#e34948;} .al-r2-b{background:#eda100;} .al-r3-b{background:#eb6834;}'
+    +'.alv{width:75px;text-align:right;font-weight:800;font-size:11px;flex-shrink:0;}'
+    +'.al-eco-v{color:#186818;} .al-prej-v{color:#c0392b;} .al-ref{color:#777;} .al-rx-v{color:#444;}'
+    +'.ald{width:270px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;font-size:10px;}'
+    +'.al-doec{color:#186818;font-weight:700;} .al-dopj{color:#c0392b;font-weight:700;}'
+    +'.al-dr1{color:#888;font-size:9px;font-weight:600;} .al-dr2{color:#b8730a;font-weight:700;}'
+    +'.al-dmen{color:#186818;font-weight:700;} .al-dref{color:#aaa;font-size:9px;}'
+    +'</style>';
+
+  // ── HEADER ──
+  var hdr = '<div style="background:#1a3a78;padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
+    +'<span style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">\uD83D\uDCCA AN\u00c1LISE DE PRE\u00c7OS POR INSUMO</span>'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.95);font-weight:700;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;">MP N\u00ba: '+(mapa.numero||'')+'</span>'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.9);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">OBRA: '+(mapa.obra||'').toUpperCase()+'</span>'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.85);border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;margin-left:auto;">DATA: '+fmtDate(now)+'</span>'
+    +'</div>';
+
+  // ── LEGENDA ──
   var leg = '<div class="al-leg">'
     +'<b style="color:#555;font-size:9px;">LEGENDA:</b>'
     +'<div class="al-li"><div class="al-lb" style="background:#888780;"></div> OR\u00c7ADO</div>'
@@ -1040,47 +1043,14 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
     +'<div class="al-li"><div class="al-lb" style="background:#eda100;"></div> 2\u00ba RANKING</div>'
     +'<div class="al-li"><div class="al-lb" style="background:#eb6834;"></div> 3\u00ba RANKING</div>'
     +'</div>';
-  // CSS (prefixado "al-" para não colidir com estilos do mapa)
-  var css = '<style>'
-    +'.al-cards{display:flex;gap:10px;margin-bottom:10px;}'
-    +'.al-card{flex:1;border:1px solid #ccd8eb;border-radius:4px;padding:8px 12px;text-align:center;background:#f0f5ff;}'
-    +'.al-cl{font-size:8px;color:#666;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}'
-    +'.al-cn{font-weight:800;} .al-cs{font-size:9px;font-weight:600;}'
-    +'.al-leg{display:flex;gap:14px;margin-bottom:10px;font-size:10px;color:#444;align-items:center;flex-wrap:wrap;}'
-    +'.al-li{display:flex;align-items:center;gap:5px;}'
-    +'.al-lb{width:14px;height:14px;border-radius:2px;flex-shrink:0;}'
-    +'.alb{margin-bottom:8px;border:1px solid #d0dcea;border-radius:4px;overflow:hidden;}'
-    +'.aln{color:#fff;font-size:11px;font-weight:700;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;}'
-    +'.albg{border-radius:3px;padding:2px 8px;font-size:9px;font-weight:700;}'
-    +'.al-eco{background:#1baf7a;color:#fff;} .al-prej{background:#e34948;color:#fff;}'
-    +'.al-men{background:#1baf7a;color:#fff;} .al-sem{background:#888;color:#fff;}'
-    +'.alr{display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid #edf0f8;min-height:34px;}'
-    +'.alr:last-child{border-bottom:none;} .alalt{background:#f8faff;}'
-    +'.al-orc{background:#eeeff3;} .al-sem-cot{justify-content:center;color:#999;font-size:10px;font-weight:600;background:#f5f5f5;}'
-    +'.all{width:130px;flex-shrink:0;} .alt{font-size:10px;font-weight:700;color:#333;} .alf{font-size:9px;color:#888;display:block;margin-top:1px;}'
-    +'.albo{flex:1;background:#e8ecf4;border-radius:3px;height:20px;overflow:hidden;}'
-    +'.albi{height:20px;border-radius:3px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10px;color:#fff;font-weight:800;white-space:nowrap;}'
-    +'.al-orc-b{background:#888780;} .al-eco-b{background:#1baf7a;} .al-prej-b{background:#e34948;}'
-    +'.al-r2-b{background:#eda100;} .al-r3-b{background:#eb6834;}'
-    +'.alv{width:75px;text-align:right;font-weight:800;font-size:11px;flex-shrink:0;}'
-    +'.al-eco-v{color:#186818;} .al-prej-v{color:#c0392b;} .al-ref{color:#777;} .al-rx-v{color:#444;}'
-    +'.ald{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;font-size:10px;}'
-    +'.al-doec{color:#186818;font-weight:700;} .al-dopj{color:#c0392b;font-weight:700;}'
-    +'.al-dr1{color:#888;font-size:9px;font-weight:600;} .al-dr2{color:#b8730a;font-weight:700;}'
-    +'.al-dmen{color:#186818;font-weight:700;} .al-dref{color:#aaa;font-size:9px;}'
-    +'</style>';
-  var hdr = '<div style="background:#1a3a78;padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
-    +'<span style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">\uD83D\uDCCA AN\u00c1LISE DE PRE\u00c7OS POR INSUMO</span>'
-    +'<span style="font-size:11px;color:rgba(255,255,255,.95);font-weight:700;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;">MP N\u00ba: '+(mapa.numero||'')+'</span>'
-    +'<span style="font-size:11px;color:rgba(255,255,255,.9);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">OBRA: '+(mapa.obra||'').toUpperCase()+'</span>'
-    +'<span style="font-size:11px;color:rgba(255,255,255,.85);border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;margin-left:auto;">DATA: '+fmtDate(now)+'</span>'
-    +'</div>';
+
   var body = '<div style="border:1px solid #c0ccdd;border-top:none;padding:10px 12px;background:#fff;">'
-    +cards+leg+itensHTML
+    +cardsComOrc+cardsSemOrc+leg+itensHTML
     +'<div style="margin-top:6px;font-size:9px;color:#999;text-align:right;">* PRE\u00c7OS UNIT\u00c1RIOS SEM IMPOSTOS \u00b7 GERADO EM '+fmtDate(now)+' '+fmtHora(now)+' \u00b7 MAPACOT V3</div>'
     +'</div>';
   return css + hdr + body;
 };
+
 
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 var buildMapaHTML = function buildMapaHTML(mapa) {
