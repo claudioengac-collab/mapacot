@@ -4466,23 +4466,16 @@ var _useState27 = useState(init),
       color: "#fff",
       gap: 5
     })
-  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"),
-  /*#__PURE__*/React.createElement("label", {
-    title: "Incluir página de análise de preços no PDF",
-    style: { display:"flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600,
-             color: inclAnalise ? "#6a0dad" : "#888", cursor:"pointer",
-             border:"1px solid "+(inclAnalise?"#9b59b6":"#ccc"),
-             borderRadius:4, padding:"3px 8px", background: inclAnalise?"#f3e8ff":"#f8f8f8",
-             userSelect:"none", whiteSpace:"nowrap" }
-  },
-    /*#__PURE__*/React.createElement("input", {
-      type: "checkbox",
-      checked: inclAnalise,
-      onChange: function(e){ setInclAnalise(e.target.checked); },
-      style: { cursor:"pointer" }
-    }),
-    "\uD83D\uDCCA + AN\u00c1LISE"
-  ),
+  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"), /*#__PURE__*/React.createElement("button", {
+    onClick: function(){ setInclAnalise(!inclAnalise); },
+    title: inclAnalise ? "Clique para remover análise do PDF" : "Clique para incluir análise de preços no PDF",
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: inclAnalise ? "#6a0dad" : "#555",
+      color: "#fff",
+      gap: 4,
+      opacity: inclAnalise ? 1 : 0.7
+    })
+  }, "\uD83D\uDCCA", inclAnalise ? " \u2713 AN\u00c1LISE" : " + AN\u00c1LISE"),
   /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return setShowCadEditor(true);
