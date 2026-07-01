@@ -894,19 +894,29 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
         +'<span class="albg al-sem">\u2014 SEM COTA\u00c7\u00c3O</span></div>'
         +'<div class="alr al-sem-cot">NENHUM FORNECEDOR ENVIOU PRE\u00c7O PARA ESTE ITEM</div></div>';
     }
-    // Acumula totais — MESMA FÓRMULA de calcResMulti (tela):
-    // vlOrcTotal = vlOrç × fator × qtCompra; vlCotadoTotal = bestPrice × qtCompra
-    // Só conta quando qtCompra > 0 (igual ao comportamento do TOTAL row)
-    if (temOrc && assoc && rkgs.length > 0) {
-      var qtCompraVal = parseFloat(String((assoc.qtCompra)||'').replace(',','.')) || 0;
-      if (qtCompraVal > 0) {
-        var vlOrcRaw = parseFloat(orcItem.valorUnitario||orcItem.vl_unitario) || 0;
-        var fatorVal = parseFloat(assoc.fator) || 1;
-        var vlOrcTot = vlOrcRaw * fatorVal * qtCompraVal;
-        var vlCotTot = rkgs[0].preco * qtCompraVal;
-        var resCMR = vlOrcTot - vlCotTot;
-        if (resCMR >= 0) { totEco += resCMR; ctEco++; }
-        else { totPrej += Math.abs(resCMR); ctPrej++; }
+    // ─── TOTAIS: réplica EXATA de calcResMulti (mesma lógica do TOTAL LUCRO da tela) ───
+    if (rkgs.length > 0) {
+      var aesItem = mapaAssocs.filter(function(a){ return a.itemMapaId === item.id; });
+      if (aesItem.length > 0) {
+        var qtCompraTotal2 = 0;
+        var vlOrcTotal2 = aesItem.reduce(function(ac, a2){
+          var idx2 = (a2.orcItemIndex != null)
+            ? a2.orcItemIndex
+            : obraOrcItens.findIndex(function(it){ return it.codigo === a2.orcItemCodigo; });
+          var oi2 = obraOrcItens[idx2];
+          if (!oi2) return ac;
+          var fator2 = parseFloat(a2.fator) || 1;
+          var qt2 = parseFloat(String(a2.qtCompra||'').replace(',','.')) || 0;
+          qtCompraTotal2 += qt2;
+          return ac + (parseFloat(oi2.valorUnitario||oi2.vl_unitario)||0) * fator2 * qt2;
+        }, 0);
+        if (vlOrcTotal2 > 0) {
+          var qtBase2 = qtCompraTotal2 > 0 ? qtCompraTotal2 : qt;
+          var vlCotTot2 = rkgs[0].preco * qtBase2;
+          var resCMR2 = vlOrcTotal2 - vlCotTot2;
+          if (resCMR2 >= 0) { totEco += resCMR2; ctEco++; }
+          else { totPrej += Math.abs(resCMR2); ctPrej++; }
+        }
       }
     }
     // Badge
