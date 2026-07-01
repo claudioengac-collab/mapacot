@@ -918,9 +918,9 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
         +'</div>';
     }
     // Linhas de ranking
-    var maxBar = rkgs[rkgs.length-1].preco;
+    var maxBar = rkgs[rkgs.length-1].preco || 1;
     rkgs.slice(0,5).forEach(function(rk, i){
-      var bw = Math.round(rk.preco / maxBar * 100);
+      var bw = Math.max(10, Math.round(rk.preco / maxBar * 100));
       var barCls = i===0 ? (temOrc ? (rk.preco<=vlOrc?'al-eco-b':'al-prej-b') : 'al-eco-b')
                          : i===1 ? 'al-r2-b' : 'al-r3-b';
       var valCls = i===0 ? (temOrc ? (rk.preco<=vlOrc?'al-eco-v':'al-prej-v') : 'al-eco-v') : 'al-rx-v';
@@ -974,20 +974,44 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
       +badge+'</div>'+rows+'</div>';
   }).join('');
   // Cards
+  var temAlgumOrc = ctEco > 0 || ctPrej > 0;
   var resultado = totEco - totPrej;
-  var cards = '<div class="al-cards">'
-    +'<div class="al-card"><div class="al-cl">\u25cf ECONOMIA</div>'
-    +'<div class="al-cn" style="color:#186818;font-size:16px;">'+ctEco+' ITENS</div>'
-    +'<div class="al-cn" style="color:#186818;font-size:18px;margin:2px 0;">\u2212 '+fmtR(totEco)+'</div>'
-    +'<div class="al-cs" style="color:#186818;">ABAIXO DO OR\u00c7ADO</div></div>'
-    +'<div class="al-card"><div class="al-cl">\u25cf PREJU\u00cdZO</div>'
-    +'<div class="al-cn" style="color:#c0392b;font-size:16px;">'+ctPrej+' ITENS</div>'
-    +'<div class="al-cn" style="color:#c0392b;font-size:18px;margin:2px 0;">+ '+fmtR(totPrej)+'</div>'
-    +'<div class="al-cs" style="color:#c0392b;">ACIMA DO OR\u00c7ADO</div></div>'
-    +'<div class="al-card"><div class="al-cl">RESULTADO L\u00cdQUIDO</div>'
-    +'<div class="al-cn" style="color:'+(resultado>=0?'#186818':'#c0392b')+';font-size:20px;margin:3px 0;">'+(resultado>=0?'+ ':'\u2212 ')+fmtR(Math.abs(resultado))+'</div>'
-    +'<div class="al-cs" style="color:#555;">ECONOMIA \u2212 PREJU\u00cdZO</div></div>'
-    +'</div>';
+  var cards;
+  if (temAlgumOrc) {
+    cards = '<div class="al-cards">'
+      +'<div class="al-card"><div class="al-cl">\u25cf ECONOMIA</div>'
+      +'<div class="al-cn" style="color:#186818;font-size:16px;">'+ctEco+' ITENS</div>'
+      +'<div class="al-cn" style="color:#186818;font-size:18px;margin:2px 0;">\u2212 '+fmtR(totEco)+'</div>'
+      +'<div class="al-cs" style="color:#186818;">ABAIXO DO OR\u00c7ADO</div></div>'
+      +'<div class="al-card"><div class="al-cl">\u25cf PREJU\u00cdZO</div>'
+      +'<div class="al-cn" style="color:#c0392b;font-size:16px;">'+ctPrej+' ITENS</div>'
+      +'<div class="al-cn" style="color:#c0392b;font-size:18px;margin:2px 0;">+ '+fmtR(totPrej)+'</div>'
+      +'<div class="al-cs" style="color:#c0392b;">ACIMA DO OR\u00c7ADO</div></div>'
+      +'<div class="al-card"><div class="al-cl">RESULTADO L\u00cdQUIDO</div>'
+      +'<div class="al-cn" style="color:'+(resultado>=0?'#186818':'#c0392b')+';font-size:20px;margin:3px 0;">'+(resultado>=0?'+ ':'\u2212 ')+fmtR(Math.abs(resultado))+'</div>'
+      +'<div class="al-cs" style="color:#555;">ECONOMIA \u2212 PREJU\u00cdZO</div></div>'
+      +'</div>';
+  } else {
+    // Sem orçado: cards mostram ranking puro
+    var totMenor = itens.reduce(function(acc,item){
+      var r=calcResumo(item,fns,precos);
+      return acc+(r.vlTotal||0);
+    },0);
+    var ctComPreco = itens.filter(function(item){
+      return fns.some(function(f){ return parseMoney(precos[item.id+'_'+f.id])!==null; });
+    }).length;
+    cards = '<div class="al-cards">'
+      +'<div class="al-card"><div class="al-cl">ITENS COM COTA\u00c7\u00c3O</div>'
+      +'<div class="al-cn" style="color:#2a5298;font-size:22px;margin:3px 0;">'+ctComPreco+'</div>'
+      +'<div class="al-cs" style="color:#555;">DE '+itens.length+' ITENS DO MAPA</div></div>'
+      +'<div class="al-card"><div class="al-cl">MENOR PRE\u00c7O TOTAL</div>'
+      +'<div class="al-cn" style="color:#186818;font-size:18px;margin:3px 0;">'+fmtR(totMenor)+'</div>'
+      +'<div class="al-cs" style="color:#555;">SOMA DOS MENORES PRE\u00c7OS</div></div>'
+      +'<div class="al-card"><div class="al-cl">OR\u00c7AMENTO DE REFER\u00caNCIA</div>'
+      +'<div class="al-cn" style="color:#b8730a;font-size:16px;margin:3px 0;">N\u00c3O ASSOCIADO</div>'
+      +'<div class="al-cs" style="color:#b8730a;">RANKING APENAS POR PRE\u00c7O</div></div>'
+      +'</div>';
+  }
   // Legenda
   var leg = '<div class="al-leg">'
     +'<b style="color:#555;font-size:9px;">LEGENDA:</b>'
@@ -4657,6 +4681,10 @@ var _useState27 = useState(init),
     }
   }, chunks.map(function (chunk, ci) {
     return renderChunk(chunk, ci, hiddenCols);
+  }), inclAnalise && /*#__PURE__*/React.createElement("div", {
+    key: "analise-screen",
+    style: { marginTop: 20 },
+    dangerouslySetInnerHTML: { __html: buildAnaliseHTML(mapa, clock, orcamentos, associacoes) }
   }))),
   // Modal de associação de orçamento
   itemAssociando && /*#__PURE__*/React.createElement(Modal, { open: true, onClose: function(){ setItemAssociando(null); }, maxWidth: 600 },
