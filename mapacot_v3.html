@@ -868,7 +868,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
   var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
   var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
-  // Totais para cards
+  // Totais para cards — mesma fórmula do LUCRO (só itens comprado=true)
   var totEco = 0, totPrej = 0, ctEco = 0, ctPrej = 0;
   // Gera HTML dos itens
   var itensHTML = itens.map(function(item, idx) {
@@ -894,9 +894,14 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
         +'<span class="albg al-sem">\u2014 SEM COTA\u00c7\u00c3O</span></div>'
         +'<div class="alr al-sem-cot">NENHUM FORNECEDOR ENVIOU PRE\u00c7O PARA ESTE ITEM</div></div>';
     }
-    // Acumula totais (só quando tem orçado)
-    if (temOrc) {
-      var diff1 = (vlOrc - rkgs[0].preco) * qt;
+    // Acumula totais — MESMA FÓRMULA DO LUCRO: só itens comprado=true, usa qtCompra se definida
+    if (temOrc && item.comprado && rkgs.length > 0) {
+      var qtCompraAssoc = parseFloat(String((assoc&&assoc.qtCompra)||'').replace(',','.')) || 0;
+      var qtParaCalc = (qtCompraAssoc > 0 && qtCompraAssoc < qt) ? qtCompraAssoc : qt;
+      var fatorAssoc = parseFloat((assoc&&assoc.fator)) || 1;
+      var vlOrcUnit = orcItem ? (parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0) : 0;
+      // resultado = vlOrc × (qtParaCalc × fator) − bestPrice × qtParaCalc
+      var diff1 = vlOrcUnit * (qtParaCalc * fatorAssoc) - rkgs[0].preco * qtParaCalc;
       if (diff1 >= 0) { totEco += diff1; ctEco++; }
       else { totPrej += Math.abs(diff1); ctPrej++; }
     }
