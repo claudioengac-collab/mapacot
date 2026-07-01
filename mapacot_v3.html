@@ -853,6 +853,192 @@ var getTheme = function getTheme(id) {
   }) || THEMES[0];
 };
 
+// ─── ANÁLISE DE PREÇOS ────────────────────────────────────────────────────────
+var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associacoes) {
+  now = now || new Date();
+  orcamentos = orcamentos || {};
+  associacoes = associacoes || [];
+  var T = getTheme(mapa.corTema);
+  var hdrColor = T.hdr;
+  var fns = mapa.fornecedores || [];
+  var itens = mapa.itens || [];
+  var precos = mapa.precos || {};
+  var fmtR = function(v){ return 'R$\u00a0' + fmtMoney(v); };
+  // Orçamento
+  var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
+  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
+  var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
+  // Totais para cards
+  var totEco = 0, totPrej = 0, ctEco = 0, ctPrej = 0;
+  // Gera HTML dos itens
+  var itensHTML = itens.map(function(item, idx) {
+    var qt = parseFloat(String(item.qt).replace(',','.')) || 0;
+    // Orçado
+    var assoc = mapaAssocs.find(function(a){ return a.itemMapaId === item.id; });
+    var orcItem = assoc ? obraOrcItens.find(function(o){ return o.codigo === assoc.orcItemCodigo; }) : null;
+    var vlOrc = orcItem ? (parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0)*(parseFloat((assoc&&assoc.fator))||1) : null;
+    var temOrc = vlOrc !== null && vlOrc > 0;
+    // Rankings: todos fornecedores com preço, ordenado crescente
+    var rkgs = [];
+    fns.forEach(function(f){
+      var v = parseMoney(precos[item.id+'_'+f.id]);
+      if (v !== null && v > 0) rkgs.push({ forn: (f.nome||'—').toUpperCase(), preco: v });
+    });
+    rkgs.sort(function(a,b){ return a.preco - b.preco; });
+    var nItem = (idx+1);
+    var desc = (item.descricao||'').toUpperCase();
+    // Sem cotação
+    if (rkgs.length === 0) {
+      return '<div class="alb"><div class="aln" style="background:'+hdrColor+';">'
+        +'<span>'+nItem+' \u2014 '+desc+' \u00b7 QT: '+item.qt+' '+(item.unid||'')+'</span>'
+        +'<span class="albg al-sem">\u2014 SEM COTA\u00c7\u00c3O</span></div>'
+        +'<div class="alr al-sem-cot">NENHUM FORNECEDOR ENVIOU PRE\u00c7O PARA ESTE ITEM</div></div>';
+    }
+    // Acumula totais (só quando tem orçado)
+    if (temOrc) {
+      var diff1 = (vlOrc - rkgs[0].preco) * qt;
+      if (diff1 >= 0) { totEco += diff1; ctEco++; }
+      else { totPrej += Math.abs(diff1); ctPrej++; }
+    }
+    // Badge
+    var badge = temOrc
+      ? (rkgs[0].preco <= vlOrc
+          ? '<span class="albg al-eco">\u2713 ECONOMIA</span>'
+          : '<span class="albg al-prej">\u2717 ACIMA DO OR\u00c7ADO</span>')
+      : '<span class="albg al-men">\u2605 MENOR PRE\u00c7O: '+rkgs[0].forn+'</span>';
+    // Linha orçado
+    var rows = '';
+    if (temOrc) {
+      var bwOrc = Math.round(vlOrc / rkgs[rkgs.length-1].preco * 100);
+      rows += '<div class="alr al-orc">'
+        +'<div class="all"><div class="alt">OR\u00c7ADO</div><div class="alf">REFER\u00caNCIA BASE</div></div>'
+        +'<div class="albo"><div class="albi al-orc-b" style="width:'+bwOrc+'%;">'+fmtR(vlOrc)+'</div></div>'
+        +'<div class="alv al-ref">'+fmtR(vlOrc)+'</div>'
+        +'<div class="ald"><span class="al-dref">REFER\u00caNCIA \u2014 SEM COMPARA\u00c7\u00c3O</span></div>'
+        +'</div>';
+    }
+    // Linhas de ranking
+    var maxBar = rkgs[rkgs.length-1].preco;
+    rkgs.slice(0,5).forEach(function(rk, i){
+      var bw = Math.round(rk.preco / maxBar * 100);
+      var barCls = i===0 ? (temOrc ? (rk.preco<=vlOrc?'al-eco-b':'al-prej-b') : 'al-eco-b')
+                         : i===1 ? 'al-r2-b' : 'al-r3-b';
+      var valCls = i===0 ? (temOrc ? (rk.preco<=vlOrc?'al-eco-v':'al-prej-v') : 'al-eco-v') : 'al-rx-v';
+      var ord = ['\u00ba','\u00ba','\u00ba','\u00ba','\u00ba'];
+      var ordN = (i+1)+'\u00ba';
+      // Deltas
+      var dlts = '';
+      if (i===0) {
+        if (temOrc) {
+          var d0 = rk.preco - vlOrc, p0 = d0/vlOrc*100;
+          dlts = d0<=0
+            ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(d0))+' (\u2212'+Math.abs(p0).toFixed(1)+'%)</span>'
+            : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(d0)+' (+'+p0.toFixed(1)+'%)</span>';
+        } else {
+          dlts = '<span class="al-dmen">\u2605 MENOR PRE\u00c7O DA COTA\u00c7\u00c3O</span>';
+        }
+      } else if (i===1) {
+        if (temOrc) {
+          var d1=rk.preco-vlOrc,p1=d1/vlOrc*100;
+          dlts += d1<=0
+            ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(d1))+' (\u2212'+Math.abs(p1).toFixed(1)+'%)</span>'
+            : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(d1)+' (+'+p1.toFixed(1)+'%)</span>';
+        }
+        var dr1=rk.preco-rkgs[0].preco,pr1=dr1/rkgs[0].preco*100;
+        dlts += '<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(dr1)+' (+'+pr1.toFixed(1)+'%)</span>';
+      } else if (i===2) {
+        if (temOrc) {
+          var d2=rk.preco-vlOrc,p2=d2/vlOrc*100;
+          dlts += d2<=0
+            ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(d2))+' (\u2212'+Math.abs(p2).toFixed(1)+'%)</span>'
+            : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(d2)+' (+'+p2.toFixed(1)+'%)</span>';
+        }
+        var dr2a=rk.preco-rkgs[0].preco,pr2a=dr2a/rkgs[0].preco*100;
+        var dr2b=rk.preco-rkgs[1].preco,pr2b=dr2b/rkgs[1].preco*100;
+        dlts += '<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(dr2a)+' (+'+pr2a.toFixed(1)+'%)</span>';
+        dlts += '<span class="al-dr2">\u25b2 VS 2\u00ba RANK: + '+fmtR(dr2b)+' (+'+pr2b.toFixed(1)+'%)</span>';
+      } else {
+        var drn=rk.preco-rkgs[0].preco,prn=drn/rkgs[0].preco*100;
+        dlts = '<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(drn)+' (+'+prn.toFixed(1)+'%)</span>';
+      }
+      var alt = i%2===0?' alalt':'';
+      rows += '<div class="alr'+alt+'">'
+        +'<div class="all"><div class="alt">'+(i+1)+'\u00ba RANKING</div><div class="alf">'+rk.forn+'</div></div>'
+        +'<div class="albo"><div class="albi '+barCls+'" style="width:'+bw+'%;">'+fmtR(rk.preco)+'</div></div>'
+        +'<div class="alv '+valCls+'">'+fmtR(rk.preco)+'</div>'
+        +'<div class="ald">'+dlts+'</div>'
+        +'</div>';
+    });
+    return '<div class="alb"><div class="aln" style="background:'+hdrColor+';">'
+      +'<span>'+nItem+' \u2014 '+desc+' \u00b7 QT: '+item.qt+' '+(item.unid||'')+'</span>'
+      +badge+'</div>'+rows+'</div>';
+  }).join('');
+  // Cards
+  var resultado = totEco - totPrej;
+  var cards = '<div class="al-cards">'
+    +'<div class="al-card"><div class="al-cl">\u25cf ECONOMIA</div>'
+    +'<div class="al-cn" style="color:#186818;font-size:16px;">'+ctEco+' ITENS</div>'
+    +'<div class="al-cn" style="color:#186818;font-size:18px;margin:2px 0;">\u2212 '+fmtR(totEco)+'</div>'
+    +'<div class="al-cs" style="color:#186818;">ABAIXO DO OR\u00c7ADO</div></div>'
+    +'<div class="al-card"><div class="al-cl">\u25cf PREJU\u00cdZO</div>'
+    +'<div class="al-cn" style="color:#c0392b;font-size:16px;">'+ctPrej+' ITENS</div>'
+    +'<div class="al-cn" style="color:#c0392b;font-size:18px;margin:2px 0;">+ '+fmtR(totPrej)+'</div>'
+    +'<div class="al-cs" style="color:#c0392b;">ACIMA DO OR\u00c7ADO</div></div>'
+    +'<div class="al-card"><div class="al-cl">RESULTADO L\u00cdQUIDO</div>'
+    +'<div class="al-cn" style="color:'+(resultado>=0?'#186818':'#c0392b')+';font-size:20px;margin:3px 0;">'+(resultado>=0?'+ ':'\u2212 ')+fmtR(Math.abs(resultado))+'</div>'
+    +'<div class="al-cs" style="color:#555;">ECONOMIA \u2212 PREJU\u00cdZO</div></div>'
+    +'</div>';
+  // Legenda
+  var leg = '<div class="al-leg">'
+    +'<b style="color:#555;font-size:9px;">LEGENDA:</b>'
+    +'<div class="al-li"><div class="al-lb" style="background:#888780;"></div> OR\u00c7ADO</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#1baf7a;"></div> 1\u00ba RANK (ECONOMIA)</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#e34948;"></div> 1\u00ba RANK (ACIMA)</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#eda100;"></div> 2\u00ba RANKING</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#eb6834;"></div> 3\u00ba RANKING</div>'
+    +'</div>';
+  // CSS (prefixado "al-" para não colidir com estilos do mapa)
+  var css = '<style>'
+    +'.al-cards{display:flex;gap:10px;margin-bottom:10px;}'
+    +'.al-card{flex:1;border:1px solid #ccd8eb;border-radius:4px;padding:8px 12px;text-align:center;background:#f0f5ff;}'
+    +'.al-cl{font-size:8px;color:#666;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}'
+    +'.al-cn{font-weight:800;} .al-cs{font-size:9px;font-weight:600;}'
+    +'.al-leg{display:flex;gap:14px;margin-bottom:10px;font-size:10px;color:#444;align-items:center;flex-wrap:wrap;}'
+    +'.al-li{display:flex;align-items:center;gap:5px;}'
+    +'.al-lb{width:14px;height:14px;border-radius:2px;flex-shrink:0;}'
+    +'.alb{margin-bottom:8px;border:1px solid #d0dcea;border-radius:4px;overflow:hidden;}'
+    +'.aln{color:#fff;font-size:11px;font-weight:700;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;}'
+    +'.albg{border-radius:3px;padding:2px 8px;font-size:9px;font-weight:700;}'
+    +'.al-eco{background:#1baf7a;color:#fff;} .al-prej{background:#e34948;color:#fff;}'
+    +'.al-men{background:#1baf7a;color:#fff;} .al-sem{background:#888;color:#fff;}'
+    +'.alr{display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid #edf0f8;min-height:34px;}'
+    +'.alr:last-child{border-bottom:none;} .alalt{background:#f8faff;}'
+    +'.al-orc{background:#eeeff3;} .al-sem-cot{justify-content:center;color:#999;font-size:10px;font-weight:600;background:#f5f5f5;}'
+    +'.all{width:130px;flex-shrink:0;} .alt{font-size:10px;font-weight:700;color:#333;} .alf{font-size:9px;color:#888;display:block;margin-top:1px;}'
+    +'.albo{flex:1;background:#e8ecf4;border-radius:3px;height:20px;overflow:hidden;}'
+    +'.albi{height:20px;border-radius:3px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10px;color:#fff;font-weight:800;white-space:nowrap;}'
+    +'.al-orc-b{background:#888780;} .al-eco-b{background:#1baf7a;} .al-prej-b{background:#e34948;}'
+    +'.al-r2-b{background:#eda100;} .al-r3-b{background:#eb6834;}'
+    +'.alv{width:75px;text-align:right;font-weight:800;font-size:11px;flex-shrink:0;}'
+    +'.al-eco-v{color:#186818;} .al-prej-v{color:#c0392b;} .al-ref{color:#777;} .al-rx-v{color:#444;}'
+    +'.ald{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:4px;font-size:10px;}'
+    +'.al-doec{color:#186818;font-weight:700;} .al-dopj{color:#c0392b;font-weight:700;}'
+    +'.al-dr1{color:#888;font-size:9px;font-weight:600;} .al-dr2{color:#b8730a;font-weight:700;}'
+    +'.al-dmen{color:#186818;font-weight:700;} .al-dref{color:#aaa;font-size:9px;}'
+    +'</style>';
+  var hdr = '<div style="background:#1a3a78;padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
+    +'<span style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">\uD83D\uDCCA AN\u00c1LISE DE PRE\u00c7OS POR INSUMO</span>'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.95);font-weight:700;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;">MP N\u00ba: '+(mapa.numero||'')+'</span>'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.9);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">OBRA: '+(mapa.obra||'').toUpperCase()+'</span>'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.85);border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;margin-left:auto;">DATA: '+fmtDate(now)+'</span>'
+    +'</div>';
+  var body = '<div style="border:1px solid #c0ccdd;border-top:none;padding:10px 12px;background:#fff;">'
+    +cards+leg+itensHTML
+    +'<div style="margin-top:6px;font-size:9px;color:#999;text-align:right;">* PRE\u00c7OS UNIT\u00c1RIOS SEM IMPOSTOS \u00b7 GERADO EM '+fmtDate(now)+' '+fmtHora(now)+' \u00b7 MAPACOT V3</div>'
+    +'</div>';
+  return css + hdr + body;
+};
+
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 var buildMapaHTML = function buildMapaHTML(mapa) {
   var now = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : new Date();
@@ -3062,6 +3248,7 @@ var _useState27 = useState(init),
     setShowTheme = _useState34[1];
   var _useStateCasar=useState(false),showCasar=_slicedToArray(_useStateCasar,2)[0],setShowCasar=_slicedToArray(_useStateCasar,2)[1];
   var _useStateIA=useState(false),showLerIA=_slicedToArray(_useStateIA,2)[0],setShowLerIA=_slicedToArray(_useStateIA,2)[1];
+  var _useStateAnal=useState(false),inclAnalise=_slicedToArray(_useStateAnal,2)[0],setInclAnalise=_slicedToArray(_useStateAnal,2)[1];
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
   var _useState35 = useState(new Date()),
@@ -4266,14 +4453,37 @@ var _useState27 = useState(init),
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      return abrirPDF(buildMapaHTML(mapa, clock, orcamentos, associacoes));
+      var htmlMapa = buildMapaHTML(mapa, clock, orcamentos, associacoes);
+      if (!inclAnalise) return abrirPDF(htmlMapa);
+      // Injeta página de análise antes de </body></html>
+      var htmlAnal = buildAnaliseHTML(mapa, clock, orcamentos, associacoes);
+      var htmlFinal = htmlMapa.replace('</body></html>',
+        '<div style="page-break-before:always;">' + htmlAnal + '</div></body></html>');
+      return abrirPDF(htmlFinal);
     },
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       background: "#c0392b",
       color: "#fff",
       gap: 5
     })
-  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"), /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"),
+  /*#__PURE__*/React.createElement("label", {
+    title: "Incluir página de análise de preços no PDF",
+    style: { display:"flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600,
+             color: inclAnalise ? "#6a0dad" : "#888", cursor:"pointer",
+             border:"1px solid "+(inclAnalise?"#9b59b6":"#ccc"),
+             borderRadius:4, padding:"3px 8px", background: inclAnalise?"#f3e8ff":"#f8f8f8",
+             userSelect:"none", whiteSpace:"nowrap" }
+  },
+    /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: inclAnalise,
+      onChange: function(e){ setInclAnalise(e.target.checked); },
+      style: { cursor:"pointer" }
+    }),
+    "\uD83D\uDCCA + AN\u00c1LISE"
+  ),
+  /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return setShowCadEditor(true);
     },
