@@ -924,7 +924,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
           +'</div>';
       }
       // Linhas de ranking
-      rkgs.slice(0,5).forEach(function(rk, i){
+      rkgs.slice(0,3).forEach(function(rk, i){
         var bw = Math.max(10, Math.round(rk.preco / maxBar * 100));
         var barCls = i===0?(temOrc?(rk.preco<=vlOrc?'al-eco-b':'al-prej-b'):'al-eco-b'):i===1?'al-r2-b':'al-r3-b';
         var valCls = i===0?(temOrc?(rk.preco<=vlOrc?'al-eco-v':'al-prej-v'):'al-eco-v'):'al-rx-v';
