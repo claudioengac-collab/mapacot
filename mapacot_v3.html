@@ -923,31 +923,29 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
           +'<div class="ald"><span class="al-dref">REFER\u00caNCIA \u2014 SEM COMPARA\u00c7\u00c3O</span></div>'
           +'</div>';
       }
-      // Linhas de ranking
-      rkgs.slice(0,3).forEach(function(rk, i){
+      // Linhas de ranking — dinâmico, todos os fornecedores, comparações cumulativas
+      var rankBarCls = ['al-r1-b','al-r2-b','al-r3-b','al-r4-b','al-r5-b','al-r6-b','al-r7p-b'];
+      rkgs.forEach(function(rk, i){
         var bw = Math.max(10, Math.round(rk.preco / maxBar * 100));
-        var barCls = i===0?(temOrc?(rk.preco<=vlOrc?'al-eco-b':'al-prej-b'):'al-eco-b'):i===1?'al-r2-b':'al-r3-b';
-        var valCls = i===0?(temOrc?(rk.preco<=vlOrc?'al-eco-v':'al-prej-v'):'al-eco-v'):'al-rx-v';
+        var barCls = rankBarCls[Math.min(i, rankBarCls.length-1)];
         var dlts = '';
         if (temOrc) {
-          // Comparação vs ORÇADO sempre
           var dO = rk.preco - vlOrc, pO = dO/vlOrc*100;
           dlts += dO<=0
             ? '<span class="al-doec">\u25bc VS OR\u00c7ADO: \u2212 '+fmtR(Math.abs(dO))+' (\u2212'+Math.abs(pO).toFixed(1)+'%)</span>'
             : '<span class="al-dopj">\u25b2 VS OR\u00c7ADO: + '+fmtR(dO)+' (+'+pO.toFixed(1)+'%)</span>';
-          // Comparação vs ranks anteriores
-          if (i>=1) { var d1=rk.preco-rkgs[0].preco,p1=d1/rkgs[0].preco*100; dlts+='<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(d1)+' (+'+p1.toFixed(1)+'%)</span>'; }
-          if (i>=2) { var d2=rk.preco-rkgs[1].preco,p2=d2/rkgs[1].preco*100; dlts+='<span class="al-dr2">\u25b2 VS 2\u00ba RANK: + '+fmtR(d2)+' (+'+p2.toFixed(1)+'%)</span>'; }
-        } else {
-          if (i===0) dlts='<span class="al-dmen">\u2605 MENOR PRE\u00c7O DA COTA\u00c7\u00c3O</span>';
-          if (i>=1) { var dr1=rk.preco-rkgs[0].preco,pr1=dr1/rkgs[0].preco*100; dlts='<span class="al-dr1">\u25b2 VS 1\u00ba RANK: + '+fmtR(dr1)+' (+'+pr1.toFixed(1)+'%)</span>'; }
-          if (i>=2) { var dr2=rk.preco-rkgs[1].preco,pr2=dr2/rkgs[1].preco*100; dlts+='<span class="al-dr2">\u25b2 VS 2\u00ba RANK: + '+fmtR(dr2)+' (+'+pr2.toFixed(1)+'%)</span>'; }
+        } else if (i===0) {
+          dlts = '<span class="al-dmen">\u2605 MENOR PRE\u00c7O DA COTA\u00c7\u00c3O</span>';
+        }
+        for (var j=0; j<i; j++) {
+          var dj=rk.preco-rkgs[j].preco, pj=dj/rkgs[j].preco*100;
+          dlts+='<span class="al-dr1">\u25b2 VS '+(j+1)+'\u00ba RANK: + '+fmtR(dj)+' (+'+pj.toFixed(1)+'%)</span>';
         }
         var alt = i%2===0?' alalt':'';
         rows += '<div class="alr'+alt+'">'
           +'<div class="all"><div class="alt">'+(i+1)+'\u00ba RANKING</div><div class="alf">'+rk.forn+'</div></div>'
           +'<div class="albo"><div class="albi '+barCls+'" style="width:'+bw+'%;">'+fmtR(rk.preco)+'</div></div>'
-          +'<div class="alv '+valCls+'">'+fmtR(rk.preco)+'</div>'
+          +'<div class="alv al-rx-v">'+fmtR(rk.preco)+'</div>'
           +'<div class="ald">'+dlts+'</div>'
           +'</div>';
       });
@@ -1017,7 +1015,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
     +'.all{width:140px;flex-shrink:0;} .alt{font-size:10px;font-weight:700;color:#333;} .alf{font-size:9px;color:#888;display:block;margin-top:1px;}'
     +'.albo{flex:1;background:#e8ecf4;border-radius:3px;height:20px;overflow:hidden;}'
     +'.albi{height:20px;border-radius:3px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;font-size:10px;color:#fff;font-weight:800;white-space:nowrap;}'
-    +'.al-orc-b{background:#888780;} .al-eco-b{background:#1baf7a;} .al-prej-b{background:#e34948;} .al-r2-b{background:#eda100;} .al-r3-b{background:#eb6834;}'
+    +'.al-orc-b{background:#888780;} .al-r1-b{background:#1baf7a;} .al-r2-b{background:#eb6834;} .al-r3-b{background:#e34948;} .al-r4-b{background:#9b59b6;} .al-r5-b{background:#2980b9;} .al-r6-b{background:#1abc9c;} .al-r7p-b{background:#e67e22;}'
     +'.alv{width:75px;text-align:right;font-weight:800;font-size:11px;flex-shrink:0;}'
     +'.al-eco-v{color:#186818;} .al-prej-v{color:#c0392b;} .al-ref{color:#777;} .al-rx-v{color:#444;}'
     +'.ald{width:270px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;font-size:10px;}'
@@ -1036,17 +1034,17 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 
   // ── LEGENDA ──
   var leg = '<div class="al-leg">'
-    +'<b style="color:#555;font-size:9px;">LEGENDA · TOP 3 FORNECEDORES:</b>'
+    +'<b style="color:#555;font-size:9px;">LEGENDA:</b>'
     +'<div class="al-li"><div class="al-lb" style="background:#888780;"></div> OR\u00c7ADO</div>'
-    +'<div class="al-li"><div class="al-lb" style="background:#1baf7a;"></div> 1\u00ba RANK (ECONOMIA)</div>'
-    +'<div class="al-li"><div class="al-lb" style="background:#e34948;"></div> 1\u00ba RANK (ACIMA)</div>'
-    +'<div class="al-li"><div class="al-lb" style="background:#eda100;"></div> 2\u00ba RANKING</div>'
-    +'<div class="al-li"><div class="al-lb" style="background:#eb6834;"></div> 3\u00ba RANKING</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#1baf7a;"></div> 1\u00ba RANKING</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#eb6834;"></div> 2\u00ba RANKING</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#e34948;"></div> 3\u00ba RANKING</div>'
+    +'<div class="al-li"><div class="al-lb" style="background:#9b59b6;"></div> 4\u00ba+ RANKING</div>'
     +'</div>';
 
   var body = '<div style="border:1px solid #c0ccdd;border-top:none;padding:10px 12px;background:#fff;">'
     +leg+itensHTML
-    +'<div style="margin-top:6px;font-size:9px;color:#999;text-align:right;">* PRE\u00c7OS UNIT\u00c1RIOS SEM IMPOSTOS \u00b7 GERADO EM '+fmtDate(now)+' '+fmtHora(now)+' \u00b7 MAPACOT V3</div>'
+    +'<div style="margin-top:6px;font-size:9px;color:#999;text-align:right;">GERADO EM '+(now instanceof Date?now:new Date(now)).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"})+' \u2013 '+fmtHora(now)+' \u2013 MAPACOT V3 CSS</div>'
     +'</div>';
   return css + hdr + body;
 };
@@ -3644,31 +3642,30 @@ var _useState27 = useState(init),
     background: T.sub,
     color: "#333"
   });
-  var calcResMulti = function(item, aes, orcItens) {
-    if (!aes || aes.length === 0) return null;
-    var orcList = orcItens || obraOrcItens;
-    var res = calcResumo(item, mapa.fornecedores, mapa.precos);
-    if (res.vlUnit === null) return null;
-    var qtItem = parseFloat(String(item.qt).replace(",","."))||0;
-    if (qtItem <= 0) return null;
-    var qtCompraTotal = 0;
-    var vlOrcTotal = aes.reduce(function(ac,a){
-      var idx = a.orcItemIndex != null ? a.orcItemIndex : orcList.findIndex(function(it){ return it.codigo===a.orcItemCodigo; });
-      var oi = orcList[idx];
-      if (!oi) return ac;
-      var fator = parseFloat(a.fator)||1;
-      var qt = parseFloat(String(a.qtCompra).replace(",","."))||0;
-      qtCompraTotal += qt;
-      return ac + (parseFloat(oi.valorUnitario)||0) * fator * qt;
-    }, 0);
-    if (vlOrcTotal <= 0) return null;
-    var qtBase = qtCompraTotal > 0 ? qtCompraTotal : qtItem;
-    var vlCotadoTotal = (res.vlUnit||0) * qtBase;
-    var resultado = vlOrcTotal - vlCotadoTotal;
-    var vloMedio = vlOrcTotal / qtBase;
-    var diff = vloMedio - res.vlUnit;
-    return { diff: diff, pct: (diff/vloMedio)*100, lucro: resultado>=0, total: resultado, vloMedio: vloMedio };
-  };
+   var calcResMulti = function(item, aes, orcItens) {
+     if (!aes || aes.length === 0) return null;
+     var orcList = orcItens || obraOrcItens;
+     var res = calcResumo(item, mapa.fornecedores, mapa.precos);
+     if (res.vlUnit === null) return null;
+     var qtItem = parseFloat(String(item.qt).replace(",","."))||0;
+     if (qtItem <= 0) return null;
+     // CORRECAO: usa qtItem x fator (igual ao PDF)
+     // qtCompra ja esta em unidades do orcamento (ex: metros)
+     // aplicar fator sobre qtCompra causava dupla contagem
+     var vlOrcTotal = aes.reduce(function(ac,a){
+       var idx = a.orcItemIndex != null ? a.orcItemIndex : orcList.findIndex(function(it){ return it.codigo===a.orcItemCodigo; });
+       var oi = orcList[idx];
+       if (!oi) return ac;
+       var fator = parseFloat(a.fator)||1;
+       return ac + (parseFloat(oi.valorUnitario)||0) * fator * qtItem;
+     }, 0);
+     if (vlOrcTotal <= 0) return null;
+     var vlCotadoTotal = (res.vlUnit||0) * qtItem;
+     var resultado = vlOrcTotal - vlCotadoTotal;
+     var vloMedio = vlOrcTotal / qtItem;
+     var diff = vloMedio - res.vlUnit;
+     return { diff: diff, pct: (diff/vloMedio)*100, lucro: resultado>=0, total: resultado, vloMedio: vloMedio };
+   };
   var renderChunk = function renderChunk(chunk, ci) {
     var hiddenCols = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
     var isFirst = ci === 0,
