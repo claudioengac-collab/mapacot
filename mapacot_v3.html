@@ -1182,7 +1182,9 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       var vlOrc=assocsIt.reduce(function(s,a){
         var oi=obraOrcItens.find(function(o){return o.codigo===a.orcItemCodigo;});
         if(!oi) return s;
-        return s+(parseFloat(oi.valorUnitario||oi.vl_unitario)||0)*(parseFloat(a.fator)||1)*qt;
+        // qtCompra já em unidades do orçamento — correto para fator 3M, 6M ou N associações
+        var qtC=parseFloat(String(a.qtCompra).replace(",","."))||0;
+        return s+(parseFloat(oi.valorUnitario||oi.vl_unitario)||0)*qtC;
       },0);
       return ac+(vlOrc>0?vlOrc-vt:0);
     },0);
@@ -3711,15 +3713,17 @@ var _useState27 = useState(init),
      // CORRECAO 2: busca por CODIGO (igual ao PDF) — mais confiavel que indice
      // quando o orcamento e reimportado, o indice fica desatualizado mas o codigo nao
      var vlOrcTotal = aes.reduce(function(ac,a){
-       // Busca exata por código — igual ao PDF (sem parseInt que distorce "006" → "6")
+       // Busca exata por código — igual ao PDF
        var oi = orcList.find(function(it){ return it.codigo===a.orcItemCodigo; });
        // Fallback por índice se código não encontrar
        if (!oi && a.orcItemIndex != null && a.orcItemIndex >= 0) {
          oi = orcList[a.orcItemIndex];
        }
        if (!oi) return ac;
-       var fator = parseFloat(a.fator)||1;
-       return ac + (parseFloat(oi.valorUnitario||oi.vl_unitario)||0) * fator * qtItem;
+       // qtCompra já está em unidades do orçamento (ex: metros)
+       // valorUnitario × qtCompra = custo real — correto para fator 3M, 6M ou N associações
+       var qtC = parseFloat(String(a.qtCompra).replace(",",".")) || 0;
+       return ac + (parseFloat(oi.valorUnitario||oi.vl_unitario)||0) * qtC;
      }, 0);
      if (vlOrcTotal <= 0) return null;
      var vlCotadoTotal = (res.vlUnit||0) * qtItem;
