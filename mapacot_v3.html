@@ -1068,7 +1068,7 @@ var buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
   var rows = itens.map(function(item, idx){
     return '<tr>'
       + '<td style="width:40px;text-align:center;">'+(idx+1)+'</td>'
-      + '<td>'+((item.descricao||'').toUpperCase())+'</td>'
+      + '<td>'+((item.descricao||'').toUpperCase())+(item.detalhe?'<div style="font-size:9px;color:#4a6888;margin-top:2px;word-break:break-word;">\u21b3 '+item.detalhe+'</div>':'')+'</td>'
       + '<td style="width:80px;text-align:right;">'+(item.qt||'')+'</td>'
       + '<td style="width:60px;text-align:center;">'+(item.unidade||item.und||'UN')+'</td>'
       + '</tr>';
