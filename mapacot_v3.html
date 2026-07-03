@@ -1102,7 +1102,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var detalhes = mapa.detalhes || {};
   var rodape = mapa.rodape || {};
   var totalBruto = function totalBruto(fid) {
-    return itensVisiveis.reduce(function (acc, item) {
+    return itens.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
       var qt = parseFloat(String(item.qt).replace(",", "."));
       return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
@@ -3624,8 +3624,13 @@ var _useState27 = useState(init),
     rodape = mapa.rodape;
   var rodapeResumo = rodape["__resumo__"] || {};
   var T = getTheme(mapa.corTema);
+  // filteredItens e itensVisiveis ANTES de totalBruto e bestFornId (que os usam)
+  var filteredItens = filter ? itens.filter(function (i) {
+    return i.descricao.toUpperCase().includes(filter.toUpperCase());
+  }) : itens;
+  var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
   var totalBruto = function totalBruto(fid) {
-    return itens.reduce(function (acc, item) {
+    return itensVisiveis.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
       var qt = parseFloat(String(item.qt).replace(",", "."));
       return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
@@ -3647,11 +3652,6 @@ var _useState27 = useState(init),
     });
     return minId;
   }();
-  var filteredItens = filter ? itens.filter(function (i) {
-    return i.descricao.toUpperCase().includes(filter.toUpperCase());
-  }) : itens;
-  // itensVisiveis = filteredItens excluindo os ocultos (para TOTAL, PDF e Análise)
-  var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
   var resumoTotal = itensVisiveis.reduce(function (acc, item) {
     var r = calcResumo(item, fornecedores, precos);
     return acc + (r.vlTotal || 0);
@@ -5567,7 +5567,7 @@ function MapCard(_ref16) {
     }
   }, "↗"), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      return abrirPDF(buildMapaHTML(Object.assign({}, mapa, { itens: itensVisiveis }), new Date(), orcamentos, associacoes));
+      return abrirPDF(buildMapaHTML(mapa, new Date(), orcamentos, associacoes));
     },
     style: _objectSpread(_objectSpread({}, SC.btnIco), {}, {
       background: "#fdecea",
