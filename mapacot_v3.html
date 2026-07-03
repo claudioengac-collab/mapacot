@@ -3253,6 +3253,16 @@ var _useState27 = useState(init),
     _useState32 = _slicedToArray(_useState31, 2),
     filter = _useState32[0],
     setFilter = _useState32[1];
+  var _useStateOcultos = useState(new Set()),
+    ocultos = _slicedToArray(_useStateOcultos, 2)[0],
+    setOcultos = _slicedToArray(_useStateOcultos, 2)[1];
+  var toggleOculto = function(id) {
+    setOcultos(function(prev) {
+      var next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   var _useState33 = useState(false),
     _useState34 = _slicedToArray(_useState33, 2),
     showTheme = _useState34[0],
@@ -3596,16 +3606,18 @@ var _useState27 = useState(init),
     });
     return minId;
   }();
-  var resumoTotal = itens.reduce(function (acc, item) {
+  var filteredItens = filter ? itens.filter(function (i) {
+    return i.descricao.toUpperCase().includes(filter.toUpperCase());
+  }) : itens;
+  // itensVisiveis = filteredItens excluindo os ocultos (para TOTAL, PDF e Análise)
+  var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
+  var resumoTotal = itensVisiveis.reduce(function (acc, item) {
     var r = calcResumo(item, fornecedores, precos);
     return acc + (r.vlTotal || 0);
   }, 0);
   var calcVLResumo = function calcVLResumo() {
     return resumoTotal - (parseMoney(rodapeResumo.desconto) || 0) + (parseMoney(rodapeResumo.impostos) || 0) + (parseMoney(rodapeResumo.frete) || 0);
   };
-  var filteredItens = filter ? itens.filter(function (i) {
-    return i.descricao.toUpperCase().includes(filter.toUpperCase());
-  }) : itens;
   var chunks = [];
   for (var i = 0; i < fornecedores.length; i += CHUNK_SIZE) chunks.push(fornecedores.slice(i, i + CHUNK_SIZE));
   if (chunks.length === 0) chunks.push([]);
@@ -3976,10 +3988,13 @@ var _useState27 = useState(init),
       var _rank2Price = _sortedUniq.length > 1 ? _sortedUniq[1] : null;
       var _rank3Price = _sortedUniq.length > 2 ? _sortedUniq[2] : null;
       var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
+      var _isOculto = ocultos.has(item.id);
       return /*#__PURE__*/React.createElement("tr", {
         key: item.id,
         style: {
-          background: bg
+          background: bg,
+          opacity: _isOculto ? 0.35 : 1,
+          textDecoration: _isOculto ? "line-through" : "none"
         }
       }, /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
@@ -3992,7 +4007,11 @@ var _useState27 = useState(init),
         onChange: function(e){ return updItem(item.id, "comprado", e.target.checked); },
         style: { width:15, height:15, cursor:"pointer", accentColor:"#2a5298" },
         title: item.comprado ? "Compra efetivada" : "Marcar como compra"
-      })), /*#__PURE__*/React.createElement("td", {
+      }), /*#__PURE__*/React.createElement("span", {
+        onClick: function(){ return toggleOculto(item.id); },
+        title: _isOculto ? "Clique para mostrar este item" : "Clique para ocultar este item",
+        style: { cursor:"pointer", fontSize:13, marginLeft:4, userSelect:"none", display:"block" }
+      }, _isOculto ? "\uD83D\uDEAB" : "\uD83D\uDC41")), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           textAlign: "center",
           color: "#666",
@@ -4463,10 +4482,11 @@ var _useState27 = useState(init),
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      var htmlMapa = buildMapaHTML(mapa, clock, orcamentos, associacoes);
+      var mapaVis = Object.assign({}, mapa, { itens: itensVisiveis });
+      var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
       if (!inclAnalise) return abrirPDF(htmlMapa);
       // Injeta página de análise antes de </body></html>
-      var htmlAnal = buildAnaliseHTML(mapa, clock, orcamentos, associacoes);
+      var htmlAnal = buildAnaliseHTML(mapaVis, clock, orcamentos, associacoes);
       var htmlFinal = htmlMapa.replace('</body></html>',
         '<div style="page-break-before:always;">' + htmlAnal + '</div></body></html>');
       return abrirPDF(htmlFinal);
@@ -4670,7 +4690,7 @@ var _useState27 = useState(init),
   }), inclAnalise && /*#__PURE__*/React.createElement("div", {
     key: "analise-screen",
     style: { marginTop: 20 },
-    dangerouslySetInnerHTML: { __html: buildAnaliseHTML(mapa, clock, orcamentos, associacoes) }
+    dangerouslySetInnerHTML: { __html: buildAnaliseHTML(Object.assign({}, mapa, { itens: itensVisiveis }), clock, orcamentos, associacoes) }
   }))),
   // Modal de associação de orçamento
   itemAssociando && /*#__PURE__*/React.createElement(Modal, { open: true, onClose: function(){ setItemAssociando(null); }, maxWidth: 600 },
@@ -5485,7 +5505,7 @@ function MapCard(_ref16) {
     }
   }, "↗"), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      return abrirPDF(buildMapaHTML(mapa, new Date(), orcamentos, associacoes));
+      return abrirPDF(buildMapaHTML(Object.assign({}, mapa, { itens: itensVisiveis }), new Date(), orcamentos, associacoes));
     },
     style: _objectSpread(_objectSpread({}, SC.btnIco), {}, {
       background: "#fdecea",
