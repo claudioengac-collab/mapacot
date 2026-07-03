@@ -1174,12 +1174,17 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var rTot0=itens.reduce(function(ac,it){var r=calcResumo(it,fns,precos);return ac+(r.vlTotal||0);},0);
     var orcRes0=itens.reduce(function(ac,it){
       var r=calcResumo(it,fns,precos);
-      var a=mapaAssocs.find(function(x){return x.itemMapaId===it.id;});
-      var oi=a?obraOrcItens.find(function(o){return o.codigo===a.orcItemCodigo;}):null;
-      var vo=oi?(parseFloat(oi.valorUnitario||oi.vl_unitario)||0)*(parseFloat(a&&a.fator)||1):null;
       var qt=parseFloat(String(it.qt).replace(',','.'))||0;
       var vt=r.vlUnit!==null?r.vlUnit*qt:0;
-      return ac+(vo&&vt>0?(vo*qt)-vt:0);
+      // Somar TODAS as associações do item (igual à tela)
+      var assocsIt=mapaAssocs.filter(function(x){return x.itemMapaId===it.id;});
+      if(!assocsIt.length||!vt) return ac;
+      var vlOrc=assocsIt.reduce(function(s,a){
+        var oi=obraOrcItens.find(function(o){return o.codigo===a.orcItemCodigo;});
+        if(!oi) return s;
+        return s+(parseFloat(oi.valorUnitario||oi.vl_unitario)||0)*(parseFloat(a.fator)||1)*qt;
+      },0);
+      return ac+(vlOrc>0?vlOrc-vt:0);
     },0);
     var rC0=orcRes0>=0?'#186818':'#aa1c1c';
     var rL0=orcRes0>=0?'\u25cf LUCRO':'\u25cf PREJ.';
@@ -3706,11 +3711,9 @@ var _useState27 = useState(init),
      // CORRECAO 2: busca por CODIGO (igual ao PDF) — mais confiavel que indice
      // quando o orcamento e reimportado, o indice fica desatualizado mas o codigo nao
      var vlOrcTotal = aes.reduce(function(ac,a){
-       var oi = orcList.find(function(it){
-         return it.codigo===a.orcItemCodigo
-           || it.codigo===String(parseInt(a.orcItemCodigo||"0",10))
-           || a.orcItemCodigo===String(parseInt(it.codigo||"0",10));
-       });
+       // Busca exata por código — igual ao PDF (sem parseInt que distorce "006" → "6")
+       var oi = orcList.find(function(it){ return it.codigo===a.orcItemCodigo; });
+       // Fallback por índice se código não encontrar
        if (!oi && a.orcItemIndex != null && a.orcItemIndex >= 0) {
          oi = orcList[a.orcItemIndex];
        }
