@@ -1102,7 +1102,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var detalhes = mapa.detalhes || {};
   var rodape = mapa.rodape || {};
   var totalBruto = function totalBruto(fid) {
-    return itens.reduce(function (acc, item) {
+    return itensVisiveis.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
       var qt = parseFloat(String(item.qt).replace(",", "."));
       return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
@@ -4230,11 +4230,11 @@ var _useState27 = useState(init),
       })
     }, "TOTAL"),
     showOrcamento && (function(){
-      var soma = itens.reduce(function(ac,it){
+      var soma = itensVisiveis.reduce(function(ac,it){
         var aes=getAssocItens(it.id); var r=aes.length>0?calcResMulti(it,aes,obraOrcItens):null;
         return ac+(r?r.total:0);
       },0);
-      var temR = itens.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id),obraOrcItens); });
+      var temR = itensVisiveis.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id),obraOrcItens); });
       return /*#__PURE__*/React.createElement(React.Fragment, null,
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",fontWeight:700,padding:"6px 8px",color:temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc"}},
