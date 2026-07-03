@@ -1180,7 +1180,16 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       var assocsIt=mapaAssocs.filter(function(x){return x.itemMapaId===it.id;});
       if(!assocsIt.length||!vt) return ac;
       var vlOrc=assocsIt.reduce(function(s,a){
-        var oi=obraOrcItens.find(function(o){return o.codigo===a.orcItemCodigo;});
+        // Lookup robusto para todos os casos:
+        // 1) index válido E código confere → usa index (distingue itens com mesmo código)
+        // 2) código não confere no index → busca por código (orçamento reimportado)
+        var oi = null;
+        var idx = a.orcItemIndex;
+        if (idx != null && idx >= 0 && idx < obraOrcItens.length) {
+          var byIdx = obraOrcItens[idx];
+          if (byIdx && byIdx.codigo === a.orcItemCodigo) oi = byIdx;
+        }
+        if (!oi) oi = obraOrcItens.find(function(o){ return o.codigo===a.orcItemCodigo; });
         if(!oi) return s;
         // qtCompra já em unidades do orçamento — correto para fator 3M, 6M ou N associações
         var qtC=parseFloat(String(a.qtCompra).replace(",","."))||0;
@@ -3713,15 +3722,18 @@ var _useState27 = useState(init),
      // CORRECAO 2: busca por CODIGO (igual ao PDF) — mais confiavel que indice
      // quando o orcamento e reimportado, o indice fica desatualizado mas o codigo nao
      var vlOrcTotal = aes.reduce(function(ac,a){
-       // Busca exata por código — igual ao PDF
-       var oi = orcList.find(function(it){ return it.codigo===a.orcItemCodigo; });
-       // Fallback por índice se código não encontrar
-       if (!oi && a.orcItemIndex != null && a.orcItemIndex >= 0) {
-         oi = orcList[a.orcItemIndex];
+       // Lookup robusto para todos os casos:
+       // 1) index válido E código confere → usa index (distingue itens com mesmo código)
+       // 2) código não confere no index → busca por código (orçamento reimportado)
+       var oi = null;
+       var idx = a.orcItemIndex;
+       if (idx != null && idx >= 0 && idx < orcList.length) {
+         var byIdx = orcList[idx];
+         if (byIdx && byIdx.codigo === a.orcItemCodigo) oi = byIdx;
        }
+       if (!oi) oi = orcList.find(function(it){ return it.codigo===a.orcItemCodigo; });
        if (!oi) return ac;
-       // qtCompra já está em unidades do orçamento (ex: metros)
-       // valorUnitario × qtCompra = custo real — correto para fator 3M, 6M ou N associações
+       // qtCompra já em unidades do orçamento — correto para fator 3M, 6M ou N associações
        var qtC = parseFloat(String(a.qtCompra).replace(",",".")) || 0;
        return ac + (parseFloat(oi.valorUnitario||oi.vl_unitario)||0) * qtC;
      }, 0);
