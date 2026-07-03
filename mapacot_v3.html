@@ -1050,6 +1050,45 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 };
 
 
+// ─── RELAÇÃO DE INSUMOS ───────────────────────────────────────────────────────
+var buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
+  var dt = (now instanceof Date ? now : new Date(now))
+    .toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  var hr = (now instanceof Date ? now : new Date(now))
+    .toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  var css = '<style>*{font-family:Arial,sans-serif;font-size:11px;}'
+    + 'body{margin:20px;} h2{font-size:13px;color:#1d3c6e;margin:0 0 4px;}'
+    + '.sub{font-size:10px;color:#666;margin-bottom:12px;}'
+    + 'table{width:100%;border-collapse:collapse;}'
+    + 'th{background:#1d3c6e;color:#fff;padding:5px 8px;text-align:left;}'
+    + 'td{padding:5px 8px;border-bottom:0.5px solid #ddd;vertical-align:top;}'
+    + 'tr:nth-child(even) td{background:#f5f7fb;}'
+    + '.footer{margin-top:10px;font-size:9px;color:#999;text-align:right;}'
+    + '</style>';
+  var rows = itens.map(function(item, idx){
+    return '<tr>'
+      + '<td style="width:40px;text-align:center;">'+(idx+1)+'</td>'
+      + '<td>'+((item.descricao||'').toUpperCase())+'</td>'
+      + '<td style="width:80px;text-align:right;">'+(item.qt||'')+'</td>'
+      + '<td style="width:60px;text-align:center;">'+(item.unidade||item.und||'UN')+'</td>'
+      + '</tr>';
+  }).join('');
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
+    + '<h2>RELAÇÃO DE INSUMOS — MAPA DE COTAÇÃO</h2>'
+    + '<div class="sub">'+((obraName||'').toUpperCase())+' &nbsp;|&nbsp; GERADO EM '+dt+' – '+hr+' – MAPACOT V3 CSS</div>'
+    + '<table>'
+    + '<thead><tr>'
+    + '<th style="width:40px;text-align:center;">#</th>'
+    + '<th>DESCRIÇÃO DO INSUMO</th>'
+    + '<th style="width:80px;text-align:right;">QUANTIDADE</th>'
+    + '<th style="width:60px;text-align:center;">UNID.</th>'
+    + '</tr></thead>'
+    + '<tbody>'+rows+'</tbody>'
+    + '</table>'
+    + '<div class="footer">Total de insumos: '+itens.length+' &nbsp;|&nbsp; MAPACOT V3 CSS</div>'
+    + '</body></html>';
+};
+
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 var buildMapaHTML = function buildMapaHTML(mapa) {
   var now = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : new Date();
@@ -4506,6 +4545,17 @@ var _useState27 = useState(init),
       opacity: inclAnalise ? 1 : 0.7
     })
   }, "\uD83D\uDCCA", inclAnalise ? " \u2713 AN\u00c1LISE" : " + AN\u00c1LISE"),
+  /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      return abrirPDF(buildInsumosHTML(mapa.obra, clock, itensVisiveis));
+    },
+    title: "Gerar PDF com a rela\u00e7\u00e3o dos insumos vis\u00edveis",
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: "#1d6a2e",
+      color: "#fff",
+      gap: 4
+    })
+  }, "\uD83D\uDCCB INSUMOS"),
   /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return setShowCadEditor(true);
