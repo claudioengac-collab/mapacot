@@ -630,6 +630,7 @@ var orcSaldoDisponivel = function(item, associacoes, obraOrcItens) {
   if (associacoes && obraOrcItens) {
     var idxItem = obraOrcItens.indexOf(item);
     var consumido = associacoes.filter(function(a){
+      if (a.referencia) return false; // associação de mapa duplicado — não conta no saldo
       var codOk = a.orcItemCodigo===item.codigo || a.orcItemCodigo===String(parseInt(item.codigo||"0",10)) || item.codigo===String(parseInt(a.orcItemCodigo||"0",10));
       var indexOk = (a.orcItemIndex != null && a.orcItemIndex >= 0) ? a.orcItemIndex === idxItem : true;
       return codOk && indexOk;
@@ -1381,6 +1382,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
     var mapaIdsObra = mapasFiltrados.map(function(m){ return m.id; });
     var codigoNorm = String(parseInt(orcItem.codigo||"0",10));
     var assocItem = associacoes.filter(function(a){
+      if (a.referencia) return false; // associação de mapa duplicado — não conta no consumo
       var mapaOk = mapaIdsObra.indexOf(a.mapaId) >= 0;
       var codOk = a.orcItemCodigo===orcItem.codigo
         || a.orcItemCodigo===codigoNorm
@@ -3701,14 +3703,20 @@ var _useState27 = useState(init),
      var qtItem = parseFloat(String(item.qt).replace(",","."))||0;
      if (qtItem <= 0) return null;
      // CORRECAO: usa qtItem x fator (igual ao PDF)
-     // qtCompra ja esta em unidades do orcamento (ex: metros)
-     // aplicar fator sobre qtCompra causava dupla contagem
+     // CORRECAO 2: busca por CODIGO (igual ao PDF) — mais confiavel que indice
+     // quando o orcamento e reimportado, o indice fica desatualizado mas o codigo nao
      var vlOrcTotal = aes.reduce(function(ac,a){
-       var idx = a.orcItemIndex != null ? a.orcItemIndex : orcList.findIndex(function(it){ return it.codigo===a.orcItemCodigo; });
-       var oi = orcList[idx];
+       var oi = orcList.find(function(it){
+         return it.codigo===a.orcItemCodigo
+           || it.codigo===String(parseInt(a.orcItemCodigo||"0",10))
+           || a.orcItemCodigo===String(parseInt(it.codigo||"0",10));
+       });
+       if (!oi && a.orcItemIndex != null && a.orcItemIndex >= 0) {
+         oi = orcList[a.orcItemIndex];
+       }
        if (!oi) return ac;
        var fator = parseFloat(a.fator)||1;
-       return ac + (parseFloat(oi.valorUnitario)||0) * fator * qtItem;
+       return ac + (parseFloat(oi.valorUnitario||oi.vl_unitario)||0) * fator * qtItem;
      }, 0);
      if (vlOrcTotal <= 0) return null;
      var vlCotadoTotal = (res.vlUnit||0) * qtItem;
@@ -5484,7 +5492,11 @@ function MapCard(_ref16) {
       padding: "2px 8px",
       flexShrink: 0
     }
-  }, "MP N\xBA ", mapa.numero || 1)), /*#__PURE__*/React.createElement("div", {
+  }, "MP N\xBA ", mapa.numero || 1),
+  mapa.duplicadoDe != null && /*#__PURE__*/React.createElement("span", {
+    title: "C\u00f3pia do MP N\u00ba " + mapa.duplicadoDe,
+    style: { fontSize:9, background:"#fff3cd", color:"#856404", borderRadius:4, padding:"1px 5px", marginLeft:4, fontWeight:600, cursor:"default" }
+  }, "\uD83D\uDCCB c\u00f3pia")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 7
@@ -6453,8 +6465,19 @@ function App() {
         clone.numero = nextNum;
         clone.criadoEm = new Date().toISOString();
         clone.atualizadoEm = new Date().toISOString();
+        clone.duplicadoDe = mapaOrigem.numero; // identificador discreto
         setMapas(function(prev){ return [clone].concat(prev); });
         sbSaveMapa(clone).catch(function(){});
+        // Copiar associações com flag referencia:true (não desconta do saldo do orçamento)
+        var assocsOrigem = associacoes.filter(function(a){ return a.mapaId === mapaOrigem.id; });
+        if (assocsOrigem.length > 0) {
+          var novasAssocs = assocsOrigem.map(function(a){
+            return Object.assign({}, a, { id: uid(), mapaId: clone.id, referencia: true });
+          });
+          var listaAtual = associacoes.concat(novasAssocs);
+          setAssociacoes(listaAtual);
+          sbSaveAssociacoes(listaAtual).catch(function(){});
+        }
       },
       orcamentos: orcamentos,
       associacoes: associacoes
