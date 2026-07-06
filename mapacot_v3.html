@@ -3320,6 +3320,16 @@ var _useState27 = useState(init),
       return next;
     });
   };
+  var _useStateFornOcultos = useState(new Set()),
+    fornOcultos = _slicedToArray(_useStateFornOcultos, 2)[0],
+    setFornOcultos = _slicedToArray(_useStateFornOcultos, 2)[1];
+  var toggleFornOculto = function(id) {
+    setFornOcultos(function(prev) {
+      var next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   var _useState33 = useState(false),
     _useState34 = _slicedToArray(_useState33, 2),
     showTheme = _useState34[0],
@@ -3645,6 +3655,7 @@ var _useState27 = useState(init),
     return i.descricao.toUpperCase().includes(filter.toUpperCase());
   }) : itens;
   var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
+  var fornecedoresVisiveis = fornecedores.filter(function(f) { return !fornOcultos.has(f.id); });
   var totalBruto = function totalBruto(fid) {
     return itensVisiveis.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
@@ -3659,7 +3670,7 @@ var _useState27 = useState(init),
   var bestFornId = function () {
     var minVal = null,
       minId = null;
-    fornecedores.forEach(function (f) {
+    fornecedoresVisiveis.forEach(function (f) {
       var vl = calcVL(f.id);
       if (vl > 0 && (minVal === null || vl < minVal)) {
         minVal = vl;
@@ -3669,7 +3680,7 @@ var _useState27 = useState(init),
     return minId;
   }();
   var resumoTotal = itensVisiveis.reduce(function (acc, item) {
-    var r = calcResumo(item, fornecedores, precos);
+    var r = calcResumo(item, fornecedoresVisiveis, precos);
     return acc + (r.vlTotal || 0);
   }, 0);
   var calcVLResumo = function calcVLResumo() {
@@ -3714,7 +3725,7 @@ var _useState27 = useState(init),
    var calcResMulti = function(item, aes, orcItens) {
      if (!aes || aes.length === 0) return null;
      var orcList = orcItens || obraOrcItens;
-     var res = calcResumo(item, mapa.fornecedores, mapa.precos);
+     var res = calcResumo(item, fornecedoresVisiveis, mapa.precos);
      if (res.vlUnit === null) return null;
      var qtItem = parseFloat(String(item.qt).replace(",","."))||0;
      if (qtItem <= 0) return null;
@@ -3920,7 +3931,8 @@ var _useState27 = useState(init),
         style: _objectSpread(_objectSpread({}, thC), {}, {
           padding: "4px 6px",
           borderLeft: "1px solid rgba(255,255,255,0.2)",
-          minWidth: 160
+          minWidth: 160,
+          opacity: fornOcultos.has(f.id) ? 0.45 : 1
         })
       }, /*#__PURE__*/React.createElement("div", {
         style: {
@@ -3973,7 +3985,12 @@ var _useState27 = useState(init),
           display: "flex",
           flexShrink: 0
         }
-      }, /*#__PURE__*/React.createElement(IcoClose, null))));
+      }, /*#__PURE__*/React.createElement(IcoClose, null)),
+      /*#__PURE__*/React.createElement("span", {
+        onClick: function(){ return toggleFornOculto(f.id); },
+        title: fornOcultos.has(f.id) ? "Mostrar fornecedor" : "Ocultar fornecedor",
+        style: { cursor:"pointer", fontSize:13, userSelect:"none", marginLeft:2, display:"inline-flex", alignItems:"center" }
+      }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41"))));
     }), emptyChunk && /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thC), {}, {
         borderLeft: "2px solid rgba(255,255,255,0.2)",
@@ -4047,9 +4064,9 @@ var _useState27 = useState(init),
         fontSize: 12
       }
     }, "NENHUM ITEM \u2014 CLIQUE EM \"+ ADICIONAR ITEM\"")), filteredItens.map(function (item, idx) {
-      var resumo = calcResumo(item, fornecedores, precos);
+      var resumo = calcResumo(item, fornecedoresVisiveis, precos);
       var _allPrices = [];
-      fornecedores.forEach(function(f) { var _v = parseMoney(precos[item.id + "_" + f.id]); if (_v !== null && _v > 0) _allPrices.push(_v); });
+      fornecedoresVisiveis.forEach(function(f) { var _v = parseMoney(precos[item.id + "_" + f.id]); if (_v !== null && _v > 0) _allPrices.push(_v); });
       var _sortedUniq = _allPrices.filter(function(v, i, arr) { return arr.indexOf(v) === i; }).sort(function(a, b) { return a - b; });
       var _rank2Price = _sortedUniq.length > 1 ? _sortedUniq[1] : null;
       var _rank3Price = _sortedUniq.length > 2 ? _sortedUniq[2] : null;
@@ -4202,9 +4219,11 @@ var _useState27 = useState(init),
           numericOnly: true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4",
-            background: isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg,
-            color: isMin ? "#1a6a1a" : isRank2 ? "#a05000" : isRank3 ? "#a01010" : undefined,
-            fontWeight: isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400
+            background: fornOcultos.has(f.id) ? bg : (isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg),
+            color: fornOcultos.has(f.id) ? "#bbb" : (isMin ? "#1a6a1a" : isRank2 ? "#a05000" : isRank3 ? "#a01010" : undefined),
+            fontWeight: fornOcultos.has(f.id) ? 400 : (isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400),
+            opacity: fornOcultos.has(f.id) ? 0.35 : 1,
+            textDecoration: fornOcultos.has(f.id) ? "line-through" : "none"
           }),
           detailValue: (detalhes || {})[item.id + "_" + f.id] !== undefined ? (detalhes || {})[item.id + "_" + f.id] : "",
           onDetailChange: function onDetailChange(v) {
@@ -4249,11 +4268,12 @@ var _useState27 = useState(init),
       })
     }, "TOTAL"),
     showOrcamento && (function(){
+      var somaOrcList = obraOrcItens;
       var soma = itensVisiveis.reduce(function(ac,it){
-        var aes=getAssocItens(it.id); var r=aes.length>0?calcResMulti(it,aes,obraOrcItens):null;
+        var aes=getAssocItens(it.id); var r=aes.length>0?calcResMulti(it,aes,somaOrcList):null;
         return ac+(r?r.total:0);
       },0);
-      var temR = itensVisiveis.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id),obraOrcItens); });
+      var temR = itensVisiveis.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id),somaOrcList); });
       return /*#__PURE__*/React.createElement(React.Fragment, null,
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",fontWeight:700,padding:"6px 8px",color:temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc"}},
@@ -4548,7 +4568,7 @@ var _useState27 = useState(init),
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      var mapaVis = Object.assign({}, mapa, { itens: itensVisiveis });
+      var mapaVis = Object.assign({}, mapa, { itens: itensVisiveis, fornecedores: fornecedoresVisiveis });
       var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
       if (!inclAnalise) return abrirPDF(htmlMapa);
       // Injeta página de análise antes de </body></html>
@@ -4767,7 +4787,7 @@ var _useState27 = useState(init),
   }), inclAnalise && /*#__PURE__*/React.createElement("div", {
     key: "analise-screen",
     style: { marginTop: 20 },
-    dangerouslySetInnerHTML: { __html: buildAnaliseHTML(Object.assign({}, mapa, { itens: itensVisiveis }), clock, orcamentos, associacoes) }
+    dangerouslySetInnerHTML: { __html: buildAnaliseHTML(Object.assign({}, mapa, { itens: itensVisiveis, fornecedores: fornecedoresVisiveis }), clock, orcamentos, associacoes) }
   }))),
   // Modal de associação de orçamento
   itemAssociando && /*#__PURE__*/React.createElement(Modal, { open: true, onClose: function(){ setItemAssociando(null); }, maxWidth: 600 },
