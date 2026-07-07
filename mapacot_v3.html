@@ -1974,8 +1974,7 @@ function DetalheBtn(_ref_det) {
   var taRef = useRef();
   var openEdit = function openEdit() {
     if (value && !detGuardReady) {
-      if (!window.confirm("Deseja editar este campo?")) return;
-      setDetGuardReady(true); // 1º clique: confirma, destaca campo
+      setDetGuardReady(true); // 1º clique: destaca campo com borda laranja
       return;                 // 2º clique: abre editor
     }
     setDetGuardReady(false);
@@ -2057,10 +2056,11 @@ function EC(_ref0) {
   var ref = useRef();
   var hasSugg = suggestions.length > 0;
   var start = function start() {
-    if (guardEdit && !guardReady && value !== null && value !== undefined && value !== "") {
-      if (!window.confirm("Deseja editar este campo?")) return;
-      setGuardReady(true); // 1º clique: confirma e destaca campo (laranja)
-      return;              // 2º clique: abre editor normalmente
+    if (guardEdit && value !== null && value !== undefined && value !== "") {
+      if (!guardReady) {
+        setGuardReady(true); // 1º clique: destaca campo com borda laranja
+        return;              // 2º clique: abre editor
+      }
     }
     setGuardReady(false);
     setRaw(value !== null && value !== void 0 ? value : "");
