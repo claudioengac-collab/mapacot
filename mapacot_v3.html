@@ -1968,16 +1968,17 @@ function DetalheBtn(_ref_det) {
   var _useStateDraft = useState(""),
     _useStateDraft2 = _slicedToArray(_useStateDraft, 2),
     draft = _useStateDraft2[0], setDraft = _useStateDraft2[1];
+  var _useStateDGR = useState(false),
+    detGuardReady = _slicedToArray(_useStateDGR, 2)[0],
+    setDetGuardReady = _slicedToArray(_useStateDGR, 2)[1];
   var taRef = useRef();
   var openEdit = function openEdit() {
-    if (value) {
+    if (value && !detGuardReady) {
       if (!window.confirm("Deseja editar este campo?")) return;
-      setTimeout(function() {
-        setDraft((value || "").toUpperCase());
-        setEd(true);
-      }, 10);
-      return;
+      setDetGuardReady(true); // 1º clique: confirma, destaca campo
+      return;                 // 2º clique: abre editor
     }
+    setDetGuardReady(false);
     setDraft((value || "").toUpperCase());
     setEd(true);
   };
@@ -2009,9 +2010,11 @@ function DetalheBtn(_ref_det) {
   });
   if (value) return /*#__PURE__*/React.createElement("div", {
     onClick: function(e){ e.stopPropagation(); openEdit(); },
+    title: detGuardReady ? "Clique novamente para editar" : undefined,
     style:{marginTop:3, padding:"2px 5px", fontSize:12, color:"#4a6080",
-      background:"#f0f6ff", border:"1px dashed #a0b4d0", borderRadius:4,
-      fontWeight:"bold", wordBreak:"break-word", whiteSpace:"pre-wrap",
+      background: detGuardReady ? "#fffbee" : "#f0f6ff",
+      border: detGuardReady ? "2px solid #f0a500" : "1px dashed #a0b4d0",
+      borderRadius:4, fontWeight:"bold", wordBreak:"break-word", whiteSpace:"pre-wrap",
       textTransform:"uppercase", cursor:"text", minHeight:22}
   }, value);
   return /*#__PURE__*/React.createElement("span", {
@@ -2048,19 +2051,18 @@ function EC(_ref0) {
     _useState8 = _slicedToArray(_useState7, 2),
     raw = _useState8[0],
     setRaw = _useState8[1];
+  var _useStateGR = useState(false),
+    guardReady = _slicedToArray(_useStateGR, 2)[0],
+    setGuardReady = _slicedToArray(_useStateGR, 2)[1];
   var ref = useRef();
   var hasSugg = suggestions.length > 0;
   var start = function start() {
-    if (guardEdit && value !== null && value !== undefined && value !== "") {
+    if (guardEdit && !guardReady && value !== null && value !== undefined && value !== "") {
       if (!window.confirm("Deseja editar este campo?")) return;
-      // setTimeout: aguarda dialog fechar antes de ativar edição (evita blur imediato)
-      setTimeout(function() {
-        setRaw(value !== null && value !== void 0 ? value : "");
-        setEd(true);
-        setTimeout(function() { if (ref.current) ref.current.focus(); }, 50);
-      }, 10);
-      return;
+      setGuardReady(true); // 1º clique: confirma e destaca campo (laranja)
+      return;              // 2º clique: abre editor normalmente
     }
+    setGuardReady(false);
     setRaw(value !== null && value !== void 0 ? value : "");
     setEd(true);
     setTimeout(function () {
@@ -2069,6 +2071,7 @@ function EC(_ref0) {
     }, 0);
   };
   var commit = function commit(v) {
+    setGuardReady(false);
     setEd(false);
     onChange(v !== null && v !== void 0 ? v : raw);
   };
@@ -2131,9 +2134,12 @@ function EC(_ref0) {
   return /*#__PURE__*/React.createElement("td", {
     style: _objectSpread(_objectSpread(_objectSpread({}, SC.td), tdSt), {}, {
       textAlign: align,
-      cursor: "text"
+      cursor: "text",
+      outline: guardReady ? "2px solid #f0a500" : undefined,
+      background: guardReady ? "#fffbee" : (tdSt.background || undefined)
     }),
     colSpan: colSpan,
+    title: guardReady ? "Clique novamente para editar" : undefined,
     onClick: start
   }, value !== "" && value !== null && value !== undefined ? (wrapText ? /*#__PURE__*/React.createElement("span", {style:{wordBreak:"break-word",whiteSpace:"pre-wrap",display:"block"}}, value) : value) : /*#__PURE__*/React.createElement("span", {
     style: {
