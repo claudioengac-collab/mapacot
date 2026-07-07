@@ -1133,8 +1133,9 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
   var temPagina0 = obraOrcItens.length > 0;
+  var showOrcPdf = !mapa.orcOculto; // quando oculto na tela, não aparece no PDF
   var pagina0HTML = '';
-  if (temPagina0) {
+  if (temPagina0 && showOrcPdf) {
     var hC0=T.hdr,sC0=T.sub,oeS0='background:#fffbee;',reS0='background:#eef2ff;';
     var rowsP0 = itens.map(function(item,ix) {
       var bg0=ix%2===0?'':'background:#f7f9fc;';
@@ -1297,7 +1298,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     return "<th style=\"border:1px solid #999;padding:5px 7px;text-align:center;font-size:10px;letter-spacing:0.3px;".concat(ex, "\">").concat(txt, "</th>");
   };
   var renderChunk = function renderChunk(chunk, ci) {
-    var isFirst = ci === 0 && !temPagina0;
+    var isFirst = ci === 0 && (!temPagina0 || !showOrcPdf);
     var emptyChunk = chunk.length === 0;
     var itemRows = itens.map(function (item, idx) {
       var r = calcResumo(item, fns, precos);
@@ -3410,6 +3411,10 @@ var _useState27 = useState(init),
       return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, key, !prev[key]));
     });
   };
+  // Estado para ocultar coluna ORÇADO (fica visível riscada, igual a fornecedores/linhas)
+  var _useStateOrcOculto = useState(false),
+    orcOculto = _slicedToArray(_useStateOrcOculto, 2)[0],
+    setOrcOculto = _slicedToArray(_useStateOrcOculto, 2)[1];
   useEffect(function () {
     var t = setInterval(function () {
       return setClock(new Date());
@@ -3896,27 +3901,15 @@ var _useState27 = useState(init),
     }, "DESCRI\xC7\xC3O"),
     showOrcamento && /*#__PURE__*/React.createElement("th", {
       colSpan: 2,
-      style: _objectSpread(_objectSpread({}, thC), {}, { textAlign:"center", background:"#b87800", borderLeft:"2px solid rgba(255,255,255,0.3)", borderRight:"2px solid rgba(255,255,255,0.3)" })
+      style: _objectSpread(_objectSpread({}, thC), {}, { textAlign:"center", background: orcOculto ? "#999" : "#b87800", borderLeft:"2px solid rgba(255,255,255,0.3)", borderRight:"2px solid rgba(255,255,255,0.3)", opacity: orcOculto ? 0.45 : 1 })
     }, /*#__PURE__*/React.createElement("div", {
       style: { display:"flex", alignItems:"center", justifyContent:"center", gap:6 }
     }, "OR\xC7AMENTO",
       /*#__PURE__*/React.createElement("span", {
-        onClick: function(e){ e.stopPropagation(); toggleCol("orcamento"); },
-        title: "Ocultar coluna OR\u00c7AMENTO",
+        onClick: function(e){ e.stopPropagation(); setOrcOculto(function(v){ return !v; }); },
+        title: orcOculto ? "Mostrar coluna OR\u00c7AMENTO" : "Ocultar coluna OR\u00c7AMENTO",
         style: { cursor:"pointer", fontSize:13, userSelect:"none", marginLeft:2, display:"inline-flex", alignItems:"center" }
-      }, "\uD83D\uDC41")
-    )),
-    !showOrcamento && temOrcamento && isFirst && /*#__PURE__*/React.createElement("th", {
-      colSpan: 2,
-      style: _objectSpread(_objectSpread({}, thC), {}, { textAlign:"center", background:"#999", borderLeft:"2px solid rgba(255,255,255,0.3)", borderRight:"2px solid rgba(255,255,255,0.3)", opacity:0.45 })
-    }, /*#__PURE__*/React.createElement("div", {
-      style: { display:"flex", alignItems:"center", justifyContent:"center", gap:6 }
-    }, "OR\xC7AMENTO",
-      /*#__PURE__*/React.createElement("span", {
-        onClick: function(e){ e.stopPropagation(); toggleCol("orcamento"); },
-        title: "Mostrar coluna OR\u00c7AMENTO",
-        style: { cursor:"pointer", fontSize:13, userSelect:"none", marginLeft:2, display:"inline-flex", alignItems:"center" }
-      }, "\uD83D\uDEAB")
+      }, orcOculto ? "\uD83D\uDEAB" : "\uD83D\uDC41")
     )),
     showResumo && /*#__PURE__*/React.createElement("th", {
       colSpan: 3,
@@ -3963,8 +3956,8 @@ var _useState27 = useState(init),
         color: "#444"
       }
     }))),
-    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderLeft:"2px solid rgba(255,255,255,0.2)"} }, "VL. OR\xC7ADO"),
-    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.2)"} }, "RESULTADO"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:orcOculto?"#aaa":"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderLeft:"2px solid rgba(255,255,255,0.2)",opacity:orcOculto?0.45:1,textDecoration:orcOculto?"line-through":"none"} }, "VL. OR\xC7ADO"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:orcOculto?"#aaa":"#d48800",color:"#fff",padding:"5px 8px",fontSize:10,fontWeight:600,textAlign:"center",borderRight:"2px solid rgba(255,255,255,0.2)",opacity:orcOculto?0.45:1,textDecoration:orcOculto?"line-through":"none"} }, "RESULTADO"),
     showResumo && /*#__PURE__*/React.createElement("th", {
       colSpan: 3,
       style: _objectSpread(_objectSpread({}, thS), {}, {
@@ -4066,8 +4059,8 @@ var _useState27 = useState(init),
     })))), /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       style: _objectSpread({}, thS)
     }),
-    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderLeft:"2px solid rgba(0,0,0,0.1)"} }, "por UNID. compra"),
-    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:"#eca820",color:"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderRight:"2px solid rgba(0,0,0,0.1)"} }, "vs. melhor pre\xe7o"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:orcOculto?"#ccc":"#eca820",color:orcOculto?"#999":"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderLeft:"2px solid rgba(0,0,0,0.1)",opacity:orcOculto?0.45:1,textDecoration:orcOculto?"line-through":"none"} }, "por UNID. compra"),
+    showOrcamento && /*#__PURE__*/React.createElement("th", { style:{background:orcOculto?"#ccc":"#eca820",color:orcOculto?"#999":"#6a3800",padding:"4px 8px",fontSize:10,textAlign:"center",borderRight:"2px solid rgba(0,0,0,0.1)",opacity:orcOculto?0.45:1,textDecoration:orcOculto?"line-through":"none"} }, "vs. melhor pre\xe7o"),
     showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thS), {}, {
         textAlign: "right",
@@ -4203,14 +4196,14 @@ var _useState27 = useState(init),
         return /*#__PURE__*/React.createElement(React.Fragment, null,
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
-            style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",padding:"5px 8px",textAlign:"right",cursor:"pointer",minWidth:110,verticalAlign:"middle"}
+            style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",padding:"5px 8px",textAlign:"right",cursor:"pointer",minWidth:110,verticalAlign:"middle",opacity:orcOculto?0.35:1,textDecoration:orcOculto?"line-through":"none"}
           }, aesR.length > 0 ? /*#__PURE__*/React.createElement(React.Fragment, null,
             /*#__PURE__*/React.createElement("div", {style:{fontSize:12,fontWeight:700,color:"#7a4400"}}, vloExib!==null?fmtMoney(vloExib):"\u2014"),
             /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:"#aaa",marginTop:1}}, aesR.length>1?(aesR.length+" fontes"):(assocR&&assocR.fator&&assocR.fator!=1?"1 "+(assocR.unidMapa||"UN")+"="+assocR.fator+" "+(assocR.unidOrc||""):"mesma unidade"))
           ) : /*#__PURE__*/React.createElement("span", {style:{fontSize:10,color:"#bbb",fontStyle:"italic"}}, "Toque para associar")),
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
-            style:{background:"#fffbee",borderRight:"2px solid #e0bf30",padding:"5px 8px",textAlign:"center",cursor:"pointer",minWidth:120,verticalAlign:"middle"}
+            style:{background:"#fffbee",borderRight:"2px solid #e0bf30",padding:"5px 8px",textAlign:"center",cursor:"pointer",minWidth:120,verticalAlign:"middle",opacity:orcOculto?0.35:1,textDecoration:orcOculto?"line-through":"none"}
           }, res ? /*#__PURE__*/React.createElement(React.Fragment, null,
             /*#__PURE__*/React.createElement("div", {style:{fontSize:11,fontWeight:700,color:res.lucro?"#186818":"#aa1c1c"}}, res.lucro?"\u25cf LUCRO":"\u25cf PREJU\xcdZO"),
             /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:res.lucro?"#186818":"#aa1c1c"}}, (res.lucro?"+":"\u2212")+Math.abs(res.pct).toFixed(1)+"% \u00b7 "+fmtMoney(Math.abs(res.diff))+"/UN"),
@@ -4385,8 +4378,8 @@ var _useState27 = useState(init),
           letterSpacing: 0.3
         })
       }, row.label),
-      showOrcamento && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
-      showOrcamento && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
+      showOrcamento && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px",opacity:orcOculto?0.35:1,textDecoration:orcOculto?"line-through":"none"}}, "\u2014"),
+      showOrcamento && /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px",opacity:orcOculto?0.35:1,textDecoration:orcOculto?"line-through":"none"}}, "\u2014"),
       showResumo && function (_rodapeResumo$row$key2) {
         var bg = "#e8eeff",
           bl = "2px solid #b8c8e8",
@@ -4622,7 +4615,7 @@ var _useState27 = useState(init),
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      var mapaVis = Object.assign({}, mapa, { itens: itensVisiveis, fornecedores: fornecedoresVisiveis });
+      var mapaVis = Object.assign({}, mapa, { itens: itensVisiveis, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
       var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
       if (!inclAnalise) return abrirPDF(htmlMapa);
       // Injeta página de análise antes de </body></html>
