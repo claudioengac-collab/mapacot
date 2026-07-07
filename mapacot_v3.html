@@ -1969,7 +1969,18 @@ function DetalheBtn(_ref_det) {
     _useStateDraft2 = _slicedToArray(_useStateDraft, 2),
     draft = _useStateDraft2[0], setDraft = _useStateDraft2[1];
   var taRef = useRef();
-  var openEdit = function openEdit() { setDraft((value || "").toUpperCase()); setEd(true); };
+  var openEdit = function openEdit() {
+    if (value) {
+      if (!window.confirm("Deseja editar este campo?")) return;
+      setTimeout(function() {
+        setDraft((value || "").toUpperCase());
+        setEd(true);
+      }, 10);
+      return;
+    }
+    setDraft((value || "").toUpperCase());
+    setEd(true);
+  };
   if (ed) return /*#__PURE__*/React.createElement("textarea", {
     ref: taRef,
     value: draft,
@@ -2042,6 +2053,13 @@ function EC(_ref0) {
   var start = function start() {
     if (guardEdit && value !== null && value !== undefined && value !== "") {
       if (!window.confirm("Deseja editar este campo?")) return;
+      // setTimeout: aguarda dialog fechar antes de ativar edição (evita blur imediato)
+      setTimeout(function() {
+        setRaw(value !== null && value !== void 0 ? value : "");
+        setEd(true);
+        setTimeout(function() { if (ref.current) ref.current.focus(); }, 50);
+      }, 10);
+      return;
     }
     setRaw(value !== null && value !== void 0 ? value : "");
     setEd(true);
