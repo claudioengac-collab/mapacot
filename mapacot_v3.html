@@ -2027,7 +2027,8 @@ function EC(_ref0) {
     strictMatch = _ref0.strictMatch,
     detailValue = _ref0.detailValue,
     onDetailChange = _ref0.onDetailChange,
-    wrapText = _ref0.wrapText;
+    wrapText = _ref0.wrapText,
+    guardEdit = _ref0.guardEdit;
   var _useState5 = useState(false),
     _useState6 = _slicedToArray(_useState5, 2),
     ed = _useState6[0],
@@ -2039,6 +2040,9 @@ function EC(_ref0) {
   var ref = useRef();
   var hasSugg = suggestions.length > 0;
   var start = function start() {
+    if (guardEdit && value !== null && value !== undefined && value !== "") {
+      if (!window.confirm("Deseja editar este campo?")) return;
+    }
     setRaw(value !== null && value !== void 0 ? value : "");
     setEd(true);
     setTimeout(function () {
@@ -4108,7 +4112,8 @@ var _useState27 = useState(init),
         placeholder: "0",
         align: "center",
         tdSt: SC.td,
-        numericOnly: true
+        numericOnly: true,
+        guardEdit: true
       }), /*#__PURE__*/React.createElement(EC, {
         value: item.unid,
         onChange: function onChange(v) {
@@ -4120,6 +4125,7 @@ var _useState27 = useState(init),
         strictMatch: true,
         placeholder: "UN",
         align: "center",
+        guardEdit: true,
         tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
           width: 58
         }),
@@ -4136,12 +4142,14 @@ var _useState27 = useState(init),
         onBlur: function() {},
         strictMatch: true,
         placeholder: "DESCRI\xC7\xC3O DO INSUMO...",
+        guardEdit: true,
         tdSt: SC.td,
         suggestions: cadastros.insumos || [],
         detailValue: item.detalhe !== undefined ? item.detalhe : "",
         onDetailChange: function onDetailChange(v) {
           updItem(item.id, "detalhe", v);
-        }
+        },
+        guardEdit: true
       }),
       showOrcamento && (function() {
                 var aesR = getAssocItens(item.id);
@@ -4373,6 +4381,7 @@ var _useState27 = useState(init),
             colSpan: 3,
             maxLen: row.maxLen,
             wrapText: true,
+            guardEdit: true,
             tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
               background: bg,
               borderLeft: bl,
@@ -4393,6 +4402,7 @@ var _useState27 = useState(init),
           placeholder: "0,00",
           align: "right",
           maxLen: row.maxLen,
+          guardEdit: true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             background: bg
           })
