@@ -1641,7 +1641,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
     + legenda
     + "</body></html>";
 
-  abrirPDF(html);
+  return html;
 };
 
 // ─── DASHBOARD GLOBAL POR FORNECEDOR ──────────────────────────────────────────
@@ -4859,26 +4859,16 @@ var _useState27 = useState(init),
       opacity: inclAnalise ? 1 : 0.7
     })
   }, "\uD83D\uDCCA", inclAnalise ? " \u2713 AN\u00c1LISE" : " + AN\u00c1LISE"),
-  /*#__PURE__*/React.createElement("label", {
-    title: showDashboard ? "Dashboard global ativo" : "Marque para incluir o dashboard global",
-    style: {
-      display: "flex", alignItems: "center", gap: 4,
-      padding: "4px 10px",
-      background: showDashboard ? "#059669" : "#374151",
-      color: "#fff", fontSize: 11, fontWeight: 600,
-      cursor: "pointer", borderRadius: 5,
-      border: showDashboard ? "1px solid #047857" : "1px solid #4b5563",
-      userSelect: "none", whiteSpace: "nowrap"
-    }
-  },
-    /*#__PURE__*/React.createElement("input", {
-      type: "checkbox",
-      checked: showDashboard,
-      onChange: function(e){ setShowDashboard(e.target.checked); },
-      style: { cursor: "pointer", width: 12, height: 12, accentColor: "#34d399" }
-    }),
-    " \uD83C\uDF10 Dashboard"
-  ),
+  /*#__PURE__*/React.createElement("button", {
+    onClick: function(){ setShowDashboard(!showDashboard); },
+    title: showDashboard ? "Dashboard global ativo — clique para desativar" : "Clique para ativar o Dashboard Global por Fornecedor",
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: showDashboard ? "#059669" : "#555",
+      color: "#fff",
+      gap: 4,
+      opacity: showDashboard ? 1 : 0.7
+    })
+  }, "\uD83C\uDF10", showDashboard ? " \u2713 DASHBOARD" : " + DASHBOARD"),
   /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return abrirPDF(buildInsumosHTML(mapa.obra, clock, itensAtivos));
@@ -5071,7 +5061,7 @@ var _useState27 = useState(init),
     }
   }, chunks.map(function (chunk, ci) {
     return renderChunk(chunk, ci, hiddenCols);
-  }), inclAnalise && showDashboard && /*#__PURE__*/React.createElement("div", {
+  }), showDashboard && /*#__PURE__*/React.createElement("div", {
     key: "dashboard-screen",
     style: { marginTop: 20 },
     dangerouslySetInnerHTML: { __html: buildDashboardHTML(Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis }), clock, orcamentos, associacoes) }
