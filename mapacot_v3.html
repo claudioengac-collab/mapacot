@@ -1782,6 +1782,40 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
         +'</div>';
     }).join('')) : '';
 
+  // HEATMAP: mapa de calor fornecedor x item
+  var hmGrid = 'display:grid;grid-template-columns:92px repeat('+itens.length+',1fr);gap:2px;font-size:8px;';
+  var hmHeader = '<div style="padding:3px;"></div>';
+  itens.forEach(function(item){
+    hmHeader += '<div style="padding:2px 1px;background:#e8ecf2;border-radius:2px;text-align:center;color:#555;font-size:7px;line-height:1.3;overflow:hidden;"><strong>It.'+item.num+'</strong><br>'+(item.descricao||'').substring(0,7)+'</div>';
+  });
+  var hmBody = '';
+  fnStats.forEach(function(s,si){
+    var fnCol = BAR_COLORS[si%BAR_COLORS.length];
+    hmBody += '<div style="padding:3px 5px;font-size:7px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:2px solid '+fnCol+';text-align:right;">'+(s.f.nome||'').substring(0,14)+'</div>';
+    itemResults.forEach(function(r){
+      var idx = r.rkgs.findIndex(function(p){ return p.fid===s.f.id; });
+      var st, txt;
+      if(idx<0){ st='background:#f5f5f5;color:#ccc;'; txt='\u2014'; }
+      else {
+        var pr=r.rkgs[idx].preco; var rank=idx+1;
+        var above=r.temOrc&&pr>r.vlOrc;
+        if(above){ st='background:#FCEBEB;color:#A32D2D;'; txt='ACIMA'; }
+        else if(rank===1){ st='background:#3B6D11;color:#fff;'; txt='1\u00b0'; }
+        else if(rank===2){ st='background:#639922;color:#fff;'; txt='2\u00b0'; }
+        else if(rank===3){ st='background:#97C459;color:#27500A;'; txt='3\u00b0'; }
+        else { st='background:#EAF3DE;color:#3B6D11;'; txt=rank+'\u00b0'; }
+      }
+      hmBody += '<div style="'+st+'padding:4px 2px;border-radius:2px;text-align:center;font-weight:bold;font-size:8px;">'+txt+'</div>';
+    });
+  });
+  var hmLegenda = '<span><span style="display:inline-block;width:9px;height:9px;background:#3B6D11;border-radius:1px;vertical-align:middle;margin-right:2px"></span>1\u00b0</span> '
+    +'<span><span style="display:inline-block;width:9px;height:9px;background:#639922;border-radius:1px;vertical-align:middle;margin-right:2px"></span>2\u00b0</span> '
+    +'<span><span style="display:inline-block;width:9px;height:9px;background:#97C459;border-radius:1px;vertical-align:middle;margin-right:2px"></span>3\u00b0</span> '
+    +'<span><span style="display:inline-block;width:9px;height:9px;background:#EAF3DE;border:1px solid #97C459;border-radius:1px;vertical-align:middle;margin-right:2px"></span>4\u00b0+</span> '
+    +(temOrcamento?'<span><span style="display:inline-block;width:9px;height:9px;background:#FCEBEB;border-radius:1px;vertical-align:middle;margin-right:2px"></span>Acima or\u00e7ado</span> ':'')
+    +'<span><span style="display:inline-block;width:9px;height:9px;background:#f5f5f5;border:1px solid #ddd;border-radius:1px;vertical-align:middle;margin-right:2px"></span>Sem cota\u00e7\u00e3o</span>';
+  var hmHTML = '<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;margin-bottom:14px;overflow-x:auto;">'    +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Mapa de calor \u2014 desempenho por fornecedor \u00d7 item</div>'    +'<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:8px;color:#555;margin-bottom:8px">'+hmLegenda+'</div>'    +'<div style="'+hmGrid+'">'+hmHeader+hmBody+'</div>'    +'</div>';
+
   // Table rows
   var tblRows = fnStats.map(function(s,i){
     var rank = i+1;
@@ -1823,6 +1857,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
       +'<div style="font-size:10px;opacity:.85;margin-top:3px">'+(mapa.obra||'SEM OBRA').toUpperCase()+' &nbsp;|\u00a0 MP N\u00ba '+(mapa.numero||'\u2014')+' &nbsp;|\u00a0 '+fmtDt+' &nbsp;|\u00a0 '+itens.length+' ITENS &nbsp;|\u00a0 '+fns.length+' FORNECEDORES</div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat('+kpiCols+',1fr);gap:7px;margin-bottom:14px;">'+kpiCards+'</div>'
+    +hmHTML
     +'<div style="display:grid;grid-template-columns:210px 1fr;gap:10px;margin-bottom:14px;">'
       +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;">'
         +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Ranking global</div>'
@@ -4836,13 +4871,12 @@ var _useState27 = useState(init),
     onClick: function onClick() {
       var mapaVis = Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
       var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
-      if (!inclAnalise) return abrirPDF(htmlMapa);
-      // Injeta dashboard global (se ativo) + análise antes de </body></html>
-      var htmlAnal = buildAnaliseHTML(mapaVis, clock, orcamentos, associacoes);
-      var dashPart = showDashboard ? '<div style="page-break-before:always;">' + buildDashboardHTML(mapaVis, clock, orcamentos, associacoes) + '</div>' : '';
-      var htmlFinal = htmlMapa.replace('</body></html>',
-        dashPart + '<div style="page-break-before:always;">' + htmlAnal + '</div></body></html>');
-      return abrirPDF(htmlFinal);
+      // Dashboard e Análise são independentes também no PDF
+      var extraParts = '';
+      if (showDashboard) extraParts += '<div style="page-break-before:always;">' + buildDashboardHTML(mapaVis, clock, orcamentos, associacoes) + '</div>';
+      if (inclAnalise) extraParts += '<div style="page-break-before:always;">' + buildAnaliseHTML(mapaVis, clock, orcamentos, associacoes) + '</div>';
+      if (!extraParts) return abrirPDF(htmlMapa);
+      return abrirPDF(htmlMapa.replace('</body></html>', extraParts + '</body></html>'));
     },
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       background: "#c0392b",
