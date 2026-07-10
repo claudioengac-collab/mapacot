@@ -4837,10 +4837,11 @@ var _useState27 = useState(init),
       var mapaVis = Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
       var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
       if (!inclAnalise) return abrirPDF(htmlMapa);
-      // Injeta página de análise antes de </body></html>
+      // Injeta dashboard global (se ativo) + análise antes de </body></html>
       var htmlAnal = buildAnaliseHTML(mapaVis, clock, orcamentos, associacoes);
+      var dashPart = showDashboard ? '<div style="page-break-before:always;">' + buildDashboardHTML(mapaVis, clock, orcamentos, associacoes) + '</div>' : '';
       var htmlFinal = htmlMapa.replace('</body></html>',
-        '<div style="page-break-before:always;">' + htmlAnal + '</div></body></html>');
+        dashPart + '<div style="page-break-before:always;">' + htmlAnal + '</div></body></html>');
       return abrirPDF(htmlFinal);
     },
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
@@ -4858,6 +4859,26 @@ var _useState27 = useState(init),
       opacity: inclAnalise ? 1 : 0.7
     })
   }, "\uD83D\uDCCA", inclAnalise ? " \u2713 AN\u00c1LISE" : " + AN\u00c1LISE"),
+  /*#__PURE__*/React.createElement("label", {
+    title: showDashboard ? "Dashboard global ativo" : "Marque para incluir o dashboard global",
+    style: {
+      display: "flex", alignItems: "center", gap: 4,
+      padding: "4px 10px",
+      background: showDashboard ? "#059669" : "#374151",
+      color: "#fff", fontSize: 11, fontWeight: 600,
+      cursor: "pointer", borderRadius: 5,
+      border: showDashboard ? "1px solid #047857" : "1px solid #4b5563",
+      userSelect: "none", whiteSpace: "nowrap"
+    }
+  },
+    /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: showDashboard,
+      onChange: function(e){ setShowDashboard(e.target.checked); },
+      style: { cursor: "pointer", width: 12, height: 12, accentColor: "#34d399" }
+    }),
+    " \uD83C\uDF10 Dashboard"
+  ),
   /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return abrirPDF(buildInsumosHTML(mapa.obra, clock, itensAtivos));
