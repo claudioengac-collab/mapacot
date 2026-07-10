@@ -1643,6 +1643,213 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
 
   abrirPDF(html);
 };
+
+// ─── DASHBOARD GLOBAL POR FORNECEDOR ──────────────────────────────────────────
+var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, associacoes) {
+  now = now || new Date(); orcamentos = orcamentos || {}; associacoes = associacoes || [];
+  var T = getTheme(mapa.corTema); var hC = T.hdr;
+  var fns = mapa.fornecedores || []; var itens = mapa.itens || []; var precos = mapa.precos || {};
+  var fmtR = function(v){ return 'R$\u00a0' + fmtMoney(v); };
+  var obraOrc = mapa.obra && orcamentos[mapa.obra] ? orcamentos[mapa.obra] : null;
+  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
+  var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
+
+  // Per-item
+  var itemResults = itens.map(function(item) {
+    var qt = parseFloat(String(item.qt||0).replace(',','.')) || 0;
+    var assoc = mapaAssocs.find(function(a){ return a.itemMapaId === item.id; });
+    var orcItem = assoc ? obraOrcItens.find(function(o,i){
+      return assoc.orcItemIndex != null ? i === assoc.orcItemIndex : o.codigo === assoc.orcItemCodigo;
+    }) : null;
+    var vlOrcUnit = orcItem ? (parseFloat(orcItem.valorUnitario||orcItem.vl_unitario)||0) : 0;
+    var fatorA = assoc ? (parseFloat(assoc.fator)||1) : 1;
+    var vlOrc = vlOrcUnit * fatorA;
+    var temOrc = vlOrc > 0;
+    var rkgs = [];
+    fns.forEach(function(f){
+      var v = parseMoney(precos[item.id+'_'+f.id]);
+      if (v !== null && v > 0) rkgs.push({ fid:f.id, fname:(f.nome||'\u2014').toUpperCase(), preco:v });
+    });
+    rkgs.sort(function(a,b){ return a.preco-b.preco; });
+    var winner = rkgs[0] || null;
+    var economy = (temOrc && winner) ? (vlOrc - winner.preco) * qt : null;
+    return { item:item, qt:qt, vlOrc:vlOrc, temOrc:temOrc, rkgs:rkgs, winner:winner, economy:economy };
+  });
+
+  var temOrcamento = itemResults.some(function(r){ return r.temOrc; });
+  var totalOrcado = itemResults.reduce(function(s,r){ return s+(r.temOrc?r.vlOrc*r.qt:0); },0);
+  var totalMelhor = itemResults.reduce(function(s,r){ return s+(r.winner?r.winner.preco*r.qt:0); },0);
+  var totalEco = itemResults.reduce(function(s,r){ return s+(r.economy!==null&&r.economy>0?r.economy:0); },0);
+  var totalEstouro = itemResults.reduce(function(s,r){ return s+(r.economy!==null&&r.economy<0?Math.abs(r.economy):0); },0);
+  var ctEco = itemResults.filter(function(r){ return r.economy!==null&&r.economy>0; }).length;
+  var ctEstouro = itemResults.filter(function(r){ return r.economy!==null&&r.economy<0; }).length;
+  var ctComCot = itemResults.filter(function(r){ return r.rkgs.length>0; }).length;
+
+  // Per-fornecedor
+  var fnStats = fns.map(function(f) {
+    var itemsWon = itemResults.filter(function(r){ return r.winner&&r.winner.fid===f.id; });
+    var itemsQuoted = itemResults.filter(function(r){ return r.rkgs.some(function(p){ return p.fid===f.id; }); });
+    var ecoGen = itemsWon.reduce(function(s,r){ return s+(r.economy!==null&&r.economy>0?r.economy:0); },0);
+    var totalQ = itemsQuoted.reduce(function(s,r){
+      var p = r.rkgs.find(function(p){ return p.fid===f.id; });
+      return s+(p?p.preco*r.qt:0);
+    },0);
+    return { f:f, itemsWon:itemsWon, itemsQuoted:itemsQuoted, ecoGen:ecoGen, totalQ:totalQ };
+  }).sort(function(a,b){ return b.itemsWon.length-a.itemsWon.length||b.ecoGen-a.ecoGen; });
+
+  var maxWon = fnStats.reduce(function(m,s){ return Math.max(m,s.itemsWon.length); },1);
+  var maxEco = fnStats.reduce(function(m,s){ return Math.max(m,s.ecoGen); },1);
+  var pB = function(v,mx){ return Math.max(2,Math.round(v/mx*100)); };
+  var BAR_COLORS = ['#2a5298','#1a7a44','#b06000','#5b2d8e','#c0392b','#445566','#0f766e','#7c3aed'];
+  var n = itens.length || 1;
+  var fmtPct = function(a,b){ return b>0?((a/b)*100).toFixed(0)+'%':'0%'; };
+
+  // Generate HTML
+  var fmtDt = now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  var kpiCols = temOrcamento ? 5 : 3;
+  var kpiStyle = 'background:#f0f6ff;border:1px solid #b5d4f4;border-radius:5px;padding:9px 11px;';
+  var kpiLbl = 'font-size:9px;color:#5f7a9a;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;';
+  var kpiVal = 'font-size:15px;font-weight:bold;color:#185FA5;';
+  var kpiSub = 'font-size:8px;color:#888;margin-top:1px;';
+
+  var kpiCards = '';
+  if (temOrcamento) kpiCards += '<div style="'+kpiStyle+'"><div style="'+kpiLbl+'">Total or\u00e7ado</div><div style="'+kpiVal+'">'+fmtR(totalOrcado)+'</div><div style="'+kpiSub+'">refer\u00eancia base</div></div>';
+  kpiCards += '<div style="'+kpiStyle+'"><div style="'+kpiLbl+'">Melhor cota\u00e7\u00e3o</div><div style="'+kpiVal+'">'+fmtR(totalMelhor)+'</div><div style="'+kpiSub+'">soma dos menores pre\u00e7os</div></div>';
+  if (temOrcamento) {
+    kpiCards += '<div style="background:#f0fdf4;border:1px solid #bbddb8;border-radius:5px;padding:9px 11px;">'
+      +'<div style="'+kpiLbl+'color:#2d6e3a">Economia</div>'
+      +'<div style="'+kpiVal+'color:#3B6D11">'+fmtR(totalEco)+'</div>'
+      +'<div style="'+kpiSub+'">'+'\u2193 '+fmtPct(totalEco,totalOrcado)+' do or\u00e7ado</div></div>';
+    var estCor = totalEstouro>0?'#fef2f2':'#f9f9f9';
+    var estBor = totalEstouro>0?'1px solid #f9c1c1':'1px solid #e0e0e0';
+    kpiCards += '<div style="background:'+estCor+';border:'+estBor+';border-radius:5px;padding:9px 11px;">'
+      +'<div style="font-size:9px;color:'+(totalEstouro>0?'#a32d2d':'#888')+';text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Estouro</div>'
+      +'<div style="font-size:15px;font-weight:bold;color:'+(totalEstouro>0?'#a32d2d':'#bbb')+';">'+(totalEstouro>0?fmtR(totalEstouro):'R$ 0,00')+'</div>'
+      +'<div style="'+kpiSub+'">'+ctEstouro+' item(ns) acima do or\u00e7ado</div></div>';
+  }
+  kpiCards += '<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:5px;padding:9px 11px;">'
+    +'<div style="'+kpiLbl+'">Itens cotados</div>'
+    +'<div style="font-size:15px;font-weight:bold;color:#333;">'+ctComCot+' / '+itens.length+'</div>'
+    +'<div style="'+kpiSub+'">com ao menos 1 cota\u00e7\u00e3o</div></div>';
+
+  // Podium
+  var podiumHTML = '';
+  var podOrder = [1,0,2];
+  var podH = [38,56,30];
+  podOrder.forEach(function(pi, gi) {
+    if (!fnStats[pi]) return;
+    var s = fnStats[pi]; var bg = pi===0?hC:(pi===1?'#888':'#a07040');
+    podiumHTML += '<div style="text-align:center;display:inline-block;vertical-align:bottom;margin:0 3px;">'
+      +'<div style="width:52px;height:'+podH[gi]+'px;background:'+bg+';border-radius:3px 3px 0 0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:'+(gi===1?16:13)+'px">'+(pi+1)+'</div>'
+      +'<div style="font-size:8px;margin-top:3px;max-width:56px;word-break:break-word;line-height:1.2;color:#333">'+(s.f.nome||'').substring(0,14)+'</div>'
+      +'<div style="font-size:8px;color:#888">'+s.itemsWon.length+' it.</div>'
+      +'</div>';
+  });
+
+  var restPodium = fnStats.slice(3).map(function(s,i){
+    return '<div style="display:flex;justify-content:space-between;font-size:9px;padding:3px 0;border-top:1px solid #eee;">'
+      +'<span style="color:#666">'+(i+4)+'\u00b0 '+(s.f.nome||'').substring(0,16)+'</span>'
+      +'<span style="color:#333;font-weight:bold">'+s.itemsWon.length+' it.</span></div>';
+  }).join('');
+
+  // Bars: itens ganhos
+  var barsWon = fnStats.map(function(s,i){
+    var pct = pB(s.itemsWon.length,maxWon);
+    var col = BAR_COLORS[i%BAR_COLORS.length];
+    var innerTxt = s.itemsWon.length>0?'<span style="font-size:8px;color:#fff;font-weight:bold">'+s.itemsWon.length+' gnh</span>':'';
+    return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">'
+      +'<div style="width:86px;text-align:right;font-size:8px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">'+(s.f.nome||'').substring(0,15)+'</div>'
+      +'<div style="flex:1;background:#e8e8e8;border-radius:2px;height:13px;overflow:hidden;">'
+        +'<div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;display:flex;align-items:center;padding-left:3px;">'+innerTxt+'</div>'
+      +'</div>'
+      +'<div style="width:38px;font-size:8px;color:#888;text-align:right">'+fmtPct(s.itemsWon.length,n)+'</div>'
+      +'</div>';
+  }).join('');
+
+  // Bars: economia
+  var barsEco = temOrcamento ? ('<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 6px">Economia gerada (R$)</div>'
+    + fnStats.map(function(s,i){
+      var pct = s.ecoGen>0?pB(s.ecoGen,maxEco):2;
+      var col = s.ecoGen>0?'#3B6D11':'#ccc';
+      var innerTxt = s.ecoGen>0?'<span style="font-size:8px;color:#fff">'+fmtR(s.ecoGen)+'</span>':'';
+      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">'
+        +'<div style="width:86px;text-align:right;font-size:8px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">'+(s.f.nome||'').substring(0,15)+'</div>'
+        +'<div style="flex:1;background:#e8e8e8;border-radius:2px;height:13px;overflow:hidden;">'
+          +'<div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;display:flex;align-items:center;padding-left:3px;">'+innerTxt+'</div>'
+        +'</div>'
+        +'<div style="width:38px;font-size:8px;color:#888;text-align:right">'+fmtPct(s.ecoGen,totalEco)+'</div>'
+        +'</div>';
+    }).join('')) : '';
+
+  // Table rows
+  var tblRows = fnStats.map(function(s,i){
+    var rank = i+1;
+    var bg = i%2===0?'#fff':'#f7f9fc';
+    var sit, sitC, sitB;
+    if (s.itemsWon.length >= Math.max(1, Math.ceil(n/2))){ sit='Vencedor'; sitC='#3B6D11'; sitB='#EAF3DE'; }
+    else if (s.itemsWon.length>0){ sit='Competitivo'; sitC='#185FA5'; sitB='#E6F1FB'; }
+    else if (s.itemsQuoted.length>0){ sit='Fora'; sitC='#888'; sitB='#f0f0f0'; }
+    else { sit='Sem cota\u00e7\u00e3o'; sitC='#bbb'; sitB='#f5f5f5'; }
+    var row = '<tr style="background:'+bg+';">'
+      +'<td style="padding:4px 7px;text-align:center;font-weight:bold;color:'+(rank<=3?hC:'#ccc')+'">'+rank+'\u00b0</td>'
+      +'<td style="padding:4px 7px;font-weight:'+(rank===1?'bold':'normal')+'">'+(s.f.nome||'\u2014').toUpperCase()+'</td>'
+      +'<td style="padding:4px 7px;text-align:center;font-size:9px;">'+s.itemsQuoted.length+'/'+n+' ('+fmtPct(s.itemsQuoted.length,n)+')</td>'
+      +'<td style="padding:4px 7px;text-align:center;"><span style="background:'+sitB+';color:'+sitC+';padding:1px 6px;border-radius:99px;font-size:8px;font-weight:bold">'+s.itemsWon.length+' item(ns)</span></td>'
+      +'<td style="padding:4px 7px;text-align:right;font-size:9px;">'+(s.totalQ>0?fmtR(s.totalQ):'\u2014')+'</td>';
+    if (temOrcamento) row += '<td style="padding:4px 7px;text-align:right;color:'+(s.ecoGen>0?'#3B6D11':'#bbb')+';font-weight:'+(s.ecoGen>0?'bold':'normal')+'">'+(s.ecoGen>0?'\u2193 '+fmtR(s.ecoGen):'\u2014')+'</td>';
+    row += '<td style="padding:4px 7px;text-align:center;"><span style="background:'+sitB+';color:'+sitC+';padding:1px 6px;border-radius:99px;font-size:8px">'+sit+'</span></td>'
+      +'</tr>';
+    return row;
+  }).join('');
+
+  var tblEcoTh = temOrcamento ? '<th style="padding:5px 7px;text-align:right">Economia</th>' : '';
+
+  var resumo = temOrcamento
+    ? '<div style="background:#EAF3DE;border-left:3px solid #3B6D11;padding:8px 12px;margin-top:12px;border-radius:0 4px 4px 0;font-size:10px;color:#27500A;line-height:1.6">'
+        +'<strong>Resumo executivo:</strong> Economia l\u00edquida de '+fmtR(totalEco-totalEstouro)+' ('+fmtPct(totalEco-totalEstouro,totalOrcado)+' do or\u00e7ado). '
+        +ctEco+' item(ns) abaixo do or\u00e7ado \u00b7 '+ctEstouro+' acima. '
+        +(fnStats[0]?'Fornecedor destaque: '+(fnStats[0].f.nome||'').toUpperCase()+' \u2014 '+fnStats[0].itemsWon.length+' item(ns) vencido(s).':'')
+        +'</div>'
+    : '<div style="background:#E6F1FB;border-left:3px solid #185FA5;padding:8px 12px;margin-top:12px;border-radius:0 4px 4px 0;font-size:10px;color:#0C447C;line-height:1.6">'
+        +'<strong>Resumo executivo:</strong> Mapa sem or\u00e7amento de refer\u00eancia. '
+        +'Melhor cota\u00e7\u00e3o total: '+fmtR(totalMelhor)+'. '
+        +(fnStats[0]?'Destaque: '+(fnStats[0].f.nome||'').toUpperCase()+' \u2014 '+fnStats[0].itemsWon.length+' item(ns) com menor pre\u00e7o.':'')
+        +'</div>';
+
+  return '<div style="font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:12px;">'
+    +'<div style="background:'+hC+';color:#fff;padding:10px 14px;border-radius:4px 4px 0 0;margin-bottom:14px;">'
+      +'<div style="font-size:14px;font-weight:bold">DASHBOARD GLOBAL \u2014 AVALIA\u00c7\u00c3O POR FORNECEDOR</div>'
+      +'<div style="font-size:10px;opacity:.85;margin-top:3px">'+(mapa.obra||'SEM OBRA').toUpperCase()+' &nbsp;|\u00a0 MP N\u00ba '+(mapa.numero||'\u2014')+' &nbsp;|\u00a0 '+fmtDt+' &nbsp;|\u00a0 '+itens.length+' ITENS &nbsp;|\u00a0 '+fns.length+' FORNECEDORES</div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat('+kpiCols+',1fr);gap:7px;margin-bottom:14px;">'+kpiCards+'</div>'
+    +'<div style="display:grid;grid-template-columns:210px 1fr;gap:10px;margin-bottom:14px;">'
+      +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;">'
+        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Ranking global</div>'
+        +'<div style="display:flex;align-items:flex-end;justify-content:center;margin-bottom:10px;">'+podiumHTML+'</div>'
+        +restPodium
+      +'</div>'
+      +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;">'
+        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Itens ganhos por fornecedor</div>'
+        +barsWon+barsEco
+      +'</div>'
+    +'</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:10px;">'
+      +'<thead><tr style="background:'+hC+';color:#fff;">'
+        +'<th style="padding:5px 7px;text-align:left;width:22px">#</th>'
+        +'<th style="padding:5px 7px;text-align:left">Fornecedor</th>'
+        +'<th style="padding:5px 7px;text-align:center">Cobertura</th>'
+        +'<th style="padding:5px 7px;text-align:center">Itens ganhos</th>'
+        +'<th style="padding:5px 7px;text-align:right">VL. Total cotado</th>'
+        +tblEcoTh
+        +'<th style="padding:5px 7px;text-align:center">Situa\u00e7\u00e3o</th>'
+      +'</tr></thead>'
+      +'<tbody>'+tblRows+'</tbody>'
+    +'</table>'
+    +resumo
+    +'</div>';
+};
+
 var abrirPDF = function abrirPDF(html) {
   var win = window.open("", "_blank");
   if (!win) {
@@ -3349,6 +3556,10 @@ var _useState27 = useState(init),
       return next;
     });
   };
+  var toggleExcluido = function(id) {
+    var item = itens.find(function(i){ return i.id === id; });
+    if (item) updItem(id, 'excluido', !item.excluido);
+  };
   var _useStateFornOcultos = useState(new Set()),
     fornOcultos = _slicedToArray(_useStateFornOcultos, 2)[0],
     setFornOcultos = _slicedToArray(_useStateFornOcultos, 2)[1];
@@ -3366,6 +3577,7 @@ var _useState27 = useState(init),
   var _useStateCasar=useState(false),showCasar=_slicedToArray(_useStateCasar,2)[0],setShowCasar=_slicedToArray(_useStateCasar,2)[1];
   var _useStateIA=useState(false),showLerIA=_slicedToArray(_useStateIA,2)[0],setShowLerIA=_slicedToArray(_useStateIA,2)[1];
   var _useStateAnal=useState(false),inclAnalise=_slicedToArray(_useStateAnal,2)[0],setInclAnalise=_slicedToArray(_useStateAnal,2)[1];
+  var _useStateDash=useState(false),showDashboard=_slicedToArray(_useStateDash,2)[0],setShowDashboard=_slicedToArray(_useStateDash,2)[1];
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
   var _useState35 = useState(new Date()),
@@ -3689,8 +3901,9 @@ var _useState27 = useState(init),
   }) : itens;
   var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
   var fornecedoresVisiveis = fornecedores.filter(function(f) { return !fornOcultos.has(f.id); });
+  var itensAtivos = itensVisiveis.filter(function(i) { return !i.excluido; });
   var totalBruto = function totalBruto(fid) {
-    return itensVisiveis.reduce(function (acc, item) {
+    return itensAtivos.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
       var qt = parseFloat(String(item.qt).replace(",", "."));
       return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
@@ -3712,7 +3925,7 @@ var _useState27 = useState(init),
     });
     return minId;
   }();
-  var resumoTotal = itensVisiveis.reduce(function (acc, item) {
+  var resumoTotal = itensAtivos.reduce(function (acc, item) {
     var r = calcResumo(item, fornecedoresVisiveis, precos);
     return acc + (r.vlTotal || 0);
   }, 0);
@@ -4113,12 +4326,13 @@ var _useState27 = useState(init),
       var _rank3Price = _sortedUniq.length > 2 ? _sortedUniq[2] : null;
       var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
       var _isOculto = ocultos.has(item.id);
+      var _isExcluido = !!item.excluido;
       return /*#__PURE__*/React.createElement("tr", {
         key: item.id,
         style: {
-          background: bg,
-          opacity: _isOculto ? 0.35 : 1,
-          textDecoration: _isOculto ? "line-through" : "none"
+          background: _isExcluido ? "#fff5f5" : bg,
+          opacity: _isOculto ? 0.35 : (_isExcluido ? 0.55 : 1),
+          textDecoration: (_isOculto || _isExcluido) ? "line-through" : "none"
         }
       }, /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
@@ -4135,7 +4349,12 @@ var _useState27 = useState(init),
         onClick: function(){ return toggleOculto(item.id); },
         title: _isOculto ? "Clique para mostrar este item" : "Clique para ocultar este item",
         style: { cursor:"pointer", fontSize:13, marginLeft:4, userSelect:"none", display:"block" }
-      }, _isOculto ? "\uD83D\uDEAB" : "\uD83D\uDC41")), /*#__PURE__*/React.createElement("td", {
+      }, _isOculto ? "\uD83D\uDEAB" : "\uD83D\uDC41"),
+      /*#__PURE__*/React.createElement("span", {
+        onClick: function(){ return toggleExcluido(item.id); },
+        title: _isExcluido ? "Restaurar item ao mapa" : "Excluir permanentemente do mapa",
+        style: { cursor:"pointer", fontSize:13, marginLeft:2, userSelect:"none", display:"block", color: _isExcluido ? "#c0392b" : "#bbb" }
+      }, _isExcluido ? "\uD83D\uDD12" : "\u2702")), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           textAlign: "center",
           color: "#666",
@@ -4314,11 +4533,11 @@ var _useState27 = useState(init),
     }, "TOTAL"),
     showOrcamento && (function(){
       var somaOrcList = obraOrcItens;
-      var soma = itensVisiveis.reduce(function(ac,it){
+      var soma = itensAtivos.reduce(function(ac,it){
         var aes=getAssocItens(it.id); var r=aes.length>0?calcResMulti(it,aes,somaOrcList):null;
         return ac+(r?r.total:0);
       },0);
-      var temR = itensVisiveis.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id),somaOrcList); });
+      var temR = itensAtivos.some(function(it){ return getAssocItens(it.id).length>0&&calcResMulti(it,getAssocItens(it.id),somaOrcList); });
       return /*#__PURE__*/React.createElement(React.Fragment, null,
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderLeft:"2px solid #e0bf30",textAlign:"center",color:"#ccc",padding:"6px 8px"}}, "\u2014"),
         /*#__PURE__*/React.createElement("td", {style:{background:"#fffbee",borderRight:"2px solid #e0bf30",textAlign:"center",fontWeight:700,padding:"6px 8px",color:temR?(soma>=0?"#186818":"#aa1c1c"):"#ccc"}},
@@ -4615,7 +4834,7 @@ var _useState27 = useState(init),
     }
   }, /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      var mapaVis = Object.assign({}, mapa, { itens: itensVisiveis, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
+      var mapaVis = Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
       var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
       if (!inclAnalise) return abrirPDF(htmlMapa);
       // Injeta página de análise antes de </body></html>
@@ -4641,7 +4860,7 @@ var _useState27 = useState(init),
   }, "\uD83D\uDCCA", inclAnalise ? " \u2713 AN\u00c1LISE" : " + AN\u00c1LISE"),
   /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
-      return abrirPDF(buildInsumosHTML(mapa.obra, clock, itensVisiveis));
+      return abrirPDF(buildInsumosHTML(mapa.obra, clock, itensAtivos));
     },
     title: "Gerar PDF com a rela\u00e7\u00e3o dos insumos vis\u00edveis",
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
@@ -4831,10 +5050,15 @@ var _useState27 = useState(init),
     }
   }, chunks.map(function (chunk, ci) {
     return renderChunk(chunk, ci, hiddenCols);
-  }), inclAnalise && /*#__PURE__*/React.createElement("div", {
+  }), inclAnalise && showDashboard && /*#__PURE__*/React.createElement("div", {
+    key: "dashboard-screen",
+    style: { marginTop: 20 },
+    dangerouslySetInnerHTML: { __html: buildDashboardHTML(Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis }), clock, orcamentos, associacoes) }
+  }),
+  inclAnalise && /*#__PURE__*/React.createElement("div", {
     key: "analise-screen",
     style: { marginTop: 20 },
-    dangerouslySetInnerHTML: { __html: buildAnaliseHTML(Object.assign({}, mapa, { itens: itensVisiveis, fornecedores: fornecedoresVisiveis }), clock, orcamentos, associacoes) }
+    dangerouslySetInnerHTML: { __html: buildAnaliseHTML(Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis }), clock, orcamentos, associacoes) }
   }))),
   // Modal de associação de orçamento
   itemAssociando && /*#__PURE__*/React.createElement(Modal, { open: true, onClose: function(){ setItemAssociando(null); }, maxWidth: 600 },
