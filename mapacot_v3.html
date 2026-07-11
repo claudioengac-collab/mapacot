@@ -7109,20 +7109,24 @@ var SC = {
   appBar: {
     background: "#0f1f3d",
     borderBottom: "3px solid #f0a500",
-    padding: "11px 18px",
+    padding: "11px 12px",
     display: "flex",
     alignItems: "center",
-    gap: 14,
+    gap: 8,
     position: "sticky",
     top: 0,
     zIndex: 30,
     width: "100%",
-    boxSizing: "border-box"
+    boxSizing: "border-box",
+    overflowX: "auto",
+    WebkitOverflowScrolling: "touch"
   },
   backBtn: {
     display: "flex",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
     background: "rgba(255,255,255,0.1)",
     border: "none",
     color: "#fff",
