@@ -1645,6 +1645,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
 };
 
 // ─── DASHBOARD GLOBAL POR FORNECEDOR ──────────────────────────────────────────
+
 var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, associacoes) {
   now = now || new Date(); orcamentos = orcamentos || {}; associacoes = associacoes || [];
   var T = getTheme(mapa.corTema); var hC = T.hdr;
@@ -1654,7 +1655,6 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
   var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
   var mapaAssocs = associacoes.filter(function(a){ return a.mapaId === mapa.id; });
 
-  // Per-item
   var itemResults = itens.map(function(item) {
     var qt = parseFloat(String(item.qt||0).replace(',','.')) || 0;
     var assoc = mapaAssocs.find(function(a){ return a.itemMapaId === item.id; });
@@ -1684,8 +1684,10 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
   var ctEco = itemResults.filter(function(r){ return r.economy!==null&&r.economy>0; }).length;
   var ctEstouro = itemResults.filter(function(r){ return r.economy!==null&&r.economy<0; }).length;
   var ctComCot = itemResults.filter(function(r){ return r.rkgs.length>0; }).length;
+  var n = itens.length || 1;
+  var fmtPct = function(a,b){ return b>0?((a/b)*100).toFixed(0)+'%':'0%'; };
+  var BAR_COLORS = ['#2a5298','#1a7a44','#b06000','#5b2d8e','#c0392b','#445566','#0f766e','#7c3aed'];
 
-  // Per-fornecedor
   var fnStats = fns.map(function(f) {
     var itemsWon = itemResults.filter(function(r){ return r.winner&&r.winner.fid===f.id; });
     var itemsQuoted = itemResults.filter(function(r){ return r.rkgs.some(function(p){ return p.fid===f.id; }); });
@@ -1694,96 +1696,101 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
       var p = r.rkgs.find(function(p){ return p.fid===f.id; });
       return s+(p?p.preco*r.qt:0);
     },0);
-    return { f:f, itemsWon:itemsWon, itemsQuoted:itemsQuoted, ecoGen:ecoGen, totalQ:totalQ };
+    var aboveCt = itemResults.filter(function(r){
+      var idx = r.rkgs.findIndex(function(p){ return p.fid===f.id; });
+      return idx>=0 && r.temOrc && r.rkgs[idx].preco > r.vlOrc;
+    }).length;
+    var score = Math.round((itemsWon.length/n)*50 + (itemsQuoted.length/n)*30 + (itemsWon.length>0?20:0) - aboveCt*5);
+    score = Math.max(0, score);
+    return { f:f, itemsWon:itemsWon, itemsQuoted:itemsQuoted, ecoGen:ecoGen, totalQ:totalQ, score:score };
   }).sort(function(a,b){ return b.itemsWon.length-a.itemsWon.length||b.ecoGen-a.ecoGen; });
 
-  var maxWon = fnStats.reduce(function(m,s){ return Math.max(m,s.itemsWon.length); },1);
-  var maxEco = fnStats.reduce(function(m,s){ return Math.max(m,s.ecoGen); },1);
-  var pB = function(v,mx){ return Math.max(2,Math.round(v/mx*100)); };
-  var BAR_COLORS = ['#2a5298','#1a7a44','#b06000','#5b2d8e','#c0392b','#445566','#0f766e','#7c3aed'];
-  var n = itens.length || 1;
-  var fmtPct = function(a,b){ return b>0?((a/b)*100).toFixed(0)+'%':'0%'; };
-
-  // Generate HTML
+  var maxEcoItem = itemResults.reduce(function(m,r){ return Math.max(m, r.economy!==null&&r.economy>0?r.economy:0); },1);
+  var maxTotalQ = fnStats.reduce(function(m,s){ return Math.max(m,s.totalQ); },1);
   var fmtDt = now.toLocaleDateString('pt-BR')+' '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 
+  // ── KPI CARDS ──────────────────────────────────────────────────────────────
   var kpiCols = temOrcamento ? 5 : 3;
-  var kpiStyle = 'background:#f0f6ff;border:1px solid #b5d4f4;border-radius:5px;padding:9px 11px;';
-  var kpiLbl = 'font-size:9px;color:#5f7a9a;text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px;';
-  var kpiVal = 'font-size:15px;font-weight:bold;color:#185FA5;';
-  var kpiSub = 'font-size:8px;color:#888;margin-top:1px;';
-
-  var kpiCards = '';
-  if (temOrcamento) kpiCards += '<div style="'+kpiStyle+'"><div style="'+kpiLbl+'">Total or\u00e7ado</div><div style="'+kpiVal+'">'+fmtR(totalOrcado)+'</div><div style="'+kpiSub+'">refer\u00eancia base</div></div>';
-  kpiCards += '<div style="'+kpiStyle+'"><div style="'+kpiLbl+'">Melhor cota\u00e7\u00e3o</div><div style="'+kpiVal+'">'+fmtR(totalMelhor)+'</div><div style="'+kpiSub+'">soma dos menores pre\u00e7os</div></div>';
-  if (temOrcamento) {
-    kpiCards += '<div style="background:#f0fdf4;border:1px solid #bbddb8;border-radius:5px;padding:9px 11px;">'
-      +'<div style="'+kpiLbl+'color:#2d6e3a">Economia</div>'
-      +'<div style="'+kpiVal+'color:#3B6D11">'+fmtR(totalEco)+'</div>'
-      +'<div style="'+kpiSub+'">'+'\u2193 '+fmtPct(totalEco,totalOrcado)+' do or\u00e7ado</div></div>';
-    var estCor = totalEstouro>0?'#fef2f2':'#f9f9f9';
-    var estBor = totalEstouro>0?'1px solid #f9c1c1':'1px solid #e0e0e0';
-    kpiCards += '<div style="background:'+estCor+';border:'+estBor+';border-radius:5px;padding:9px 11px;">'
-      +'<div style="font-size:9px;color:'+(totalEstouro>0?'#a32d2d':'#888')+';text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">Estouro</div>'
-      +'<div style="font-size:15px;font-weight:bold;color:'+(totalEstouro>0?'#a32d2d':'#bbb')+';">'+(totalEstouro>0?fmtR(totalEstouro):'R$ 0,00')+'</div>'
-      +'<div style="'+kpiSub+'">'+ctEstouro+' item(ns) acima do or\u00e7ado</div></div>';
+  var kS = 'background:#f0f6ff;border:1px solid #b5d4f4;border-radius:5px;padding:9px 12px;';
+  var kpi = '';
+  if(temOrcamento) kpi += '<div style="'+kS+'"><div style="font-size:9px;color:#5f7a9a;text-transform:uppercase;letter-spacing:.3px">Total or\u00e7ado</div><div style="font-size:16px;font-weight:bold;color:#185FA5;margin-top:2px">'+fmtR(totalOrcado)+'</div><div style="font-size:8px;color:#888">refer\u00eancia base</div></div>';
+  kpi += '<div style="'+kS+'"><div style="font-size:9px;color:#5f7a9a;text-transform:uppercase;letter-spacing:.3px">Melhor cota\u00e7\u00e3o</div><div style="font-size:16px;font-weight:bold;color:#185FA5;margin-top:2px">'+fmtR(totalMelhor)+'</div><div style="font-size:8px;color:#888">soma dos menores pre\u00e7os</div></div>';
+  if(temOrcamento){
+    kpi += '<div style="background:#f0fdf4;border:1px solid #bbddb8;border-radius:5px;padding:9px 12px;"><div style="font-size:9px;color:#2d6e3a;text-transform:uppercase;letter-spacing:.3px">Economia l\u00edquida</div><div style="font-size:16px;font-weight:bold;color:#3B6D11;margin-top:2px">'+fmtR(totalEco)+'</div><div style="font-size:8px;color:#555">\u2193 '+fmtPct(totalEco,totalOrcado)+' abaixo do or\u00e7ado</div></div>';
+    var estBg=totalEstouro>0?'#fef2f2':'#f9f9f9'; var estBr=totalEstouro>0?'1px solid #f9c1c1':'1px solid #e0e0e0';
+    kpi += '<div style="background:'+estBg+';border:'+estBr+';border-radius:5px;padding:9px 12px;"><div style="font-size:9px;color:'+(totalEstouro>0?'#a32d2d':'#888')+';text-transform:uppercase;letter-spacing:.3px">Itens com economia</div><div style="font-size:16px;font-weight:bold;color:'+(totalEstouro>0?'#a32d2d':'#333')+';margin-top:2px">'+ctEco+' / '+n+'</div><div style="font-size:8px;color:#888">'+ctEstouro+' acima do or\u00e7ado</div></div>';
   }
-  kpiCards += '<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:5px;padding:9px 11px;">'
-    +'<div style="'+kpiLbl+'">Itens cotados</div>'
-    +'<div style="font-size:15px;font-weight:bold;color:#333;">'+ctComCot+' / '+itens.length+'</div>'
-    +'<div style="'+kpiSub+'">com ao menos 1 cota\u00e7\u00e3o</div></div>';
+  kpi += '<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:5px;padding:9px 12px;"><div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.3px">Itens cotados</div><div style="font-size:16px;font-weight:bold;color:#333;margin-top:2px">'+ctComCot+' / '+n+'</div><div style="font-size:8px;color:#888">'+fns.length+' fornecedores consultados</div></div>';
 
-  // Podium
-  var podiumHTML = '';
-  var podOrder = [1,0,2];
-  var podH = [38,56,30];
-  podOrder.forEach(function(pi, gi) {
-    if (!fnStats[pi]) return;
-    var s = fnStats[pi]; var bg = pi===0?hC:(pi===1?'#888':'#a07040');
-    podiumHTML += '<div style="text-align:center;display:inline-block;vertical-align:bottom;margin:0 3px;">'
-      +'<div style="width:52px;height:'+podH[gi]+'px;background:'+bg+';border-radius:3px 3px 0 0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:'+(gi===1?16:13)+'px">'+(pi+1)+'</div>'
-      +'<div style="font-size:8px;margin-top:3px;max-width:56px;word-break:break-word;line-height:1.2;color:#333">'+(s.f.nome||'').substring(0,14)+'</div>'
-      +'<div style="font-size:8px;color:#888">'+s.itemsWon.length+' it.</div>'
+  // ── DONUT: distribuição itens ganhos ───────────────────────────────────────
+  var totalWon = fnStats.reduce(function(s,f){ return s+f.itemsWon.length; },0);
+  var donutHTML = '';
+  if(totalWon > 0){
+    var cumul = 0;
+    var conicParts = fnStats.filter(function(s){ return s.itemsWon.length>0; }).map(function(s,i){
+      var pct = (s.itemsWon.length/totalWon)*100;
+      var from = cumul; cumul += pct;
+      return BAR_COLORS[i%BAR_COLORS.length]+' '+from.toFixed(1)+'% '+cumul.toFixed(1)+'%';
+    }).join(', ');
+    donutHTML = '<div style="position:relative;width:100px;height:100px;margin:0 auto 10px;">'
+      +'<div style="width:100px;height:100px;border-radius:50%;background:conic-gradient('+conicParts+');"></div>'
+      +'<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:54px;height:54px;background:#f9f9f9;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;">'
+        +'<div style="font-size:16px;font-weight:bold;color:#333;">'+totalWon+'</div>'
+        +'<div style="font-size:7px;color:#888;">ganhos</div>'
+      +'</div></div>';
+    donutHTML += '<div style="display:flex;flex-wrap:wrap;gap:3px 8px;justify-content:center;">';
+    fnStats.filter(function(s){ return s.itemsWon.length>0; }).forEach(function(s,i){
+      donutHTML += '<div style="display:flex;align-items:center;gap:3px;font-size:8px;color:#555;">'
+        +'<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+BAR_COLORS[i%BAR_COLORS.length]+';flex-shrink:0;"></span>'
+        +(s.f.nome||'').substring(0,12)+' '+Math.round(s.itemsWon.length/totalWon*100)+'%'
+        +'</div>';
+    });
+    donutHTML += '</div>';
+  } else {
+    donutHTML = '<div style="text-align:center;color:#bbb;font-size:10px;padding:20px">Nenhum item ganho</div>';
+  }
+
+  // ── BARRAS: economia por item (colorido pelo vencedor) ─────────────────────
+  var ecoByItem = itemResults.filter(function(r){ return r.winner; }).map(function(r,i){
+    var winnerIdx = fnStats.findIndex(function(s){ return s.f.id===r.winner.fid; });
+    var col = BAR_COLORS[Math.max(0,winnerIdx)%BAR_COLORS.length];
+    var ecoVal = r.economy!==null&&r.economy>0 ? r.economy : 0;
+    var pct = Math.max(2, Math.round(ecoVal/maxEcoItem*100));
+    var desc = (r.item.descricao||'').substring(0,18)||('Item '+r.item.num);
+    return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">'
+      +'<div style="width:100px;text-align:right;font-size:8px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">'+desc+'</div>'
+      +'<div style="flex:1;background:#e8e8e8;border-radius:2px;height:14px;overflow:hidden;">'
+        +(ecoVal>0?'<div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;display:flex;align-items:center;padding-left:4px;"><span style="font-size:8px;color:#fff;font-weight:bold">'+fmtR(ecoVal)+'</span></div>':'<div style="width:2%;height:100%;background:#ddd;border-radius:2px;"></div>')
+      +'</div>'
+      +'</div>';
+  }).join('');
+  if(!ecoByItem) ecoByItem = '<div style="font-size:9px;color:#bbb;text-align:center;padding:10px">Sem dados de economia</div>';
+
+  // ── COMPARATIVO TOTAIS POR FORNECEDOR (barras verticais CSS) ──────────────
+  var maxBar = Math.max(maxTotalQ, totalMelhor) || 1;
+  var refLinePct = Math.round(totalMelhor/maxBar*100);
+  var barChart = '<div style="display:flex;align-items:flex-end;gap:4px;height:100px;padding-bottom:2px;border-bottom:2px solid #e0e0e0;position:relative;margin-bottom:4px;">';
+  // linha de referência (melhor cotação)
+  barChart += '<div style="position:absolute;bottom:'+refLinePct+'%;left:0;right:0;border-top:2px dashed #c0392b;z-index:1;"></div>';
+  fnStats.forEach(function(s,i){
+    var hPct = s.totalQ>0 ? Math.round(s.totalQ/maxBar*100) : 2;
+    var col = BAR_COLORS[i%BAR_COLORS.length];
+    barChart += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">'
+      +'<div style="font-size:7px;color:#555;text-align:center;white-space:nowrap;overflow:hidden;width:100%;">'+(s.totalQ>0?fmtR(s.totalQ):'—')+'</div>'
+      +'<div style="width:100%;height:'+hPct+'%;background:'+col+';border-radius:3px 3px 0 0;min-height:3px;"></div>'
       +'</div>';
   });
-
-  var restPodium = fnStats.slice(3).map(function(s,i){
-    return '<div style="display:flex;justify-content:space-between;font-size:9px;padding:3px 0;border-top:1px solid #eee;">'
-      +'<span style="color:#666">'+(i+4)+'\u00b0 '+(s.f.nome||'').substring(0,16)+'</span>'
-      +'<span style="color:#333;font-weight:bold">'+s.itemsWon.length+' it.</span></div>';
-  }).join('');
-
-  // Bars: itens ganhos
-  var barsWon = fnStats.map(function(s,i){
-    var pct = pB(s.itemsWon.length,maxWon);
+  barChart += '</div>';
+  barChart += '<div style="display:flex;gap:4px;">';
+  fnStats.forEach(function(s,i){
     var col = BAR_COLORS[i%BAR_COLORS.length];
-    var innerTxt = s.itemsWon.length>0?'<span style="font-size:8px;color:#fff;font-weight:bold">'+s.itemsWon.length+(s.itemsWon.length===1?' ganho':' ganhos')+'</span>':'';
-    return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">'
-      +'<div style="width:86px;text-align:right;font-size:8px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">'+(s.f.nome||'').substring(0,15)+'</div>'
-      +'<div style="flex:1;background:#e8e8e8;border-radius:2px;height:13px;overflow:hidden;">'
-        +'<div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;display:flex;align-items:center;padding-left:3px;">'+innerTxt+'</div>'
-      +'</div>'
-      +'<div style="width:38px;font-size:8px;color:#888;text-align:right">'+fmtPct(s.itemsWon.length,n)+'</div>'
-      +'</div>';
-  }).join('');
+    barChart += '<div style="flex:1;text-align:center;font-size:7px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-top:2px solid '+col+';">'+(s.f.nome||'').substring(0,8)+'</div>';
+  });
+  barChart += '</div>';
+  barChart += '<div style="font-size:8px;color:#c0392b;margin-top:4px;">--- Melhor cota\u00e7\u00e3o: '+fmtR(totalMelhor)+'</div>';
 
-  // Bars: economia
-  var barsEco = temOrcamento ? ('<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin:10px 0 6px">Economia gerada (R$)</div>'
-    + fnStats.map(function(s,i){
-      var pct = s.ecoGen>0?pB(s.ecoGen,maxEco):2;
-      var col = s.ecoGen>0?'#3B6D11':'#ccc';
-      var innerTxt = s.ecoGen>0?'<span style="font-size:8px;color:#fff">'+fmtR(s.ecoGen)+'</span>':'';
-      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">'
-        +'<div style="width:86px;text-align:right;font-size:8px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">'+(s.f.nome||'').substring(0,15)+'</div>'
-        +'<div style="flex:1;background:#e8e8e8;border-radius:2px;height:13px;overflow:hidden;">'
-          +'<div style="width:'+pct+'%;height:100%;background:'+col+';border-radius:2px;display:flex;align-items:center;padding-left:3px;">'+innerTxt+'</div>'
-        +'</div>'
-        +'<div style="width:38px;font-size:8px;color:#888;text-align:right">'+fmtPct(s.ecoGen,totalEco)+'</div>'
-        +'</div>';
-    }).join('')) : '';
-
-  // HEATMAP: mapa de calor fornecedor x item
-  var hmGrid = 'display:grid;grid-template-columns:92px repeat('+itens.length+',1fr);gap:2px;font-size:8px;';
+  // ── HEATMAP ────────────────────────────────────────────────────────────────
+  var hmGrid = 'display:grid;grid-template-columns:90px repeat('+itens.length+',1fr);gap:2px;font-size:8px;';
   var hmHeader = '<div style="padding:3px;"></div>';
   itens.forEach(function(item){
     hmHeader += '<div style="padding:2px 1px;background:#e8ecf2;border-radius:2px;text-align:center;color:#555;font-size:7px;line-height:1.3;overflow:hidden;"><strong>It.'+item.num+'</strong><br>'+(item.descricao||'').substring(0,7)+'</div>';
@@ -1814,76 +1821,101 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
     +'<span><span style="display:inline-block;width:9px;height:9px;background:#EAF3DE;border:1px solid #97C459;border-radius:1px;vertical-align:middle;margin-right:2px"></span>4\u00b0+</span> '
     +(temOrcamento?'<span><span style="display:inline-block;width:9px;height:9px;background:#FCEBEB;border-radius:1px;vertical-align:middle;margin-right:2px"></span>Acima or\u00e7ado</span> ':'')
     +'<span><span style="display:inline-block;width:9px;height:9px;background:#f5f5f5;border:1px solid #ddd;border-radius:1px;vertical-align:middle;margin-right:2px"></span>Sem cota\u00e7\u00e3o</span>';
-  var hmHTML = '<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;margin-bottom:14px;overflow-x:auto;">'    +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Mapa de calor \u2014 desempenho por fornecedor \u00d7 item</div>'    +'<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:8px;color:#555;margin-bottom:8px">'+hmLegenda+'</div>'    +'<div style="'+hmGrid+'">'+hmHeader+hmBody+'</div>'    +'</div>';
 
-  // Table rows
+  // ── TABELA SCORE ───────────────────────────────────────────────────────────
+  var tblEcoTh = temOrcamento ? '<th style="padding:5px 7px;text-align:right;white-space:nowrap">Economia gerada</th>' : '';
   var tblRows = fnStats.map(function(s,i){
     var rank = i+1;
     var bg = i%2===0?'#fff':'#f7f9fc';
     var sit, sitC, sitB;
-    if (s.itemsWon.length >= Math.max(1, Math.ceil(n/2))){ sit='Vencedor'; sitC='#3B6D11'; sitB='#EAF3DE'; }
-    else if (s.itemsWon.length>0){ sit='Competitivo'; sitC='#185FA5'; sitB='#E6F1FB'; }
-    else if (s.itemsQuoted.length>0){ sit='Fora'; sitC='#888'; sitB='#f0f0f0'; }
+    if(s.itemsWon.length>=Math.max(1,Math.ceil(n/2))){ sit='Vencedor'; sitC='#3B6D11'; sitB='#EAF3DE'; }
+    else if(s.itemsWon.length>0){ sit='Competitivo'; sitC='#185FA5'; sitB='#E6F1FB'; }
+    else if(s.itemsQuoted.length>0){ sit='Fora'; sitC='#888'; sitB='#f0f0f0'; }
     else { sit='Sem cota\u00e7\u00e3o'; sitC='#bbb'; sitB='#f5f5f5'; }
+    var scoreW = Math.round(s.score/100*50);
+    var scoreCol = s.score>=70?'#3B6D11':s.score>=40?'#b06000':'#c0392b';
     var row = '<tr style="background:'+bg+';">'
-      +'<td style="padding:4px 7px;text-align:center;font-weight:bold;color:'+(rank<=3?hC:'#ccc')+'">'+rank+'\u00b0</td>'
-      +'<td style="padding:4px 7px;font-weight:'+(rank===1?'bold':'normal')+'">'+(s.f.nome||'\u2014').toUpperCase()+'</td>'
-      +'<td style="padding:4px 7px;text-align:center;font-size:9px;">'+s.itemsQuoted.length+'/'+n+' ('+fmtPct(s.itemsQuoted.length,n)+')</td>'
-      +'<td style="padding:4px 7px;text-align:center;"><span style="background:'+sitB+';color:'+sitC+';padding:1px 6px;border-radius:99px;font-size:8px;font-weight:bold">'+s.itemsWon.length+' item(ns)</span></td>'
-      +'<td style="padding:4px 7px;text-align:right;font-size:9px;">'+(s.totalQ>0?fmtR(s.totalQ):'\u2014')+'</td>';
-    if (temOrcamento) row += '<td style="padding:4px 7px;text-align:right;color:'+(s.ecoGen>0?'#3B6D11':'#bbb')+';font-weight:'+(s.ecoGen>0?'bold':'normal')+'">'+(s.ecoGen>0?'\u2193 '+fmtR(s.ecoGen):'\u2014')+'</td>';
-    row += '<td style="padding:4px 7px;text-align:center;"><span style="background:'+sitB+';color:'+sitC+';padding:1px 6px;border-radius:99px;font-size:8px">'+sit+'</span></td>'
+      +'<td style="padding:5px 7px;text-align:center;font-weight:bold;color:'+(rank<=3?hC:'#ccc')+'">'+rank+'\u00b0</td>'
+      +'<td style="padding:5px 7px;font-weight:'+(rank===1?'bold':'normal')+'"><div style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+BAR_COLORS[i%BAR_COLORS.length]+';flex-shrink:0;"></span>'+(s.f.nome||'\u2014').toUpperCase()+'</div></td>'
+      +'<td style="padding:5px 7px;text-align:center;font-size:9px;white-space:nowrap;">'+s.itemsQuoted.length+'/'+n+' ('+fmtPct(s.itemsQuoted.length,n)+')<div style="background:#e0e0e0;border-radius:2px;height:3px;margin-top:2px;overflow:hidden;"><div style="width:'+fmtPct(s.itemsQuoted.length,n)+';height:100%;background:'+BAR_COLORS[i%BAR_COLORS.length]+';border-radius:2px;"></div></div></td>'
+      +'<td style="padding:5px 7px;text-align:center;"><span style="background:'+sitB+';color:'+sitC+';padding:1px 7px;border-radius:99px;font-size:8px;font-weight:bold">'+s.itemsWon.length+' item(ns)</span></td>'
+      +(temOrcamento?'<td style="padding:5px 7px;text-align:right;color:'+(s.ecoGen>0?'#3B6D11':'#bbb')+';font-weight:'+(s.ecoGen>0?'bold':'normal')+';font-size:9px;">'+(s.ecoGen>0?'\u2193 '+fmtR(s.ecoGen):'\u2014')+'</td>':'')
+      +'<td style="padding:5px 7px;text-align:center;"><div style="display:flex;align-items:center;gap:4px;justify-content:center;"><div style="background:#e0e0e0;border-radius:2px;height:6px;width:50px;overflow:hidden;"><div style="width:'+scoreW+'px;height:100%;background:'+scoreCol+';border-radius:2px;"></div></div><span style="font-size:9px;font-weight:bold;color:'+scoreCol+'">'+s.score+'</span></div></td>'
+      +'<td style="padding:5px 7px;text-align:center;"><span style="background:'+sitB+';color:'+sitC+';padding:1px 7px;border-radius:99px;font-size:8px;">'+sit+'</span></td>'
       +'</tr>';
     return row;
   }).join('');
 
-  var tblEcoTh = temOrcamento ? '<th style="padding:5px 7px;text-align:right">Economia</th>' : '';
+  // ── RESUMO ────────────────────────────────────────────────────────────────
+  var destaque = (function(){
+    var top=fnStats[0];
+    if(!top||top.itemsWon.length===0) return 'Nenhum fornecedor venceu itens.';
+    var empate=fnStats.filter(function(s){ return s.itemsWon.length===top.itemsWon.length; });
+    if(empate.length>1) return 'Empate t\u00e9cnico: '+empate.length+' fornecedores venceram '+top.itemsWon.length+' item(ns) cada. Avalie a cobertura antes de decidir.';
+    var cobPct=Math.round(top.itemsQuoted.length/n*100);
+    var aviso=cobPct<70?' (ATEN\u00c7\u00c3O: cobre apenas '+top.itemsQuoted.length+'/'+n+' itens)':' (cobertura: '+top.itemsQuoted.length+'/'+n+' itens)';
+    return (temOrcamento?'Fornecedor destaque: ':'Menor pre\u00e7o: ')+(top.f.nome||'').toUpperCase()+' \u2014 '+top.itemsWon.length+' item(ns)'+aviso+'.';
+  })();
+  var resumoBg = temOrcamento ? '#EAF3DE' : '#E6F1FB';
+  var resumoBr = temOrcamento ? '3px solid #3B6D11' : '3px solid #185FA5';
+  var resumoTxt = temOrcamento ? '#27500A' : '#0C447C';
+  var resumoBody = temOrcamento
+    ? 'Economia l\u00edquida de <strong>'+fmtR(totalEco-totalEstouro)+'</strong> ('+fmtPct(totalEco-totalEstouro,totalOrcado)+' do or\u00e7ado). '+ctEco+' item(ns) abaixo do or\u00e7ado \u00b7 '+ctEstouro+' acima. '+destaque
+    : 'Mapa sem or\u00e7amento de refer\u00eancia. Melhor cota\u00e7\u00e3o total: <strong>'+fmtR(totalMelhor)+'</strong>. '+destaque;
 
-  var resumo = temOrcamento
-    ? '<div style="background:#EAF3DE;border-left:3px solid #3B6D11;padding:8px 12px;margin-top:12px;border-radius:0 4px 4px 0;font-size:10px;color:#27500A;line-height:1.6">'
-        +'<strong>Resumo executivo:</strong> Economia l\u00edquida de '+fmtR(totalEco-totalEstouro)+' ('+fmtPct(totalEco-totalEstouro,totalOrcado)+' do or\u00e7ado). '
-        +ctEco+' item(ns) abaixo do or\u00e7ado \u00b7 '+ctEstouro+' acima. '
-        +(function(){var top=fnStats[0];if(!top||top.itemsWon.length===0) return 'Nenhum fornecedor venceu itens.';var empate=fnStats.filter(function(s){return s.itemsWon.length===top.itemsWon.length;});var cobTop=top.itemsQuoted.length;if(empate.length>1) return 'Empate t\u00e9cnico: '+empate.length+' fornecedores venceram '+top.itemsWon.length+' item(ns) cada. Avalie a cobertura e os pre\u00e7os antes de decidir.';var cobPct=Math.round(cobTop/n*100);var aviso=cobPct<70?' (ATEN\u00c7\u00c3O: cobre apenas '+cobTop+'/'+n+' itens)':' (cobertura: '+cobTop+'/'+n+' itens)';return 'Destaque: '+(top.f.nome||'').toUpperCase()+' \u2014 '+top.itemsWon.length+' item(ns) vencido(s)'+aviso+'.';})()
-        +'</div>'
-    : '<div style="background:#E6F1FB;border-left:3px solid #185FA5;padding:8px 12px;margin-top:12px;border-radius:0 4px 4px 0;font-size:10px;color:#0C447C;line-height:1.6">'
-        +'<strong>Resumo executivo:</strong> Mapa sem or\u00e7amento de refer\u00eancia. '
-        +'Melhor cota\u00e7\u00e3o total: '+fmtR(totalMelhor)+'. '
-        +(function(){var top=fnStats[0];if(!top||top.itemsWon.length===0) return 'Nenhum fornecedor venceu itens.';var empate=fnStats.filter(function(s){return s.itemsWon.length===top.itemsWon.length;});var cobTop=top.itemsQuoted.length;if(empate.length>1) return 'Empate t\u00e9cnico: '+empate.length+' fornecedores venceram '+top.itemsWon.length+' item(ns) cada. Avalie a cobertura total antes de definir o vencedor.';var cobPct=Math.round(cobTop/n*100);var aviso=cobPct<70?' (ATEN\u00c7\u00c3O: cobriu apenas '+cobTop+'/'+n+' itens)':' (cobertura: '+cobTop+'/'+n+' itens)';return 'Destaque: '+(top.f.nome||'').toUpperCase()+' \u2014 '+top.itemsWon.length+' item(ns) com menor pre\u00e7o'+aviso+'.';})()
-        +'</div>';
-
+  // ── MONTAGEM FINAL ─────────────────────────────────────────────────────────
   return '<div style="font-family:Arial,sans-serif;font-size:11px;color:#1a1a1a;padding:12px;">'
-    +'<div style="background:'+hC+';color:#fff;padding:10px 14px;border-radius:4px 4px 0 0;margin-bottom:14px;">'
+    // Header
+    +'<div style="background:'+hC+';color:#fff;padding:10px 14px;border-radius:4px 4px 0 0;margin-bottom:12px;">'
       +'<div style="font-size:14px;font-weight:bold">DASHBOARD GLOBAL \u2014 AVALIA\u00c7\u00c3O POR FORNECEDOR</div>'
-      +'<div style="font-size:10px;opacity:.85;margin-top:3px">'+(mapa.obra||'SEM OBRA').toUpperCase()+' &nbsp;|\u00a0 MP N\u00ba '+(mapa.numero||'\u2014')+' &nbsp;|\u00a0 '+fmtDt+' &nbsp;|\u00a0 '+itens.length+' ITENS &nbsp;|\u00a0 '+fns.length+' FORNECEDORES</div>'
+      +'<div style="font-size:10px;opacity:.85;margin-top:2px">'+(mapa.obra||'SEM OBRA').toUpperCase()+' &nbsp;|\u00a0 MP N\u00ba '+(mapa.numero||'\u2014')+' &nbsp;|\u00a0 '+fmtDt+' &nbsp;|\u00a0 '+itens.length+' ITENS &nbsp;|\u00a0 '+fns.length+' FORNECEDORES'+(temOrcamento?' \u2714 Com or\u00e7amento base':'')+'</div>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat('+kpiCols+',1fr);gap:7px;margin-bottom:14px;">'+kpiCards+'</div>'
-    +hmHTML
-    +'<div style="display:grid;grid-template-columns:210px 1fr;gap:10px;margin-bottom:14px;">'
+    // KPIs
+    +'<div style="display:grid;grid-template-columns:repeat('+kpiCols+',1fr);gap:7px;margin-bottom:12px;">'+kpi+'</div>'
+    // Donut + Economia por item
+    +'<div style="display:grid;grid-template-columns:200px 1fr;gap:10px;margin-bottom:12px;">'
       +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;">'
-        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Ranking global</div>'
-        +'<div style="display:flex;align-items:flex-end;justify-content:center;margin-bottom:10px;">'+podiumHTML+'</div>'
-        +restPodium
+        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Distribui\u00e7\u00e3o \u2014 itens ganhos</div>'
+        +donutHTML
       +'</div>'
       +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;">'
-        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Itens ganhos por fornecedor</div>'
-        +barsWon+barsEco
+        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Economia gerada por item (R$) \u2014 colorido pelo vencedor</div>'
+        +ecoByItem
       +'</div>'
     +'</div>'
+    // Heatmap
+    +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;margin-bottom:12px;overflow-x:auto;">'
+      +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Mapa de calor \u2014 desempenho por fornecedor \u00d7 item</div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:8px;color:#555;margin-bottom:8px">'+hmLegenda+'</div>'
+      +'<div style="'+hmGrid+'">'+hmHeader+hmBody+'</div>'
+    +'</div>'
+    // Comparativo totais
+    +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;margin-bottom:12px;">'
+      +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Comparativo de totais por fornecedor vs melhor cota\u00e7\u00e3o ('+fmtR(totalMelhor)+')</div>'
+      +barChart
+    +'</div>'
+    // Score table
+    +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Score global por fornecedor</div>'
     +'<table style="width:100%;border-collapse:collapse;font-size:10px;">'
       +'<thead><tr style="background:'+hC+';color:#fff;">'
-        +'<th style="padding:5px 7px;text-align:left;width:22px">#</th>'
+        +'<th style="padding:5px 7px;width:22px">#</th>'
         +'<th style="padding:5px 7px;text-align:left">Fornecedor</th>'
-        +'<th style="padding:5px 7px;text-align:center">Cobertura</th>'
-        +'<th style="padding:5px 7px;text-align:center">Itens ganhos</th>'
-        +'<th style="padding:5px 7px;text-align:right">VL. Total cotado</th>'
+        +'<th style="padding:5px 7px;text-align:center;white-space:nowrap">Cobertura</th>'
+        +'<th style="padding:5px 7px;text-align:center;white-space:nowrap">Itens ganhos</th>'
         +tblEcoTh
+        +'<th style="padding:5px 7px;text-align:center">Score</th>'
         +'<th style="padding:5px 7px;text-align:center">Situa\u00e7\u00e3o</th>'
       +'</tr></thead>'
       +'<tbody>'+tblRows+'</tbody>'
     +'</table>'
-    +resumo
+    // Resumo
+    +'<div style="background:'+resumoBg+';border-left:'+resumoBr+';padding:8px 12px;margin-top:10px;border-radius:0 4px 4px 0;font-size:10px;color:'+resumoTxt+';line-height:1.6">'
+      +'<strong>Resumo executivo:</strong> '+resumoBody
+    +'</div>'
     +'</div>';
 };
+
+
 
 var abrirPDF = function abrirPDF(html) {
   var win = window.open("", "_blank");
