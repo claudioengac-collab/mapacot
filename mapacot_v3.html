@@ -1754,7 +1754,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
   var ecoByItem = itemResults.filter(function(r){ return r.winner; }).map(function(r,i){
     var winnerIdx = fnStats.findIndex(function(s){ return s.f.id===r.winner.fid; });
     var col = BAR_COLORS[Math.max(0,winnerIdx)%BAR_COLORS.length];
-    var ecoVal = r.economy!==null&&r.economy>0 ? r.economy : 0;
+    var ecoVal = temOrcamento ? (r.economy!==null&&r.economy>0?r.economy:0) : (r.winner?r.winner.preco*r.qt:0);
     var pct = Math.max(2, Math.round(ecoVal/maxEcoItem*100));
     var desc = (r.item.descricao||'').substring(0,18)||('Item '+r.item.num);
     return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">'
@@ -1767,8 +1767,9 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
   if(!ecoByItem) ecoByItem = '<div style="font-size:9px;color:#bbb;text-align:center;padding:10px">Sem dados de economia</div>';
 
   // ── COMPARATIVO TOTAIS POR FORNECEDOR (barras verticais CSS) ──────────────
-  var maxBar = Math.max(maxTotalQ, totalMelhor) || 1;
-  var refLinePct = Math.round(totalMelhor/maxBar*100);
+  // +15% de margem para linha de referência sempre aparecer dentro do gráfico
+  var maxBar = Math.max(maxTotalQ, totalMelhor) * 1.15 || 1;
+  var refLinePct = Math.min(92, Math.round(totalMelhor/maxBar*100));
   var barChart = '<div style="display:flex;align-items:flex-end;gap:4px;height:100px;padding-bottom:2px;border-bottom:2px solid #e0e0e0;position:relative;margin-bottom:4px;">';
   // linha de referência (melhor cotação)
   barChart += '<div style="position:absolute;bottom:'+refLinePct+'%;left:0;right:0;border-top:2px dashed #c0392b;z-index:1;"></div>';
@@ -1879,7 +1880,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
         +donutHTML
       +'</div>'
       +'<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:10px;">'
-        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Economia gerada por item (R$) \u2014 colorido pelo vencedor</div>'
+        +'<div style="font-size:9px;font-weight:bold;color:#888;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">'+(temOrcamento?'Economia gerada por item (R$) \u2014 colorido pelo vencedor':'Menor pre\u00e7o por item (R$) \u2014 colorido pelo vencedor')+'</div>'
         +ecoByItem
       +'</div>'
     +'</div>'
