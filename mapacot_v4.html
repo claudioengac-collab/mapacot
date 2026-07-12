@@ -1088,6 +1088,103 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 };
 
 
+// === V4 CSS - Relatorio Consolidado de Pedidos PDF ===
+var buildRelatorioPDF = function(pedidosFilt, rf) {
+  var dtG = new Date().toLocaleDateString('pt-BR');
+  // FIX 1: Escapar HTML para evitar layout quebrado no PDF
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // FIX 2: Data segura com T12:00:00 para evitar problema de fuso horário
+  function fD(s){ if(!s) return '-'; var d=new Date(s.length===10?s+'T12:00:00':s); return isNaN(d.getTime())?'-':d.toLocaleDateString('pt-BR'); }
+  function fR(v){ return 'R$ '+Number(v||0).toFixed(2).replace('.',','); }
+  var sL={rascunho:'Rascunho',emitido:'Emitido',recebido:'Recebido',cancelado:'Cancelado'};
+  var sC={rascunho:'#666',emitido:'#185FA5',recebido:'#3B6D11',cancelado:'#A32D2D'};
+  var fi=[];
+  if(rf.obra)   fi.push('Obra: <b>'+esc(rf.obra)+'</b>');
+  if(rf.de)     fi.push('De: <b>'+fD(rf.de)+'</b>');
+  if(rf.ate)    fi.push('Ate: <b>'+fD(rf.ate)+'</b>');
+  if(rf.insumo) fi.push('Insumo: <b>'+esc(rf.insumo)+'</b>');
+  if(rf.status) fi.push('Status: <b>'+(sL[rf.status]||esc(rf.status))+'</b>');
+  if(!fi.length) fi.push('<b>Todos os pedidos (sem filtros)</b>');
+  var vT=pedidosFilt.reduce(function(s,p){ return s+Number(p.total||0); },0);
+  var nR=pedidosFilt.filter(function(p){ return p.status==='recebido'; }).length;
+  var nP=pedidosFilt.filter(function(p){ return p.status==='rascunho'||p.status==='emitido'; }).length;
+  var nC=pedidosFilt.filter(function(p){ return p.status==='cancelado'; }).length;
+  var pR=pedidosFilt.map(function(po,i){
+    var sc=sC[po.status]||'#666'; var sl=sL[po.status]||po.status;
+    var il=(po.itens||[]).map(function(it){ return esc(it.descricao)+(it.detalhe?' ('+esc(it.detalhe)+')':''); }).join(', ');
+    return '<tr style="background:'+(i%2===0?'#fff':'#f9f9f9')+'">'
+      +'<td style="font-weight:bold;color:#7c3aed">PO-'+String(po.numero).padStart(3,'0')+'</td>'
+      +'<td>'+fD(po.data_emissao||po.criado_em)+'</td>'
+      +'<td>'+esc(po.obra)+'</td><td>'+esc(po.fornecedor_nome)+'</td>'
+      +'<td style="font-size:8px">'+il+'</td>'
+      +'<td style="text-align:right">'+fR(po.total)+'</td>'
+      +'<td style="color:'+sc+';font-weight:bold;font-size:9px">'+sl+'</td></tr>';
+  }).join('');
+  var iM={};
+  pedidosFilt.forEach(function(po){
+    (po.itens||[]).forEach(function(it){
+      // FIX 3: Separador \x00 (nunca aparece em nomes de insumos)
+      var k=(it.descricao||'')+'\x00'+(it.detalhe||'');
+      if(!iM[k]) iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||'',qP:0,qA:0,vl:0,fn:{}};
+      var q=Number(it.qt_pedida)||0;
+      iM[k].qP+=q; iM[k].vl+=Number(it.vl_total)||0;
+      if(po.status==='recebido') iM[k].qA+=q;
+      iM[k].fn[po.fornecedor_nome]=(iM[k].fn[po.fornecedor_nome]||0)+q;
+    });
+  });
+  var iR=Object.values(iM).sort(function(a,b){ return a.desc.localeCompare(b.desc); }).map(function(ins,i){
+    var qd=ins.qP-ins.qA; var pc=ins.qP>0?Math.round(ins.qA/ins.qP*100):0;
+    // FIX 5: Sem espaço quando unidade está vazia
+    var fl=Object.keys(ins.fn).map(function(f){ return esc(f)+' ('+ins.fn[f]+(ins.unid?' '+esc(ins.unid):'')+')'; }).join(', ');
+    return '<tr style="background:'+(i%2===0?'#fff':'#f9f9f9')+'">'
+      +'<td><b>'+esc(ins.desc)+'</b>'+(ins.det?'<br><span style="font-size:8px;color:#888">'+esc(ins.det)+'</span>':'')+'</td>'
+      +'<td style="text-align:center">'+esc(ins.unid)+'</td>'
+      +'<td style="text-align:center;font-weight:bold;color:#2a5298">'+ins.qP+'</td>'
+      +'<td style="text-align:center;font-weight:bold;color:#3B6D11">'+ins.qA+'</td>'
+      +'<td style="text-align:center;font-weight:bold;color:'+(qd>0?'#b06000':'#3B6D11')+'">'+qd+'</td>'
+      +'<td style="text-align:center"><span style="background:'+(pc>=100?'#EAF3DE':'#FEF3CD')+';color:'+(pc>=100?'#3B6D11':'#856404')+';padding:2px 6px;border-radius:99px;font-size:8px">'+pc+'%</span></td>'
+      +'<td style="text-align:right;font-weight:bold">'+fR(ins.vl)+'</td>'
+      +'<td style="font-size:8px;color:#555">'+fl+'</td></tr>';
+  }).join('');
+  var css='<style>*{font-family:Arial,sans-serif;font-size:10px;box-sizing:border-box;}'
+    +'body{margin:20px;} h2{margin:0;font-size:16px;} h3{font-size:12px;margin:16px 0 8px;padding-bottom:4px;}'
+    +'.hdr{background:#7c3aed;color:#fff;padding:14px 18px;}'
+    +'.kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0;}'
+    +'.kc{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px;text-align:center;}'
+    +'.kl{font-size:8px;color:#888;text-transform:uppercase;display:block;margin-bottom:2px;}'
+    +'.kv{font-size:14px;font-weight:bold;}'
+    +'.fb{background:#f0eaff;border:1px solid #d4b8ff;border-radius:4px;padding:8px 12px;margin:8px 0;font-size:9px;}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:10px;}'
+    +'th{background:#2a5298;color:#fff;padding:6px 8px;font-size:9px;text-align:left;}'
+    +'th.p{background:#7c3aed;} td{padding:5px 8px;font-size:9px;border-bottom:1px solid #eee;}'
+    +'.tf{background:#f0eaff;font-weight:bold;}'
+    +'.rod{text-align:center;font-size:8px;color:#bbb;margin-top:14px;border-top:1px solid #eee;padding-top:8px;}'
+    +'</style>';
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
+    +'<div class="hdr"><h2>RELATORIO DE PEDIDOS DE COMPRA</h2>'
+    +'<p style="font-size:9px;opacity:.85;margin:3px 0 0">MAPACOT V4 CSS - Gerado em '+dtG+'</p></div>'
+    +'<div class="fb">Filtros: '+fi.join(' | ')+'</div>'
+    +'<div class="kpi">'
+    +'<div class="kc"><span class="kl">Total POs</span><span class="kv" style="color:#2a5298">'+pedidosFilt.length+'</span></div>'
+    +'<div class="kc"><span class="kl">Valor Total</span><span class="kv" style="color:#7c3aed;font-size:11px">'+fR(vT)+'</span></div>'
+    +'<div class="kc"><span class="kl">Recebidos</span><span class="kv" style="color:#3B6D11">'+nR+'</span></div>'
+    +'<div class="kc"><span class="kl">Pendentes</span><span class="kv" style="color:#b06000">'+nP+'</span></div>'
+    +'<div class="kc"><span class="kl">Cancelados</span><span class="kv" style="color:#c0392b">'+nC+'</span></div>'
+    +'</div>'
+    +'<h3 style="color:#2a5298;border-bottom:2px solid #2a5298">PEDIDOS</h3>'
+    +(pedidosFilt.length===0?'<p style="color:#888;text-align:center;padding:20px">Nenhum pedido encontrado para os filtros selecionados.</p>'
+      :'<table><thead><tr><th>No PO</th><th>Data</th><th>Obra</th><th>Fornecedor</th><th>Insumos</th><th style="text-align:right">Total</th><th>Status</th></tr></thead><tbody>'
+      +pR+'<tr class="tf"><td colspan="5" style="text-align:right">TOTAL GERAL</td><td style="text-align:right">'+fR(vT)+'</td><td></td></tr></tbody></table>')
+    +'<h3 style="color:#7c3aed;border-bottom:2px solid #7c3aed">CONSOLIDADO POR INSUMO</h3>'
+    +(Object.keys(iM).length===0?'<p style="color:#888;text-align:center;padding:20px">Sem insumos para exibir.</p>'
+      :'<table><thead><tr><th class="p">Insumo / Detalhe</th><th class="p" style="text-align:center">Un.</th>'
+      +'<th class="p" style="text-align:center">Qt.Pedida</th><th class="p" style="text-align:center">Qt.Atendida</th>'
+      +'<th class="p" style="text-align:center">Qt.Pendente</th><th class="p" style="text-align:center">% Atend.</th>'
+      +'<th class="p" style="text-align:right">Vl.Total</th><th class="p">Fornecedores</th>'
+      +'</tr></thead><tbody>'+iR+'</tbody></table>')
+    +'<div class="rod">MAPACOT V4 CSS - '+dtG+'</div></body></html>';
+}
+// ===========================================================================
 // ─── RELAÇÃO DE INSUMOS ───────────────────────────────────────────────────────
 // Helper: converte valor financeiro aceitando vírgula e ponto decimal
 var parsePOVal = function(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
@@ -6030,7 +6127,9 @@ function TelaPedidos(_ref_tp) {
   var pedidos=_ref_tp.pedidos, mapa=_ref_tp.mapa, obras=_ref_tp.obras||[], onClose=_ref_tp.onClose, onRefresh=_ref_tp.onRefresh;
   var onUpdateStatus=_ref_tp.onUpdateStatus, onPDF=_ref_tp.onPDF;
 
-  var _sF=useState({obra:'',periodo:'',insumo:'',fornecedor:'',status:''}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
+  var _sF=useState({obra:'',de:'',ate:'',insumo:'',fornecedor:'',status:''}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
+  var _sRM=useState(false),showRelModal=_slicedToArray(_sRM,2)[0],setShowRelModal=_slicedToArray(_sRM,2)[1];
+  var _sRF=useState({obra:'',de:'',ate:'',insumo:'',status:''}),relFiltros=_slicedToArray(_sRF,2)[0],setRelFiltros=_slicedToArray(_sRF,2)[1];
 
   var statusCores = { rascunho:{bg:'#f0f0f0',c:'#666'}, emitido:{bg:'#E6F1FB',c:'#185FA5'}, recebido:{bg:'#EAF3DE',c:'#3B6D11'}, cancelado:{bg:'#FCEBEB',c:'#A32D2D'} };
   var statusLabel = { rascunho:'Rascunho', emitido:'Emitido', recebido:'Recebido', cancelado:'Cancelado' };
@@ -6043,15 +6142,11 @@ function TelaPedidos(_ref_tp) {
       var hasInsumo = (po.itens||[]).some(function(it){ return (it.descricao||'').toLowerCase().includes(filtros.insumo.toLowerCase())||(it.detalhe||'').toLowerCase().includes(filtros.insumo.toLowerCase()); });
       if (!hasInsumo) return false;
     }
-    if (filtros.periodo && filtros.periodo.trim()) {
-      var partes = filtros.periodo.split(/[-\/]/);
-      if (partes.length >= 2) {
-        var mes = parseInt(partes[0],10), ano = parseInt(partes[1],10);
-        if (!isNaN(mes) && !isNaN(ano)) {
-          var dtPO = new Date(po.data_emissao||po.criado_em);
-          if (dtPO.getMonth()+1 !== mes || dtPO.getFullYear() !== ano) return false;
-        }
-      }
+    if (filtros.de || filtros.ate) {
+      var dtPO = new Date((po.data_emissao||po.criado_em||'').length===10?(po.data_emissao||po.criado_em)+'T12:00:00':(po.data_emissao||po.criado_em));
+      if (isNaN(dtPO.getTime())) return false;
+      if (filtros.de && dtPO < new Date(filtros.de+'T00:00:00')) return false;
+      if (filtros.ate && dtPO > new Date(filtros.ate+'T23:59:59')) return false;
     }
     return true;
   });
@@ -6070,7 +6165,8 @@ function TelaPedidos(_ref_tp) {
     );
   }
 
-  return /*#__PURE__*/React.createElement('div', { style:ovStyle },
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+  /*#__PURE__*/React.createElement('div', { style:ovStyle },
     /*#__PURE__*/React.createElement('div', { style:modalStyle },
       // Header
       /*#__PURE__*/React.createElement('div', { style:{background:'#7c3aed',color:'#fff',padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between'} },
@@ -6079,7 +6175,7 @@ function TelaPedidos(_ref_tp) {
           /*#__PURE__*/React.createElement('div', { style:{fontSize:9,opacity:.85,marginTop:2} }, 'Controle completo \u00B7 Por obra \u00B7 Por per\u00EDodo \u00B7 Por insumo')
         ),
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
-          /*#__PURE__*/React.createElement('button', { onClick:onRefresh, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, '\uD83D\uDD04 Atualizar'),
+          /*#__PURE__*/React.createElement('button', { onClick:function(){ setRelFiltros({obra:'',de:'',ate:'',insumo:'',status:''}); setShowRelModal(true); }, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, 'Relatorio PDF'), /*#__PURE__*/React.createElement('button', { onClick:onRefresh, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, '\uD83D\uDD04 Atualizar'),
           /*#__PURE__*/React.createElement('span', { onClick:onClose, style:{cursor:'pointer',fontSize:18,opacity:.8} }, '\u2715')
         )
       ),
@@ -6100,6 +6196,18 @@ function TelaPedidos(_ref_tp) {
         ),
         fInput('Insumo','insumo'),
         fInput('Fornecedor','fornecedor'),
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
+          /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, 'Per\u00EDodo De'),
+          /*#__PURE__*/React.createElement('input', { type:'date', value:filtros.de||'',
+            onChange:function(e){ setFiltros(function(prev){ return Object.assign({},prev,{de:e.target.value}); }); },
+            style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,minWidth:110} })
+        ),
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
+          /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, 'At\u00E9'),
+          /*#__PURE__*/React.createElement('input', { type:'date', value:filtros.ate||'',
+            onChange:function(e){ setFiltros(function(prev){ return Object.assign({},prev,{ate:e.target.value}); }); },
+            style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,minWidth:110} })
+        ),
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
           /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, 'Status'),
           /*#__PURE__*/React.createElement('select', { value:filtros.status||'', onChange:function(e){ setFiltros(function(prev){ return Object.assign({},prev,{status:e.target.value}); }); }, style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,minWidth:110} },
@@ -6176,6 +6284,69 @@ function TelaPedidos(_ref_tp) {
           )
       )
     )
+  ),
+  showRelModal && /*#__PURE__*/React.createElement('div', {
+    style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',padding:12,overscrollBehavior:'none'}
+  },
+    /*#__PURE__*/React.createElement('div', {
+      style:{background:'#fff',borderRadius:8,overflow:'hidden',width:'100%',maxWidth:500,boxShadow:'0 8px 32px rgba(0,0,0,0.3)',maxHeight:'90vh',display:'flex',flexDirection:'column'}
+    },
+      /*#__PURE__*/React.createElement('div', { style:{background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0} },
+        /*#__PURE__*/React.createElement('div', null,
+          /*#__PURE__*/React.createElement('div', { style:{fontWeight:'bold',fontSize:13} }, 'GERAR RELATORIO PDF'),
+          /*#__PURE__*/React.createElement('div', { style:{fontSize:9,opacity:.85,marginTop:2} }, 'Escolha os filtros - deixe em branco para incluir tudo')
+        ),
+        /*#__PURE__*/React.createElement('span', { onClick:function(){ setShowRelModal(false); }, style:{cursor:'pointer',fontSize:18,opacity:.8} }, 'X')
+      ),
+      /*#__PURE__*/React.createElement('div', { style:{padding:16,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',flex:1,overscrollBehavior:'contain'} },
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+          /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Obra'),
+          /*#__PURE__*/React.createElement('select', { value:relFiltros.obra||'', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{obra:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:12,width:'100%',minHeight:40} },
+            /*#__PURE__*/React.createElement('option',{value:''},'Todas as obras'),
+            obras.map(function(o,i){ return /*#__PURE__*/React.createElement('option',{key:i,value:o},o); })
+          )
+        ),
+        /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8} },
+          /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+            /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Periodo De'),
+            /*#__PURE__*/React.createElement('input', { type:'date',value:relFiltros.de||'', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{de:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:11,width:'100%',minHeight:40} })
+          ),
+          /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+            /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Ate'),
+            /*#__PURE__*/React.createElement('input', { type:'date',value:relFiltros.ate||'', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{ate:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:11,width:'100%',minHeight:40} })
+          )
+        ),
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+          /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Insumo'),
+          /*#__PURE__*/React.createElement('input', { type:'text',value:relFiltros.insumo||'',placeholder:'Ex: LIXA DISCO (vazio = todos)', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{insumo:e.target.value.toUpperCase()}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:12,width:'100%',minHeight:40} })
+        ),
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+          /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Status'),
+          /*#__PURE__*/React.createElement('select', { value:relFiltros.status||'', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{status:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:12,width:'100%',minHeight:40} },
+            /*#__PURE__*/React.createElement('option',{value:''},'Todos os status'),
+            [['rascunho','Rascunho'],['emitido','Emitido'],['recebido','Recebido'],['cancelado','Cancelado']].map(function(s){ return /*#__PURE__*/React.createElement('option',{key:s[0],value:s[0]},s[1]); })
+          )
+        )
+      ),
+      /*#__PURE__*/React.createElement('div', { style:{padding:'12px 16px',borderTop:'1px solid #eee',display:'flex',gap:8,justifyContent:'flex-end',flexShrink:0} },
+        /*#__PURE__*/React.createElement('button', { onClick:function(){ setShowRelModal(false); }, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} },'Cancelar'),
+        /*#__PURE__*/React.createElement('button', {
+          onClick:function(){
+            var ped=(pedidos||[]).filter(function(po){
+              if(relFiltros.obra && po.obra!==relFiltros.obra) return false;
+              if(relFiltros.status && po.status!==relFiltros.status) return false;
+              if(relFiltros.insumo){ var has=(po.itens||[]).some(function(it){ return (it.descricao||'').toLowerCase().includes(relFiltros.insumo.toLowerCase())||(it.detalhe||'').toLowerCase().includes(relFiltros.insumo.toLowerCase()); }); if(!has) return false; }
+              if(relFiltros.de||relFiltros.ate){ var dt=new Date(po.data_emissao||po.criado_em); if(isNaN(dt.getTime())) return false; if(relFiltros.de && dt<new Date(relFiltros.de+'T00:00:00')) return false; if(relFiltros.ate && dt>new Date(relFiltros.ate+'T23:59:59')) return false; }
+              return true;
+            });
+            setShowRelModal(false);
+            abrirPDF(buildRelatorioPDF(ped, relFiltros));
+          },
+          style:{background:'#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor:'pointer',fontWeight:'bold'}
+        },'Gerar Relatorio PDF')
+      )
+    )
+  )
   );
 }
 
