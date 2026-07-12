@@ -4555,15 +4555,25 @@ var _useState27 = useState(init),
       var _tooltipTitle = _isAtendido
         ? '\uD83D\uDD12 TOTALMENTE ATENDIDO\n' + (_dadosAtend.pedidos||[]).map(function(p){ return p.num+' \u00B7 '+p.forn+' \u00B7 '+p.qt+' un ('+p.status+')'; }).join('\n')
         : '';
+      // Handlers para células estáticas (long press tablet + hover desktop)
+      var _cellProps = _isAtendido ? {
+        title: _tooltipTitle,
+        onTouchStart: function(e){
+          clearTimeout(window._poLockTimer);
+          window._poLockTimer = setTimeout(function(){ setTooltipItemId(item.id); }, 800);
+        },
+        onTouchEnd: function(){ clearTimeout(window._poLockTimer); },
+        onTouchMove: function(e){
+          // Tolerar micro-movimentos (< 10px) sem cancelar
+          if (!window._poLockStart) return;
+          var dx = e.touches[0].clientX - window._poLockStart.x;
+          var dy = e.touches[0].clientY - window._poLockStart.y;
+          if (Math.sqrt(dx*dx+dy*dy) > 10) clearTimeout(window._poLockTimer);
+        },
+        style: { padding:'6px 8px', background:'#d4edda', color:'#555', cursor:'help', userSelect:'none', fontSize:11, textAlign:'center' }
+      } : null;
       return /*#__PURE__*/React.createElement("tr", {
         key: item.id,
-        title: _tooltipTitle,
-        onTouchStart: _isAtendido ? function(e){
-          clearTimeout(window._poLockTimer);
-          window._poLockTimer = setTimeout(function(){ setTooltipItemId(item.id); }, 600);
-        } : undefined,
-        onTouchEnd: _isAtendido ? function(){ clearTimeout(window._poLockTimer); } : undefined,
-        onTouchMove: _isAtendido ? function(){ clearTimeout(window._poLockTimer); } : undefined,
         style: {
           background: _isAtendido ? '#e8f5e9' : (_isExcluido ? "#fff5f5" : bg),
           opacity: _isOculto ? 0.35 : (_isExcluido ? 0.55 : 1),
@@ -4596,10 +4606,11 @@ var _useState27 = useState(init),
           color: "#666",
           fontSize: 11
         })
-      }, item.num), /*#__PURE__*/React.createElement(EC, {
+      }, item.num), _isAtendido
+        ? /*#__PURE__*/React.createElement("td", Object.assign({}, _cellProps, { style: Object.assign({}, _cellProps.style, {textAlign:'center'}) }), item.qt)
+        : /*#__PURE__*/React.createElement(EC, {
         value: item.qt,
         onChange: function onChange(v) {
-          if (_isAtendido) return;
           return updItem(item.id, "qt", v.replace(/[^0-9.,]/g, ""));
         },
         placeholder: "0",
@@ -4607,13 +4618,14 @@ var _useState27 = useState(init),
         tdSt: SC.td,
         numericOnly: true,
         guardEdit: true
-      }), /*#__PURE__*/React.createElement(EC, {
+      }), _isAtendido
+        ? /*#__PURE__*/React.createElement("td", Object.assign({}, _cellProps, { style: Object.assign({}, _cellProps.style, {textAlign:'center'}) }), item.unid)
+        : /*#__PURE__*/React.createElement(EC, {
         value: item.unid,
         onChange: function onChange(v) {
           var u = (cadastros.unidades || []).find(function (x) {
             return x.toUpperCase() === v.toUpperCase();
           });
-          if (_isAtendido) return;
           updItem(item.id, "unid", u || "");
         },
         strictMatch: true,
@@ -4625,13 +4637,17 @@ var _useState27 = useState(init),
         }),
         maxLen: 8,
         suggestions: cadastros.unidades || []
-      }), /*#__PURE__*/React.createElement(EC, {
+      }), _isAtendido
+        ? /*#__PURE__*/React.createElement("td", Object.assign({}, _cellProps, { style: Object.assign({}, _cellProps.style, {textAlign:'left', minWidth:120}) }),
+            /*#__PURE__*/React.createElement("div", {style:{fontWeight:'bold',fontSize:11}}, item.descricao||''),
+            item.detalhe && /*#__PURE__*/React.createElement("div", {style:{fontSize:9,color:'#777'}}, item.detalhe)
+          )
+        : /*#__PURE__*/React.createElement(EC, {
         value: item.descricao,
         onChange: function onChange(v) {
           var d = (cadastros.insumos || []).find(function (x) {
             return x.toUpperCase() === v.toUpperCase();
           });
-          if (_isAtendido) return;
           updItem(item.id, "descricao", d || "");
         },
         onBlur: function() {},
@@ -4711,11 +4727,12 @@ var _useState27 = useState(init),
         var isMin = resumo.vlUnit !== null && unit !== null && unit > 0 && unit === resumo.vlUnit;
         var isRank2 = !isMin && _rank2Price !== null && unit !== null && unit > 0 && unit === _rank2Price;
         var isRank3 = !isMin && !isRank2 && _rank3Price !== null && unit !== null && unit > 0 && unit === _rank3Price;
-        return /*#__PURE__*/React.createElement(EC, {
+        return _isAtendido
+          ? /*#__PURE__*/React.createElement("td", Object.assign({}, _cellProps, { key: key, style: Object.assign({}, _cellProps.style, {textAlign:'right'}) }), (_precos$key = precos[key]) ? _precos$key : '—')
+          : /*#__PURE__*/React.createElement(EC, {
           key: key,
           value: (_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "",
           onChange: function onChange(v) {
-            if (_isAtendido) return;
             return setPreco(item.id, f.id, v.replace(/[^0-9.,]/g, ""));
           },
           placeholder: "0,00",
