@@ -333,7 +333,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4ff;min-height:100vh
 input{text-transform:uppercase;}
 input[type=password]{text-transform:none;}
 @media(max-width:640px){
-  html{width:100%;overflow-x:hidden;}body,#root{width:100%;}
+  html{width:100%;overflow-x:hidden;overscroll-behavior:none;}body,#root{width:100%;overscroll-behavior:none;}
   .hdr-nav .hdr-lbl{display:none!important;width:0!important;overflow:hidden!important;}
   .hdr-nav button{padding:7px 9px!important;min-width:0;}
   .rsp-appbar{flex-wrap:wrap!important;padding:8px 10px!important;gap:6px!important;}
@@ -5433,7 +5433,7 @@ var _useState27 = useState(init),
   // ── TOOLTIP ITEM ATENDIDO ─────────────────────────────────────────────────
   tooltipItemId && /*#__PURE__*/React.createElement('div', {
     onClick: function(){ setTooltipItemId(null); },
-    style:{ position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center' }
+    style:{ position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center',overscrollBehavior:'none' }
   },
     /*#__PURE__*/React.createElement('div', {
       style:{ background:'#fff',borderRadius:8,padding:'16px 20px',maxWidth:340,boxShadow:'0 8px 24px rgba(0,0,0,0.3)',border:'2px solid #3B6D11' }
@@ -5627,10 +5627,10 @@ function ModalPedidoStep1(_ref_po1) {
   });
 
   var qtSel = itensSelecionados.length;
-  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12 };
+  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12,overscrollBehavior:'none' };
   var modalStyle = { background:'#fff',borderRadius:8,overflow:'hidden',width:'100%',maxWidth:700,maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 8px 32px rgba(0,0,0,0.3)' };
   var hdrStyle = { background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between' };
-  var bodyStyle = { padding:14,overflowY:'auto',flex:1 };
+  var bodyStyle = { padding:14,overflowY:'auto',flex:1,overscrollBehavior:'contain' };
   var ftrStyle = { display:'flex',gap:8,padding:'12px 14px',borderTop:'1px solid #eee',alignItems:'center' };
   var infoStyle = { background:'#f0eaff',border:'1px solid #d4b8ff',borderRadius:5,padding:'8px 12px',marginBottom:12,fontSize:10,color:'#4a1a8a' };
   var thStyle = { background:'#5b21b6',color:'#fff',padding:'6px 8px',fontSize:9,textAlign:'center',whiteSpace:'nowrap' };
@@ -5741,10 +5741,10 @@ function ModalPedidoStep2(_ref_po2) {
   var valorTotal = 0;
   itemIds.forEach(function(id){ (config[id]||[]).forEach(function(l){ valorTotal += (Number(l.vlUnit)||0)*(Number(l.qt)||0); }); });
 
-  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12 };
+  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12,overscrollBehavior:'none' };
   var modalStyle = { background:'#fff',borderRadius:8,overflow:'hidden',width:'100%',maxWidth:740,maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 8px 32px rgba(0,0,0,0.3)' };
   var hdrStyle = { background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between' };
-  var bodyStyle = { padding:14,overflowY:'auto',flex:1 };
+  var bodyStyle = { padding:14,overflowY:'auto',flex:1,overscrollBehavior:'contain' };
   var ftrStyle = { display:'flex',gap:8,padding:'12px 14px',borderTop:'1px solid #eee',alignItems:'center' };
   var kpiRowStyle = { display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginBottom:14 };
   var kpiCardStyle = { background:'#f9f9f9',border:'1px solid #e0e0e0',borderRadius:5,padding:'8px 10px',textAlign:'center' };
@@ -6032,7 +6032,7 @@ function TelaPedidos(_ref_tp) {
 
   var kpis = { total:(pedidos||[]).length, valor:(pedidos||[]).reduce(function(s,p){ return s+Number(p.total||0); },0), recebidos:(pedidos||[]).filter(function(p){ return p.status==='recebido'; }).length, pendentes:(pedidos||[]).filter(function(p){ return p.status==='rascunho'||p.status==='emitido'; }).length, cancelados:(pedidos||[]).filter(function(p){ return p.status==='cancelado'; }).length };
 
-  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12 };
+  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12,overscrollBehavior:'none' };
   var modalStyle = { background:'#fff',borderRadius:8,overflow:'hidden',width:'100%',maxWidth:900,maxHeight:'94vh',display:'flex',flexDirection:'column',boxShadow:'0 8px 32px rgba(0,0,0,0.3)' };
 
   function fInput(label, field) {
