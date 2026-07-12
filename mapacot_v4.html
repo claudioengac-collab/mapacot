@@ -1107,7 +1107,8 @@ var buildRelatorioPDF = function(pedidosFilt, rf) {
   if(!fi.length) fi.push('<b>Todos os pedidos (sem filtros)</b>');
   var vT=pedidosFilt.reduce(function(s,p){ return s+Number(p.total||0); },0);
   var nR=pedidosFilt.filter(function(p){ return p.status==='recebido'; }).length;
-  var nP=pedidosFilt.filter(function(p){ return p.status==='rascunho'||p.status==='emitido'; }).length;
+  var nRasc=pedidosFilt.filter(function(p){ return p.status==='rascunho'; }).length;
+  var nEmit=pedidosFilt.filter(function(p){ return p.status==='emitido'; }).length;
   var nC=pedidosFilt.filter(function(p){ return p.status==='cancelado'; }).length;
   var pR=pedidosFilt.map(function(po,i){
     var sc=sC[po.status]||'#666'; var sl=sL[po.status]||po.status;
@@ -1128,20 +1129,21 @@ var buildRelatorioPDF = function(pedidosFilt, rf) {
       if(!iM[k]) iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||'',qP:0,qA:0,vl:0,fn:{}};
       var q=Number(it.qt_pedida)||0;
       iM[k].qP+=q; iM[k].vl+=Number(it.vl_total)||0;
-      if(po.status==='recebido') iM[k].qA+=q;
+      if(po.status!=='cancelado') iM[k].qA+=q; // Comprometida = qualquer PO ativo
+      if(po.status==='recebido') iM[k].qR=(iM[k].qR||0)+q; // Recebida = apenas recebido
       iM[k].fn[po.fornecedor_nome]=(iM[k].fn[po.fornecedor_nome]||0)+q;
     });
   });
   var iR=Object.values(iM).sort(function(a,b){ return a.desc.localeCompare(b.desc); }).map(function(ins,i){
-    var qd=ins.qP-ins.qA; var pc=ins.qP>0?Math.round(ins.qA/ins.qP*100):0;
+    var qd=ins.qA-(ins.qR||0); var pc=ins.qA>0?Math.round((ins.qR||0)/ins.qA*100):0; // qd = comprometida mas nao recebida
     // FIX 5: Sem espaço quando unidade está vazia
     var fl=Object.keys(ins.fn).map(function(f){ return esc(f)+' ('+ins.fn[f]+(ins.unid?' '+esc(ins.unid):'')+')'; }).join(', ');
     return '<tr style="background:'+(i%2===0?'#fff':'#f9f9f9')+'">'
       +'<td><b>'+esc(ins.desc)+'</b>'+(ins.det?'<br><span style="font-size:8px;color:#888">'+esc(ins.det)+'</span>':'')+'</td>'
       +'<td style="text-align:center">'+esc(ins.unid)+'</td>'
-      +'<td style="text-align:center;font-weight:bold;color:#2a5298">'+ins.qP+'</td>'
-      +'<td style="text-align:center;font-weight:bold;color:#3B6D11">'+ins.qA+'</td>'
-      +'<td style="text-align:center;font-weight:bold;color:'+(qd>0?'#b06000':'#3B6D11')+'">'+qd+'</td>'
+      +'<td style="text-align:center;font-weight:bold;color:#2a5298">'+ins.qA+'</td>'
+      +'<td style="text-align:center;font-weight:bold;color:#3B6D11">'+(ins.qR||0)+'</td>'
+      +'<td style="text-align:center;font-weight:bold;color:'+(qd>0?'#185FA5':'#3B6D11')+'">'+qd+'</td>'
       +'<td style="text-align:center"><span style="background:'+(pc>=100?'#EAF3DE':'#FEF3CD')+';color:'+(pc>=100?'#3B6D11':'#856404')+';padding:2px 6px;border-radius:99px;font-size:8px">'+pc+'%</span></td>'
       +'<td style="text-align:right;font-weight:bold">'+fR(ins.vl)+'</td>'
       +'<td style="font-size:8px;color:#555">'+fl+'</td></tr>';
@@ -1149,7 +1151,7 @@ var buildRelatorioPDF = function(pedidosFilt, rf) {
   var css='<style>*{font-family:Arial,sans-serif;font-size:10px;box-sizing:border-box;}'
     +'body{margin:20px;} h2{margin:0;font-size:16px;} h3{font-size:12px;margin:16px 0 8px;padding-bottom:4px;}'
     +'.hdr{background:#7c3aed;color:#fff;padding:14px 18px;}'
-    +'.kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0;}'
+    +'.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0;}'
     +'.kc{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px;text-align:center;}'
     +'.kl{font-size:8px;color:#888;text-transform:uppercase;display:block;margin-bottom:2px;}'
     +'.kv{font-size:14px;font-weight:bold;}'
@@ -1168,7 +1170,8 @@ var buildRelatorioPDF = function(pedidosFilt, rf) {
     +'<div class="kc"><span class="kl">Total POs</span><span class="kv" style="color:#2a5298">'+pedidosFilt.length+'</span></div>'
     +'<div class="kc"><span class="kl">Valor Total</span><span class="kv" style="color:#7c3aed;font-size:11px">'+fR(vT)+'</span></div>'
     +'<div class="kc"><span class="kl">Recebidos</span><span class="kv" style="color:#3B6D11">'+nR+'</span></div>'
-    +'<div class="kc"><span class="kl">Pendentes</span><span class="kv" style="color:#b06000">'+nP+'</span></div>'
+    +'<div class="kc"><span class="kl">Emitidos</span><span class="kv" style="color:#185FA5">'+nEmit+'</span></div>'
+    +'<div class="kc"><span class="kl">Rascunhos</span><span class="kv" style="color:#b06000">'+nRasc+'</span></div>'
     +'<div class="kc"><span class="kl">Cancelados</span><span class="kv" style="color:#c0392b">'+nC+'</span></div>'
     +'</div>'
     +'<h3 style="color:#2a5298;border-bottom:2px solid #2a5298">PEDIDOS</h3>'
@@ -1178,8 +1181,8 @@ var buildRelatorioPDF = function(pedidosFilt, rf) {
     +'<h3 style="color:#7c3aed;border-bottom:2px solid #7c3aed">CONSOLIDADO POR INSUMO</h3>'
     +(Object.keys(iM).length===0?'<p style="color:#888;text-align:center;padding:20px">Sem insumos para exibir.</p>'
       :'<table><thead><tr><th class="p">Insumo / Detalhe</th><th class="p" style="text-align:center">Un.</th>'
-      +'<th class="p" style="text-align:center">Qt.Pedida</th><th class="p" style="text-align:center">Qt.Atendida</th>'
-      +'<th class="p" style="text-align:center">Qt.Pendente</th><th class="p" style="text-align:center">% Atend.</th>'
+      +'<th class="p" style="text-align:center">Qt.Comprometida</th><th class="p" style="text-align:center">Qt.Recebida</th>'
+      +'<th class="p" style="text-align:center">Qt.A Receber</th><th class="p" style="text-align:center">% Recebido</th>'
       +'<th class="p" style="text-align:right">Vl.Total</th><th class="p">Fornecedores</th>'
       +'</tr></thead><tbody>'+iR+'</tbody></table>')
     +'<div class="rod">MAPACOT V4 CSS - '+dtG+'</div></body></html>';
