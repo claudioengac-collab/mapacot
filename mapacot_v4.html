@@ -1089,6 +1089,8 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 
 
 // ─── RELAÇÃO DE INSUMOS ───────────────────────────────────────────────────────
+// Helper: converte valor financeiro aceitando vírgula e ponto decimal
+var parsePOVal = function(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
 var buildPedidoPDF = function buildPedidoPDF(po) {
   var num = 'PO-' + String(po.numero).padStart(3,'0');
   var dt = new Date(po.data_emissao || po.criado_em).toLocaleDateString('pt-BR');
@@ -1122,10 +1124,10 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   }).join('');
   var subtotal = (po.itens||[]).reduce(function(s,i){ return s+Number(i.vl_total||0); },0);
   var fin = po.financeiro||{};
-  var descVal=Number(fin.desconto||0),  descMode=fin.desconto_mode||'%';
-  var acrVal=Number(fin.acrescimo||0),  acrMode=fin.acrescimo_mode||'%';
-  var freteVal=Number(fin.frete||0),    freteMode=fin.frete_mode||'R$';
-  var impVal=Number(fin.impostos||0),   impMode=fin.impostos_mode||'%';
+  var descVal=parsePOVal(fin.desconto),  descMode=fin.desconto_mode||'%';
+  var acrVal=parsePOVal(fin.acrescimo),  acrMode=fin.acrescimo_mode||'%';
+  var freteVal=parsePOVal(fin.frete),    freteMode=fin.frete_mode||'R$';
+  var impVal=parsePOVal(fin.impostos),   impMode=fin.impostos_mode||'%';
   var vlDesc  = descMode==='%'  ? subtotal*descVal/100  : descVal;
   var vlAcr   = acrMode==='%'   ? subtotal*acrVal/100   : acrVal;
   var baseImp = subtotal-vlDesc+vlAcr;
@@ -3778,6 +3780,9 @@ var _useState27 = useState(init),
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
   useEffect(function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); },[]);
+  useEffect(function(){
+    if(mapa && mapa.id){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); }
+  },[mapa && mapa.id]);
   var _useState35 = useState(new Date()),
     _useState36 = _slicedToArray(_useState35, 2),
     clock = _useState36[0],
@@ -5509,16 +5514,33 @@ var _useState27 = useState(init),
         });
       });
       var fornLista = Object.values(grupos);
-      if (!fornLista.length) { alert('Nenhum item com fornecedor e quantidade preenchidos.'); return; }
+      if (!fornLista.length) { alert('Nenhum item com fornecedor e quantidade preenchidos.'); if(onDone) onDone(); return; }
+      // Verificar itens com preço zero
+      var itensPrecoZero = [];
+      fornLista.forEach(function(g){
+        g.itens.forEach(function(it){
+          if((it.vl_unit===0||!it.vl_unit) && it.qt_pedida>0){
+            itensPrecoZero.push('• '+it.descricao+(it.detalhe?' ('+it.detalhe+')':'')+' — '+g.fornNome);
+          }
+        });
+      });
+      if(itensPrecoZero.length>0){
+        if(!confirm('⚠️ Atenção! Os itens abaixo estão com preço unitário ZERO:\n\n'+itensPrecoZero.join('\n')+'\n\nIsso pode indicar que o preço não está cadastrado para este fornecedor.\n\nDeseja gerar o pedido assim mesmo?')){
+          if(onDone) onDone(); return;
+        }
+      }
       sbGetNextNumeroPO().then(function(nextNum){
+        // Garantir que o número é maior que qualquer PO local existente
+        var maxLocal = (pedidos||[]).reduce(function(max,p){ return Math.max(max, Number(p.numero)||0); }, 0);
+        var safeNext = Math.max(nextNum, maxLocal + 1);
         var promises = fornLista.map(function(g, idx){
-          var num = nextNum + idx;
+          var num = safeNext + idx;
           var subtotal = g.itens.reduce(function(s,i){ return s + i.vl_total; }, 0);
           var fin = (finConfig||{})[g.fornId] || {};
-          var descVal  = Number(fin.desconto||0),  descMode  = fin.desconto_mode||'%';
-          var acrVal   = Number(fin.acrescimo||0), acrMode   = fin.acrescimo_mode||'%';
-          var freteVal = Number(fin.frete||0),     freteMode = fin.frete_mode||'R$';
-          var impVal   = Number(fin.impostos||0),  impMode   = fin.impostos_mode||'%';
+          var descVal  = parsePOVal(fin.desconto),  descMode  = fin.desconto_mode||'%';
+          var acrVal   = parsePOVal(fin.acrescimo), acrMode   = fin.acrescimo_mode||'%';
+          var freteVal = parsePOVal(fin.frete),     freteMode = fin.frete_mode||'R$';
+          var impVal   = parsePOVal(fin.impostos),  impMode   = fin.impostos_mode||'%';
           var vlDesc   = descMode==='%'  ? subtotal*descVal/100  : descVal;
           var vlAcr    = acrMode==='%'   ? subtotal*acrVal/100   : acrVal;
           var baseImp  = subtotal - vlDesc + vlAcr;
@@ -5777,7 +5799,7 @@ function ModalPedidoStep2(_ref_po2) {
           var ps = poStatus[itemId]||{};
           var linhas = config[itemId]||[{ fornId:'', fornNome:'', vlUnit:0, qt:'', obs:'' }];
           var qtDistrib = linhas.reduce(function(s,l){ return s+(Number(l.qt)||0); },0);
-          var qtOk = qtDistrib===ps.qtPend;
+          var qtOk = qtDistrib > 0 && qtDistrib === ps.qtPend;
           var qtOver = qtDistrib > ps.qtPend;
 
           return /*#__PURE__*/React.createElement('div', { key:itemId, style:{border:'1px solid #e0e0e0',borderRadius:6,overflow:'hidden',marginBottom:10} },
@@ -5873,20 +5895,17 @@ function ModalPedidoStep2(_ref_po2) {
             (config[iid]||[]).forEach(function(l){ if(l.fornId===fid) subtotal += (Number(l.vlUnit)||0)*(Number(l.qt)||0); });
           });
           var fin = poFinanceiro[fid]||{};
-          var descVal  = Number(fin.desconto||0);
-          var descMode = fin.desconto_mode||'%';
-          var acrVal   = Number(fin.acrescimo||0);
-          var acrMode  = fin.acrescimo_mode||'%';
-          var freteVal = Number(fin.frete||0);
-          var freteMode= fin.frete_mode||'R$';
-          var impVal   = Number(fin.impostos||0);
-          var impMode  = fin.impostos_mode||'%';
+          var descVal  = parseVal(fin.desconto);  var descMode  = fin.desconto_mode||'%';
+          var acrVal   = parseVal(fin.acrescimo); var acrMode   = fin.acrescimo_mode||'%';
+          var freteVal = parseVal(fin.frete);     var freteMode = fin.frete_mode||'R$';
+          var impVal   = parseVal(fin.impostos);  var impMode   = fin.impostos_mode||'%';
           var vlDesc   = descMode==='%' ? subtotal*descVal/100 : descVal;
           var vlAcr    = acrMode==='%'  ? subtotal*acrVal/100  : acrVal;
           var baseImp  = subtotal - vlDesc + vlAcr;
           var vlFrete  = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
           var vlImp    = impMode==='%'  ? baseImp*impVal/100   : impVal;
           var totalFin = baseImp + vlImp + vlFrete;
+          function parseVal(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; }
           function updateFin(field, val){
             onFinanceiro(function(prev){
               var n = Object.assign({}, prev);
@@ -5911,7 +5930,7 @@ function ModalPedidoStep2(_ref_po2) {
                 ['%','R$'].map(function(m){
                   return /*#__PURE__*/React.createElement('button', {
                     key:m,
-                    onClick: function(e){ e.preventDefault(); updateFin(field,''); updateFinMode(field,m); },
+                    onClick: function(e){ e.preventDefault(); updateFinMode(field,m); },
                     style:{
                       flex:1, padding:'8px 4px', fontSize:11, border:'none',
                       cursor:'pointer', fontWeight:'bold', minHeight:36,
@@ -5922,7 +5941,7 @@ function ModalPedidoStep2(_ref_po2) {
                 })
               ),
               /*#__PURE__*/React.createElement('input', {
-                type:'number', min:0, step:'0.0001',
+                type:'text', inputMode:'decimal',
                 value: curVal,
                 onChange: function(e){ updateFin(field, e.target.value); },
                 placeholder: curMode==='%' ? 'Ex: 10,5' : 'Ex: 14,4564',
@@ -6109,6 +6128,7 @@ function TelaPedidos(_ref_tp) {
                       /*#__PURE__*/React.createElement('button', { onClick:function(){ onPDF(po); }, style:{background:'#c0392b',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer',fontWeight:'bold'} }, 'PDF'),
                       po.status==='rascunho'&&/*#__PURE__*/React.createElement('button', { onClick:function(){ onUpdateStatus(po.id,'emitido'); }, style:{background:'#185FA5',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer'} }, 'Emitir'),
                       po.status==='emitido'&&/*#__PURE__*/React.createElement('button', { onClick:function(){ onUpdateStatus(po.id,'recebido'); }, style:{background:'#3B6D11',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer'} }, 'Receber'),
+                      po.status==='recebido'&&/*#__PURE__*/React.createElement('button', { onClick:function(){ if(confirm('Desfazer recebimento de PO-'+String(po.numero).padStart(3,'0')+'?\nO pedido voltará para status Emitido.')) onUpdateStatus(po.id,'emitido'); }, style:{background:'#b06000',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer'} }, '\u21A9 Desfazer'),
                       (po.status==='rascunho'||po.status==='emitido')&&/*#__PURE__*/React.createElement('button', { onClick:function(){ if(confirm('Cancelar PO-'+String(po.numero).padStart(3,'0')+'?')) onUpdateStatus(po.id,'cancelado'); }, style:{background:'#f0f0f0',color:'#666',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer'} }, '\u2715')
                     )
                   )
