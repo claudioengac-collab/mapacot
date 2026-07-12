@@ -1122,18 +1122,23 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   }).join('');
   var subtotal = (po.itens||[]).reduce(function(s,i){ return s+Number(i.vl_total||0); },0);
   var fin = po.financeiro||{};
-  var descPct = Number(fin.desconto||0), acrPct = Number(fin.acrescimo||0);
-  var freteVal = Number(fin.frete||0), impPct = Number(fin.impostos||0);
-  var vlDesc = subtotal*descPct/100, vlAcr = subtotal*acrPct/100;
-  var baseImp = subtotal-vlDesc+vlAcr, vlImp = baseImp*impPct/100;
-  function fR(v){ return 'R$ '+Number(v).toFixed(2).replace('.',','); }
+  var descVal=Number(fin.desconto||0),  descMode=fin.desconto_mode||'%';
+  var acrVal=Number(fin.acrescimo||0),  acrMode=fin.acrescimo_mode||'%';
+  var freteVal=Number(fin.frete||0),    freteMode=fin.frete_mode||'R$';
+  var impVal=Number(fin.impostos||0),   impMode=fin.impostos_mode||'%';
+  var vlDesc  = descMode==='%'  ? subtotal*descVal/100  : descVal;
+  var vlAcr   = acrMode==='%'   ? subtotal*acrVal/100   : acrVal;
+  var baseImp = subtotal-vlDesc+vlAcr;
+  var vlFrete = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
+  var vlImp   = impMode==='%'   ? baseImp*impVal/100    : impVal;
+  function fR(v){ return 'R$ '+Number(v).toFixed(4).replace(/\.?0+$/,'').replace('.',','); }
   var finHTML = '';
-  if(descPct||acrPct||freteVal||impPct){
+  if(descVal||acrVal||freteVal||impVal){
     finHTML = '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#666;">Subtotal</td><td style="text-align:right;font-size:9px;">'+fR(subtotal)+'</td></tr>';
-    if(descPct) finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#c0392b;">Desconto ('+descPct+'%)</td><td style="text-align:right;font-size:9px;color:#c0392b;">- '+fR(vlDesc)+'</td></tr>';
-    if(acrPct)  finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#3B6D11;">Acréscimo ('+acrPct+'%)</td><td style="text-align:right;font-size:9px;color:#3B6D11;">+ '+fR(vlAcr)+'</td></tr>';
-    if(impPct)  finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#b06000;">Impostos ('+impPct+'%)</td><td style="text-align:right;font-size:9px;color:#b06000;">+ '+fR(vlImp)+'</td></tr>';
-    if(freteVal) finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#185FA5;">Frete</td><td style="text-align:right;font-size:9px;color:#185FA5;">+ '+fR(freteVal)+'</td></tr>';
+    if(descVal) finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#c0392b;">Desconto ('+(descMode==='%'?descVal+'%':fR(descVal))+')</td><td style="text-align:right;font-size:9px;color:#c0392b;">- '+fR(vlDesc)+'</td></tr>';
+    if(acrVal)  finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#3B6D11;">Acréscimo ('+(acrMode==='%'?acrVal+'%':fR(acrVal))+')</td><td style="text-align:right;font-size:9px;color:#3B6D11;">+ '+fR(vlAcr)+'</td></tr>';
+    if(impVal)  finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#b06000;">Impostos ('+(impMode==='%'?impVal+'%':fR(impVal))+')</td><td style="text-align:right;font-size:9px;color:#b06000;">+ '+fR(vlImp)+'</td></tr>';
+    if(freteVal) finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#185FA5;">Frete '+(freteMode==='%'?'('+freteVal+'%)':'')+' </td><td style="text-align:right;font-size:9px;color:#185FA5;">+ '+fR(vlFrete)+'</td></tr>';
   }
   var totalFmt = fR(po.total||0);
   var obsHTML = po.observacao ? '<div class="obs"><strong>Observações:</strong> ' + po.observacao + '</div>' : '';
@@ -3768,6 +3773,7 @@ var _useState27 = useState(init),
   var _useStatePOFin=useState({}),poFinanceiro=_slicedToArray(_useStatePOFin,2)[0],setPoFinanceiro=_slicedToArray(_useStatePOFin,2)[1];
   var _useStatePedidos=useState([]),pedidos=_slicedToArray(_useStatePedidos,2)[0],setPedidos=_slicedToArray(_useStatePedidos,2)[1];
   var _useStatePOFiltros=useState({obra:'',periodo:'',insumo:'',fornecedor:'',status:''}),pedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[0],setPedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[1];
+  var _useStateTooltip=useState(null),tooltipItemId=_slicedToArray(_useStateTooltip,2)[0],setTooltipItemId=_slicedToArray(_useStateTooltip,2)[1];
   // ───────────────────────────────────────────────────────────────────────────
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
@@ -4094,6 +4100,26 @@ var _useState27 = useState(init),
   var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
   var fornecedoresVisiveis = fornecedores.filter(function(f) { return !fornOcultos.has(f.id); });
   var itensAtivos = itensVisiveis.filter(function(i) { return !i.excluido; });
+  // ── V4 CSS — Mapa de itens totalmente atendidos por pedidos ───────────────
+  var itensAtendidosMap = {};
+  itensAtivos.forEach(function(item){
+    var qtTotal = Number(item.qt)||0;
+    var qtPedida = 0;
+    var pedidosVinculados = [];
+    (pedidos||[]).filter(function(po){ return po.mapa_id===mapa.id && po.status!=='cancelado'; }).forEach(function(po){
+      var it = (po.itens||[]).find(function(i){ return i.item_id===item.id; });
+      if(it){
+        qtPedida += Number(it.qt_pedida)||0;
+        pedidosVinculados.push({ num:'PO-'+String(po.numero).padStart(3,'0'), forn:po.fornecedor_nome, qt:it.qt_pedida, status:po.status });
+      }
+    });
+    itensAtendidosMap[item.id] = {
+      atendido: qtTotal > 0 && qtPedida >= qtTotal,
+      qtPedida: qtPedida,
+      pedidos: pedidosVinculados
+    };
+  });
+  // ─────────────────────────────────────────────────────────────────────────
   var totalBruto = function totalBruto(fid) {
     return itensAtivos.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
@@ -4519,12 +4545,24 @@ var _useState27 = useState(init),
       var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
       var _isOculto = ocultos.has(item.id);
       var _isExcluido = !!item.excluido;
+      var _dadosAtend = itensAtendidosMap[item.id]||{};
+      var _isAtendido = !!_dadosAtend.atendido;
+      var _tooltipTitle = _isAtendido
+        ? '\uD83D\uDD12 TOTALMENTE ATENDIDO\n' + (_dadosAtend.pedidos||[]).map(function(p){ return p.num+' \u00B7 '+p.forn+' \u00B7 '+p.qt+' un ('+p.status+')'; }).join('\n')
+        : '';
       return /*#__PURE__*/React.createElement("tr", {
         key: item.id,
+        title: _tooltipTitle,
+        onTouchStart: _isAtendido ? function(e){
+          window._poLockTimer = setTimeout(function(){ setTooltipItemId(item.id); }, 600);
+        } : undefined,
+        onTouchEnd: _isAtendido ? function(){ clearTimeout(window._poLockTimer); } : undefined,
+        onTouchMove: _isAtendido ? function(){ clearTimeout(window._poLockTimer); } : undefined,
         style: {
-          background: _isExcluido ? "#fff5f5" : bg,
+          background: _isAtendido ? '#e8f5e9' : (_isExcluido ? "#fff5f5" : bg),
           opacity: _isOculto ? 0.35 : (_isExcluido ? 0.55 : 1),
-          textDecoration: (_isOculto || _isExcluido) ? "line-through" : "none"
+          textDecoration: (_isOculto || _isExcluido) ? "line-through" : "none",
+          position: 'relative'
         }
       }, /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
@@ -4555,6 +4593,7 @@ var _useState27 = useState(init),
       }, item.num), /*#__PURE__*/React.createElement(EC, {
         value: item.qt,
         onChange: function onChange(v) {
+          if (_isAtendido) return;
           return updItem(item.id, "qt", v.replace(/[^0-9.,]/g, ""));
         },
         placeholder: "0",
@@ -4568,6 +4607,7 @@ var _useState27 = useState(init),
           var u = (cadastros.unidades || []).find(function (x) {
             return x.toUpperCase() === v.toUpperCase();
           });
+          if (_isAtendido) return;
           updItem(item.id, "unid", u || "");
         },
         strictMatch: true,
@@ -4585,6 +4625,7 @@ var _useState27 = useState(init),
           var d = (cadastros.insumos || []).find(function (x) {
             return x.toUpperCase() === v.toUpperCase();
           });
+          if (_isAtendido) return;
           updItem(item.id, "descricao", d || "");
         },
         onBlur: function() {},
@@ -4668,6 +4709,7 @@ var _useState27 = useState(init),
           key: key,
           value: (_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "",
           onChange: function onChange(v) {
+            if (_isAtendido) return;
             return setPreco(item.id, f.id, v.replace(/[^0-9.,]/g, ""));
           },
           placeholder: "0,00",
@@ -5382,6 +5424,25 @@ var _useState27 = useState(init),
     },
     onIaUso: function(d){ setIaUsoDia(function(prev){ return { leituras: prev.leituras+1, custo: prev.custo+(d.custo||0) }; }); }
   }),
+  // ── TOOLTIP ITEM ATENDIDO ─────────────────────────────────────────────────
+  tooltipItemId && /*#__PURE__*/React.createElement('div', {
+    onClick: function(){ setTooltipItemId(null); },
+    style:{ position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:9999,background:'rgba(0,0,0,0.4)',display:'flex',alignItems:'center',justifyContent:'center' }
+  },
+    /*#__PURE__*/React.createElement('div', {
+      style:{ background:'#fff',borderRadius:8,padding:'16px 20px',maxWidth:340,boxShadow:'0 8px 24px rgba(0,0,0,0.3)',border:'2px solid #3B6D11' }
+    },
+      /*#__PURE__*/React.createElement('div', { style:{fontWeight:'bold',fontSize:12,color:'#3B6D11',marginBottom:10} }, '\uD83D\uDD12 ITEM TOTALMENTE ATENDIDO'),
+      (itensAtendidosMap[tooltipItemId]&&itensAtendidosMap[tooltipItemId].pedidos||[]).map(function(p, i){
+        return /*#__PURE__*/React.createElement('div', { key:i, style:{fontSize:11,color:'#333',padding:'4px 0',borderBottom:'1px solid #eee'} },
+          /*#__PURE__*/React.createElement('strong', { style:{color:'#7c3aed'} }, p.num),
+          ' \u00B7 ' + p.forn + ' \u00B7 ' + p.qt + ' un',
+          /*#__PURE__*/React.createElement('span', { style:{background:'#EAF3DE',color:'#3B6D11',padding:'1px 6px',borderRadius:99,fontSize:9,marginLeft:6} }, p.status)
+        );
+      }),
+      /*#__PURE__*/React.createElement('div', { style:{marginTop:10,fontSize:10,color:'#888',textAlign:'center'} }, 'Toque fora para fechar')
+    )
+  ),
   // ── MODAL STEP 1 — Seleção de Itens para Pedido ──────────────────────────
   showPedidoModal && /*#__PURE__*/React.createElement(ModalPedidoStep1, {
     mapa: mapa,
@@ -5447,15 +5508,16 @@ var _useState27 = useState(init),
           var num = nextNum + idx;
           var subtotal = g.itens.reduce(function(s,i){ return s + i.vl_total; }, 0);
           var fin = (finConfig||{})[g.fornId] || {};
-          var descPct  = Number(fin.desconto||0);
-          var acrPct   = Number(fin.acrescimo||0);
-          var freteVal = Number(fin.frete||0);
-          var impPct   = Number(fin.impostos||0);
-          var vlDesc   = subtotal * descPct / 100;
-          var vlAcr    = subtotal * acrPct  / 100;
+          var descVal  = Number(fin.desconto||0),  descMode  = fin.desconto_mode||'%';
+          var acrVal   = Number(fin.acrescimo||0), acrMode   = fin.acrescimo_mode||'%';
+          var freteVal = Number(fin.frete||0),     freteMode = fin.frete_mode||'R$';
+          var impVal   = Number(fin.impostos||0),  impMode   = fin.impostos_mode||'%';
+          var vlDesc   = descMode==='%'  ? subtotal*descVal/100  : descVal;
+          var vlAcr    = acrMode==='%'   ? subtotal*acrVal/100   : acrVal;
           var baseImp  = subtotal - vlDesc + vlAcr;
-          var vlImp    = baseImp * impPct / 100;
-          var total    = baseImp + vlImp + freteVal;
+          var vlFrete  = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
+          var vlImp    = impMode==='%'   ? baseImp*impVal/100    : impVal;
+          var total    = baseImp + vlImp + vlFrete;
           var po = {
             id: uid(),
             numero: num,
@@ -5465,7 +5527,12 @@ var _useState27 = useState(init),
             fornecedor_nome: g.fornNome,
             itens: g.itens,
             observacao: g.obs||'',
-            financeiro: { desconto:descPct, acrescimo:acrPct, frete:freteVal, impostos:impPct },
+            financeiro: { 
+              desconto:descVal, desconto_mode:descMode,
+              acrescimo:acrVal, acrescimo_mode:acrMode,
+              frete:freteVal,   frete_mode:freteMode,
+              impostos:impVal,  impostos_mode:impMode
+            },
             total: total,
             status: 'rascunho',
             data_emissao: new Date().toISOString(),
@@ -5796,36 +5863,52 @@ function ModalPedidoStep2(_ref_po2) {
             (config[iid]||[]).forEach(function(l){ if(l.fornId===fid) subtotal += (Number(l.vlUnit)||0)*(Number(l.qt)||0); });
           });
           var fin = poFinanceiro[fid]||{};
-          var descPct  = Number(fin.desconto||0);
-          var acrPct   = Number(fin.acrescimo||0);
+          var descVal  = Number(fin.desconto||0);
+          var descMode = fin.desconto_mode||'%';
+          var acrVal   = Number(fin.acrescimo||0);
+          var acrMode  = fin.acrescimo_mode||'%';
           var freteVal = Number(fin.frete||0);
-          var impPct   = Number(fin.impostos||0);
-          var vlDesc   = subtotal * descPct / 100;
-          var vlAcr    = subtotal * acrPct  / 100;
+          var freteMode= fin.frete_mode||'R$';
+          var impVal   = Number(fin.impostos||0);
+          var impMode  = fin.impostos_mode||'%';
+          var vlDesc   = descMode==='%' ? subtotal*descVal/100 : descVal;
+          var vlAcr    = acrMode==='%'  ? subtotal*acrVal/100  : acrVal;
           var baseImp  = subtotal - vlDesc + vlAcr;
-          var vlImp    = baseImp * impPct / 100;
-          var totalFin = baseImp + vlImp + freteVal;
-          function updateFin(field, val){
+          var vlFrete  = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
+          var vlImp    = impMode==='%'  ? baseImp*impVal/100   : impVal;
+          var totalFin = baseImp + vlImp + vlFrete;
+          function updateFinMode(field, mode){
             onFinanceiro(function(prev){
               var n = Object.assign({}, prev);
-              n[fid] = Object.assign({}, n[fid]||{}, _defineProperty({},field,val));
+              n[fid] = Object.assign({}, n[fid]||{}, _defineProperty({},field+'_mode',mode));
               return n;
             });
           }
-          function fmtR(v){ return 'R$ ' + Number(v).toFixed(2).replace('.',','); }
-          function finInput(label, field, tipo){
+          function fmtR(v){ return 'R$ ' + Number(v).toFixed(4).replace(/\.?0+$/,'').replace('.',','); }
+          function finInput(label, field, defaultMode){
+            var curMode = (poFinanceiro[fid]||{})[field+'_mode']||defaultMode;
+            var curVal  = (poFinanceiro[fid]||{})[field]||'';
             return /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
               /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#666',textTransform:'uppercase'} }, label),
-              /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:4} },
-                tipo==='R$' && /*#__PURE__*/React.createElement('span', { style:{fontSize:10,color:'#888'} }, 'R$'),
+              /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:3} },
+                /*#__PURE__*/React.createElement('div', { style:{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid #d4b8ff'} },
+                  ['%','R$'].map(function(m){
+                    return /*#__PURE__*/React.createElement('button', {
+                      key:m,
+                      onClick: function(){ updateFin(field,''); updateFinMode(field,m); },
+                      style:{padding:'3px 7px',fontSize:9,border:'none',cursor:'pointer',fontWeight:'bold',
+                        background: curMode===m ? '#7c3aed' : '#f0eaff',
+                        color: curMode===m ? '#fff' : '#7c3aed'}
+                    }, m);
+                  })
+                ),
                 /*#__PURE__*/React.createElement('input', {
-                  type:'number', min:0, step:'0.01',
-                  value: (poFinanceiro[fid]||{})[field]||'',
+                  type:'number', min:0, step:'0.0001',
+                  value: curVal,
                   onChange: function(e){ updateFin(field, e.target.value); },
                   placeholder:'0',
-                  style:{width:70,padding:'4px 6px',border:'1px solid #d4b8ff',borderRadius:4,fontSize:11,textAlign:'center'}
-                }),
-                tipo==='%' && /*#__PURE__*/React.createElement('span', { style:{fontSize:10,color:'#888'} }, '%')
+                  style:{width:65,padding:'4px 5px',border:'1px solid #d4b8ff',borderRadius:4,fontSize:11,textAlign:'center'}
+                })
               )
             );
           }
@@ -5842,7 +5925,7 @@ function ModalPedidoStep2(_ref_po2) {
             /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,fontSize:9,color:'#666',background:'#f0eaff',padding:'6px 8px',borderRadius:4} },
               vlDesc>0 && /*#__PURE__*/React.createElement('span', null, '- Desc: ' + fmtR(vlDesc)),
               vlAcr>0 && /*#__PURE__*/React.createElement('span', null, '+ Acr: ' + fmtR(vlAcr)),
-              freteVal>0 && /*#__PURE__*/React.createElement('span', null, '+ Frete: ' + fmtR(freteVal)),
+              vlFrete>0 && /*#__PURE__*/React.createElement('span', null, '+ Frete: ' + fmtR(vlFrete)),
               vlImp>0 && /*#__PURE__*/React.createElement('span', null, '+ Imp: ' + fmtR(vlImp))
             ),
             /*#__PURE__*/React.createElement('div', { style:{textAlign:'right',fontWeight:'bold',color:'#2a5298',fontSize:12,marginTop:6} },
@@ -7306,26 +7389,20 @@ function App() {
       return _ref20.apply(this, arguments);
     };
   }();
-  var handleDelete = /*#__PURE__*/function () {
-    var _ref21 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee0(id) {
-      return _regenerator().w(function (_context0) {
-        while (1) switch (_context0.n) {
-          case 0:
-            setMapas(function (prev) {
-              return prev.filter(function (m) {
-                return m.id !== id;
-              });
-            });
-            sbDeleteMapa(id).catch(function () {});
-          case 1:
-            return _context0.a(2);
+  var handleDelete = function handleDelete(id) {
+    // ── V4 CSS — Verificar pedidos vinculados antes de excluir ──────────────
+    fetch(SUPABASE_URL + '/rest/v1/pedidos?select=numero,status&mapa_id=eq.' + id + '&status=neq.cancelado', { headers: SB })
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .catch(function(){ return []; })
+      .then(function(pedidosVinc){
+        if (pedidosVinc && pedidosVinc.length > 0) {
+          alert('❌ Este mapa não pode ser excluído!\n\nExistem ' + pedidosVinc.length + ' pedido(s) de compra vinculado(s).\n\nCancele ou exclua os pedidos antes de excluir o mapa.\n\nPedidos: ' + pedidosVinc.map(function(p){ return 'PO-'+String(p.numero).padStart(3,'0')+' ('+p.status+')'; }).join(', '));
+          return;
         }
-      }, _callee0);
-    }));
-    return function handleDelete(_x6) {
-      return _ref21.apply(this, arguments);
-    };
-  }();
+        setMapas(function(prev){ return prev.filter(function(m){ return m.id !== id; }); });
+        sbDeleteMapa(id).catch(function(){});
+      });
+  };
   var handleSave = /*#__PURE__*/function () {
     var _ref22 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1(updated) {
       return _regenerator().w(function (_context1) {
