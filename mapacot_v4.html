@@ -1090,11 +1090,10 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 
 // === V4 CSS - Relatorio Consolidado de Pedidos PDF ===
 var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
-  // Lookup de Qt.Total por descricao+detalhe do mapa
-  var itensMap = {};
+  // Lookup de Qt.Total por item_id (UUID) — mais confiável que descricao+detalhe
+  var itensMapById = {};
   (itensDoMapa||[]).forEach(function(item){
-    var k=(item.descricao||'')+'\x00'+(item.detalhe||'');
-    itensMap[k] = { qtTotal: Number(item.qt)||0, unid: item.unid||'' };
+    itensMapById[item.id] = { qtTotal: Number(item.qt)||0, unid: item.unid||'' };
   });
   var dtG = new Date().toLocaleDateString('pt-BR');
   // FIX 1: Escapar HTML para evitar layout quebrado no PDF
@@ -1133,8 +1132,9 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
       // FIX 3: Separador \x00 (nunca aparece em nomes de insumos)
       var k=(it.descricao||'')+'\x00'+(it.detalhe||'');
       if(!iM[k]){
-        var dadosMapa = itensMap[k]||{};
-        iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||dadosMapa.unid||'',qT:dadosMapa.qtTotal||null,qP:0,qA:0,vl:0,fn:{}};
+        // Lookup por item_id (UUID) — exato e confiável
+        var dadosMapa = itensMapById[it.item_id]||{};
+        iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||dadosMapa.unid||'',qT:dadosMapa.qtTotal!==undefined?dadosMapa.qtTotal:null,qP:0,qA:0,vl:0,fn:{}};
       }
       var q=Number(it.qt_pedida)||0;
       iM[k].qP+=q; iM[k].vl+=Number(it.vl_total)||0;
@@ -1145,8 +1145,8 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
   });
   var iR=Object.values(iM).sort(function(a,b){ return a.desc.localeCompare(b.desc); }).map(function(ins,i){
     var qd=ins.qA-(ins.qR||0); var pc=ins.qA>0?Math.round((ins.qR||0)/ins.qA*100):0; // qd = comprometida mas nao recebida
-    var qTotalStr = ins.qT!==null ? String(ins.qT) : '\u2014';
-    var qPend = ins.qT!==null ? Math.max(0, ins.qT - ins.qA) : null;
+    var qTotalStr = ins.qT!==null && ins.qT!==undefined ? String(ins.qT) : '\u2014';
+    var qPend = (ins.qT!==null && ins.qT!==undefined) ? Math.max(0, ins.qT - ins.qA) : null;
     var qPendStr = qPend!==null ? String(qPend) : '\u2014';
     var qPendColor = qPend===null ? '#888' : qPend>0 ? '#c0392b' : '#3B6D11';
     // FIX 5: Sem espaço quando unidade está vazia
