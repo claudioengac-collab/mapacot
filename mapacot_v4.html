@@ -1107,7 +1107,7 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   // FIX 2: Data segura com T12:00:00 para evitar problema de fuso horário
   function fD(s){ if(!s) return '-'; var d=new Date(s.length===10?s+'T12:00:00':s); return isNaN(d.getTime())?'-':d.toLocaleDateString('pt-BR'); }
-  function fR(v){ return 'R$ '+Number(v||0).toFixed(2).replace('.',','); }
+  function fR(v){ var n=Number(v||0); if(isNaN(n)) return 'R$ 0,00'; return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   var sL={rascunho:'Rascunho',emitido:'Emitido',recebido:'Recebido',cancelado:'Cancelado'};
   var sC={rascunho:'#666',emitido:'#185FA5',recebido:'#3B6D11',cancelado:'#A32D2D'};
   var fi=[];
@@ -1188,13 +1188,9 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
     +'.tf{background:#f0eaff;font-weight:bold;}'
     +'.rod{text-align:center;font-size:8px;color:#bbb;margin-top:14px;border-top:1px solid #eee;padding-top:8px;}'
     +'</style>';
-  // DEBUG: mostrar dados recebidos para diagnostico
-  var debugItens = (itensDoMapa||[]).slice(0,5).map(function(x){ return esc(x.descricao||'?')+' qt='+x.qt+' id='+String(x.id).slice(0,8); }).join(' | ');
-  var debugPO = (pedidosFilt||[]).slice(0,3).map(function(po){ return 'PO-'+po.numero+' itens='+(po.itens||[]).map(function(it){ return esc(it.descricao||'?')+' item_id='+String(it.item_id||'').slice(0,8); }).join(','); }).join(' / ');
   return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
     +'<div class="hdr"><h2>RELATORIO DE PEDIDOS DE COMPRA</h2>'
     +'<p style="font-size:9px;opacity:.85;margin:3px 0 0">MAPACOT V4 CSS - Gerado em '+dtG+'</p></div>'
-    +'<div style="background:#fff3cd;border:1px solid #ffc107;padding:8px;margin:6px 0;font-size:8px;font-family:monospace"><b>DEBUG (remover apos teste)</b><br>itensDoMapa['+itensDoMapa.length+']: '+debugItens+'<br>POs: '+debugPO+'</div>'
     +'<div class="fb">Filtros: '+fi.join(' | ')+'</div>'
     +'<div class="kpi">'
     +'<div class="kc"><span class="kl">Total POs</span><span class="kv" style="color:#2a5298">'+pedidosFilt.length+'</span></div>'
@@ -1250,7 +1246,7 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
       + '<td style="font-size:9px;color:#555;">' + (it.detalhe||'') + '</td>'
       + '<td style="text-align:center;">' + (it.unid||'') + '</td>'
       + '<td style="text-align:right;">' + (it.qt_pedida||0) + '</td>'
-      + '<td style="text-align:right;">R$ ' + Number(it.vl_unit||0).toFixed(2).replace('.',',') + '</td>'
+      + '<td style="text-align:right;">R$ ' + Number(it.vl_unit||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td>'
       + '<td style="text-align:right;">R$ ' + Number(it.vl_total||0).toFixed(2).replace('.',',') + '</td>'
       + '</tr>';
   }).join('');
@@ -1265,7 +1261,7 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   var baseImp = subtotal-vlDesc+vlAcr;
   var vlFrete = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
   var vlImp   = impMode==='%'   ? baseImp*impVal/100    : impVal;
-  function fR(v){ return 'R$ '+Number(v||0).toFixed(2).replace('.',','); }
+  function fR(v){ var n=Number(v||0); if(isNaN(n)) return 'R$ 0,00'; return 'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   var finHTML = '';
   if(descVal||acrVal||freteVal||impVal){
     finHTML = '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#666;">Subtotal</td><td style="text-align:right;font-size:9px;">'+fR(subtotal)+'</td></tr>';
@@ -5944,7 +5940,7 @@ function ModalPedidoStep2(_ref_po2) {
       /*#__PURE__*/React.createElement('div', { style:bodyStyle },
         // KPIs
         /*#__PURE__*/React.createElement('div', { style:kpiRowStyle },
-          [['Itens no pedido', itemIds.length, '#2a5298'],['Qt. pendente total', itemIds.reduce(function(s,id){ return s+(poStatus[id]?poStatus[id].qtPend:0); },0)+' un','#b06000'],['POs a gerar', nPOs,'#7c3aed'],['Valor estimado','R$ '+valorTotal.toFixed(2).replace('.',','),'#3B6D11']].map(function(k,i){
+          [['Itens no pedido', itemIds.length, '#2a5298'],['Qt. pendente total', itemIds.reduce(function(s,id){ return s+(poStatus[id]?poStatus[id].qtPend:0); },0)+' un','#b06000'],['POs a gerar', nPOs,'#7c3aed'],['Valor estimado','R$ '+Number(valorTotal||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),'#3B6D11']].map(function(k,i){
             return /*#__PURE__*/React.createElement('div', { key:i, style:kpiCardStyle },
               /*#__PURE__*/React.createElement('div', { style:{fontSize:8,color:'#888',textTransform:'uppercase',marginBottom:3} }, k[0]),
               /*#__PURE__*/React.createElement('div', { style:{fontSize:15,fontWeight:'bold',color:k[2]} }, k[1])
@@ -5983,7 +5979,7 @@ function ModalPedidoStep2(_ref_po2) {
                 var forn = (mapa.fornecedores||[]).find(function(f){ return f.id===linha.fornId; });
                 var vlFmt = linha.vlUnit ? 'R$ '+Number(linha.vlUnit).toFixed(2).replace('.',',') : '—';
                 var vlTotal = (Number(linha.vlUnit)||0)*(Number(linha.qt)||0);
-                var vlTotalFmt = vlTotal>0 ? '= R$ '+vlTotal.toFixed(2).replace('.',',') : '';
+                var vlTotalFmt = vlTotal>0 ? '= R$ '+Number(vlTotal||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
                 return /*#__PURE__*/React.createElement('div', { key:idx, style:{display:'grid',gridTemplateColumns:'1fr auto auto auto',gap:8,alignItems:'center',marginBottom:6} },
                   /*#__PURE__*/React.createElement('select', {
                     value: linha.fornId||'',
@@ -6254,7 +6250,7 @@ function TelaPedidos(_ref_tp) {
       ),
       // KPIs
       /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',borderBottom:'1px solid #eee'} },
-        [['Total POs',kpis.total,'#2a5298'],['Valor total','R$ '+kpis.valor.toFixed(2).replace('.',','),'#7c3aed'],['Recebidos',kpis.recebidos,'#3B6D11'],['Pendentes',kpis.pendentes,'#b06000'],['Cancelados',kpis.cancelados,'#c0392b']].map(function(k,i){
+        [['Total POs',kpis.total,'#2a5298'],['Valor total','R$ '+Number(kpis.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),'#7c3aed'],['Recebidos',kpis.recebidos,'#3B6D11'],['Pendentes',kpis.pendentes,'#b06000'],['Cancelados',kpis.cancelados,'#c0392b']].map(function(k,i){
           return /*#__PURE__*/React.createElement('div', { key:i, style:{padding:'8px 10px',textAlign:'center',borderRight:i<4?'1px solid #eee':'none',background:'#f9f9f9'} },
             /*#__PURE__*/React.createElement('div', { style:{fontSize:8,color:'#888',textTransform:'uppercase',marginBottom:3} }, k[0]),
             /*#__PURE__*/React.createElement('div', { style:{fontSize:15,fontWeight:'bold',color:k[2]} }, k[1])
@@ -6283,7 +6279,7 @@ function TelaPedidos(_ref_tp) {
                 var qtIni = qtPedida;
                 var descPrincipal = itensPO.length>0?itensPO[0].descricao:po.fornecedor_nome;
                 var detPrincipal = itensPO.length>0?itensPO[0].detalhe:'';
-                var totalFmt = 'R$ '+Number(po.total||0).toFixed(2).replace('.',',');
+                var totalFmt = 'R$ '+Number(po.total||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
                 return /*#__PURE__*/React.createElement('tr', { key:po.id, style:{background:ri%2===0?'#fff':'#f9f9f9',opacity:po.status==='cancelado'?.55:1} },
                   /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',textAlign:'center',fontWeight:'bold',color:'#7c3aed',borderBottom:'1px solid #eee'} }, num),
                   /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',fontSize:9,borderBottom:'1px solid #eee'} }, po.obra||''),
