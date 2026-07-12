@@ -1089,15 +1089,17 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 
 
 // === V4 CSS - Relatorio Consolidado de Pedidos PDF ===
-var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
-  // Lookup de Qt.Total — duplo: por item_id (UUID) e por descricao+detalhe (fallback)
+var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
+  // Fonte 1: itensAtendidosMap (tem qtTotal já calculado, keyed por item.id)
+  itensAtendMap = itensAtendMap||{};
+  // Fonte 2: mapa.itens via descricao (fallback)
   var itensMapById = {};
   var itensMapByDesc = {};
   (itensDoMapa||[]).forEach(function(item){
     var qtN = Number(item.qt)||0;
     var data = { qtTotal: qtN, unid: item.unid||'' };
     if(item.id) itensMapById[item.id] = data;
-    var dk = (item.descricao||'')+'|||'+(item.detalhe||'');
+    var dk = String(item.descricao||'').trim().toUpperCase()+'|||'+String(item.detalhe||'').trim().toUpperCase();
     itensMapByDesc[dk] = data;
   });
   var dtG = new Date().toLocaleDateString('pt-BR');
@@ -1136,11 +1138,13 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
     (po.itens||[]).forEach(function(it){
       var k=(it.descricao||'')+'|||'+(it.detalhe||'');
       if(!iM[k]){
-        // Busca por item_id (UUID) OU por descricao+detalhe
-        var dadosMapa = itensMapById[it.item_id]
-          || itensMapByDesc[(it.descricao||'')+'|||'+(it.detalhe||'')]
-          || {};
-        var qTval = (dadosMapa.qtTotal!==undefined) ? dadosMapa.qtTotal : null;
+        // Triplo lookup: 1) itensAtendMap por item_id, 2) itensMapById por item_id, 3) desc+detalhe
+        var descKey = String(it.descricao||'').trim().toUpperCase()+'|||'+String(it.detalhe||'').trim().toUpperCase();
+        var fromAtend = itensAtendMap[it.item_id];
+        var fromId    = itensMapById[it.item_id];
+        var fromDesc  = itensMapByDesc[descKey];
+        var dadosMapa = fromAtend || fromId || fromDesc || {};
+        var qTval = dadosMapa.qtTotal!==undefined && dadosMapa.qtTotal!==null ? Number(dadosMapa.qtTotal)||0 : null;
         iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||dadosMapa.unid||'',qT:qTval,qP:0,qA:0,vl:0,fn:{}};
       }
       var q=Number(it.qt_pedida)||0;
@@ -1184,9 +1188,13 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
     +'.tf{background:#f0eaff;font-weight:bold;}'
     +'.rod{text-align:center;font-size:8px;color:#bbb;margin-top:14px;border-top:1px solid #eee;padding-top:8px;}'
     +'</style>';
+  // DEBUG: mostrar dados recebidos para diagnostico
+  var debugItens = (itensDoMapa||[]).slice(0,5).map(function(x){ return esc(x.descricao||'?')+' qt='+x.qt+' id='+String(x.id).slice(0,8); }).join(' | ');
+  var debugPO = (pedidosFilt||[]).slice(0,3).map(function(po){ return 'PO-'+po.numero+' itens='+(po.itens||[]).map(function(it){ return esc(it.descricao||'?')+' item_id='+String(it.item_id||'').slice(0,8); }).join(','); }).join(' / ');
   return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
     +'<div class="hdr"><h2>RELATORIO DE PEDIDOS DE COMPRA</h2>'
     +'<p style="font-size:9px;opacity:.85;margin:3px 0 0">MAPACOT V4 CSS - Gerado em '+dtG+'</p></div>'
+    +'<div style="background:#fff3cd;border:1px solid #ffc107;padding:8px;margin:6px 0;font-size:8px;font-family:monospace"><b>DEBUG (remover apos teste)</b><br>itensDoMapa['+itensDoMapa.length+']: '+debugItens+'<br>POs: '+debugPO+'</div>'
     +'<div class="fb">Filtros: '+fi.join(' | ')+'</div>'
     +'<div class="kpi">'
     +'<div class="kc"><span class="kl">Total POs</span><span class="kv" style="color:#2a5298">'+pedidosFilt.length+'</span></div>'
@@ -4244,6 +4252,7 @@ var _useState27 = useState(init),
     });
     itensAtendidosMap[item.id] = {
       atendido: qtTotal > 0 && qtPedida >= qtTotal,
+      qtTotal: qtTotal,
       qtPedida: qtPedida,
       pedidos: pedidosVinculados
     };
@@ -5728,7 +5737,8 @@ var _useState27 = useState(init),
   showPedidos && /*#__PURE__*/React.createElement(TelaPedidos, {
     pedidos: pedidos,
     mapa: mapa,
-    itensDoMapa: itensAtivos||[],
+    itensDoMapa: (mapa && mapa.itens)||[],
+    itensAtendidosMap: itensAtendidosMap,
     obras: (function(){
       var fromCad = cadastros.obras||[];
       var fromPed = (pedidos||[]).map(function(p){ return p.obra||''; }).filter(Boolean);
@@ -6150,7 +6160,7 @@ function ModalPedidoStep2(_ref_po2) {
 
 // ─── V4 CSS — Tela Pedidos ──────────────────────────────────────────────────
 function TelaPedidos(_ref_tp) {
-  var pedidos=_ref_tp.pedidos, mapa=_ref_tp.mapa, obras=_ref_tp.obras||[], itensDoMapa=_ref_tp.itensDoMapa||[], onClose=_ref_tp.onClose, onRefresh=_ref_tp.onRefresh;
+  var pedidos=_ref_tp.pedidos, mapa=_ref_tp.mapa, obras=_ref_tp.obras||[], itensDoMapa=_ref_tp.itensDoMapa||[], itensAtendidosMap=_ref_tp.itensAtendidosMap||{}, onClose=_ref_tp.onClose, onRefresh=_ref_tp.onRefresh;
   var onUpdateStatus=_ref_tp.onUpdateStatus, onPDF=_ref_tp.onPDF;
 
   var _sF=useState({obra:'',de:'',ate:'',insumo:'',fornecedor:'',status:''}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
@@ -6366,7 +6376,7 @@ function TelaPedidos(_ref_tp) {
               return true;
             });
             setShowRelModal(false);
-            abrirPDF(buildRelatorioPDF(ped, relFiltros, itensDoMapa));
+            abrirPDF(buildRelatorioPDF(ped, relFiltros, itensDoMapa, itensAtendidosMap));
           },
           style:{background:'#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor:'pointer',fontWeight:'bold'}
         },'Gerar Relatorio PDF')
