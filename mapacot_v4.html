@@ -5533,8 +5533,8 @@ function ModalPedidoStep1(_ref_po1) {
               var sel = itensSelecionados.indexOf(item.id)>=0;
               var qtPend = Math.max(0,(Number(item.qt)||0) - (ps.qtPedida||0));
               return /*#__PURE__*/React.createElement('tr', { key:item.id, onClick:function(){onToggle(item.id);}, style:{cursor:'pointer',background:sel?'#f5f0ff':'transparent'} },
-                /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 4px',borderBottom:'1px solid #eee'} },
-                  /*#__PURE__*/React.createElement('input', { type:'checkbox', checked:sel, onChange:function(){onToggle(item.id);}, style:{cursor:'pointer',accentColor:'#7c3aed'} })
+                /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 4px',borderBottom:'1px solid #eee'}, onClick:function(e){ e.stopPropagation(); } },
+                  /*#__PURE__*/React.createElement('input', { type:'checkbox', checked:sel, onChange:function(e){ e.stopPropagation(); onToggle(item.id); }, onClick:function(e){ e.stopPropagation(); }, style:{cursor:'pointer',accentColor:'#7c3aed'} })
                 ),
                 /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',fontWeight:'bold'} }, item.num),
                 /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
