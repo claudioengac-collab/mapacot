@@ -1090,10 +1090,15 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 
 // === V4 CSS - Relatorio Consolidado de Pedidos PDF ===
 var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
-  // Lookup de Qt.Total por item_id (UUID) — mais confiável que descricao+detalhe
+  // Lookup de Qt.Total — duplo: por item_id (UUID) e por descricao+detalhe (fallback)
   var itensMapById = {};
+  var itensMapByDesc = {};
   (itensDoMapa||[]).forEach(function(item){
-    itensMapById[item.id] = { qtTotal: Number(item.qt)||0, unid: item.unid||'' };
+    var qtN = Number(item.qt)||0;
+    var data = { qtTotal: qtN, unid: item.unid||'' };
+    if(item.id) itensMapById[item.id] = data;
+    var dk = (item.descricao||'')+'|||'+(item.detalhe||'');
+    itensMapByDesc[dk] = data;
   });
   var dtG = new Date().toLocaleDateString('pt-BR');
   // FIX 1: Escapar HTML para evitar layout quebrado no PDF
@@ -1129,12 +1134,14 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
   var iM={};
   pedidosFilt.forEach(function(po){
     (po.itens||[]).forEach(function(it){
-      // FIX 3: Separador \x00 (nunca aparece em nomes de insumos)
-      var k=(it.descricao||'')+'\x00'+(it.detalhe||'');
+      var k=(it.descricao||'')+'|||'+(it.detalhe||'');
       if(!iM[k]){
-        // Lookup por item_id (UUID) — exato e confiável
-        var dadosMapa = itensMapById[it.item_id]||{};
-        iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||dadosMapa.unid||'',qT:dadosMapa.qtTotal!==undefined?dadosMapa.qtTotal:null,qP:0,qA:0,vl:0,fn:{}};
+        // Busca por item_id (UUID) OU por descricao+detalhe
+        var dadosMapa = itensMapById[it.item_id]
+          || itensMapByDesc[(it.descricao||'')+'|||'+(it.detalhe||'')]
+          || {};
+        var qTval = (dadosMapa.qtTotal!==undefined) ? dadosMapa.qtTotal : null;
+        iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||dadosMapa.unid||'',qT:qTval,qP:0,qA:0,vl:0,fn:{}};
       }
       var q=Number(it.qt_pedida)||0;
       iM[k].qP+=q; iM[k].vl+=Number(it.vl_total)||0;
@@ -1145,7 +1152,7 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa) {
   });
   var iR=Object.values(iM).sort(function(a,b){ return a.desc.localeCompare(b.desc); }).map(function(ins,i){
     var qd=ins.qA-(ins.qR||0); var pc=ins.qA>0?Math.round((ins.qR||0)/ins.qA*100):0; // qd = comprometida mas nao recebida
-    var qTotalStr = ins.qT!==null && ins.qT!==undefined ? String(ins.qT) : '\u2014';
+    var qTotalStr = (ins.qT!==null && ins.qT!==undefined) ? String(ins.qT) : '\u2014';
     var qPend = (ins.qT!==null && ins.qT!==undefined) ? Math.max(0, ins.qT - ins.qA) : null;
     var qPendStr = qPend!==null ? String(qPend) : '\u2014';
     var qPendColor = qPend===null ? '#888' : qPend>0 ? '#c0392b' : '#3B6D11';
