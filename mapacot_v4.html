@@ -1131,7 +1131,7 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   var baseImp = subtotal-vlDesc+vlAcr;
   var vlFrete = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
   var vlImp   = impMode==='%'   ? baseImp*impVal/100    : impVal;
-  function fR(v){ return 'R$ '+Number(v).toFixed(4).replace(/\.?0+$/,'').replace('.',','); }
+  function fR(v){ return 'R$ '+Number(v||0).toFixed(2).replace('.',','); }
   var finHTML = '';
   if(descVal||acrVal||freteVal||impVal){
     finHTML = '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#666;">Subtotal</td><td style="text-align:right;font-size:9px;">'+fR(subtotal)+'</td></tr>';
@@ -4554,6 +4554,7 @@ var _useState27 = useState(init),
         key: item.id,
         title: _tooltipTitle,
         onTouchStart: _isAtendido ? function(e){
+          clearTimeout(window._poLockTimer);
           window._poLockTimer = setTimeout(function(){ setTooltipItemId(item.id); }, 600);
         } : undefined,
         onTouchEnd: _isAtendido ? function(){ clearTimeout(window._poLockTimer); } : undefined,
@@ -5473,7 +5474,7 @@ var _useState27 = useState(init),
     onFinanceiro: setPoFinanceiro,
     onVoltar: function(){ setShowPedidoConfig(false); setShowPedidoModal(true); },
     onClose: function(){ setShowPedidoConfig(false); },
-    onGerar: function(config, finConfig){
+    onGerar: function(config, finConfig, onDone){
       // Agrupar por fornecedor
       var grupos = {};
       Object.keys(config).forEach(function(itemId){
@@ -5490,15 +5491,21 @@ var _useState27 = useState(init),
           }
           var vlUnit = Number(linha.vlUnit)||0;
           var qtN = Number(linha.qt)||0;
-          grupos[k].itens.push({
-            item_id: item.id,
-            descricao: item.descricao||'',
-            detalhe: item.detalhe||'',
-            unid: item.unid||'',
-            qt_pedida: qtN,
-            vl_unit: vlUnit,
-            vl_total: vlUnit * qtN
-          });
+          var existingItem = grupos[k].itens.find(function(i){ return i.item_id === item.id; });
+          if (existingItem) {
+            existingItem.qt_pedida += qtN;
+            existingItem.vl_total  += vlUnit * qtN;
+          } else {
+            grupos[k].itens.push({
+              item_id: item.id,
+              descricao: item.descricao||'',
+              detalhe: item.detalhe||'',
+              unid: item.unid||'',
+              qt_pedida: qtN,
+              vl_unit: vlUnit,
+              vl_total: vlUnit * qtN
+            });
+          }
         });
       });
       var fornLista = Object.values(grupos);
@@ -5543,9 +5550,11 @@ var _useState27 = useState(init),
         Promise.all(promises).then(function(novos){
           sbGetPedidos().then(function(d){ setPedidos(d||[]); });
           setShowPedidoConfig(false);
+          if(onDone) onDone();
           alert('✅ ' + novos.length + ' pedido(s) gerado(s) com sucesso!\n' + novos.map(function(p){ return 'PO-'+String(p.numero).padStart(3,'0')+' \u2192 '+p.fornecedor_nome; }).join('\n'));
           setShowPedidos(true);
         }).catch(function(e){
+          if(onDone) onDone();
           alert('❌ Erro ao gerar pedidos:\n' + (e.message||'Verifique sua conexão com a internet e tente novamente.'));
         });
       });
@@ -5684,6 +5693,7 @@ function ModalPedidoStep2(_ref_po2) {
   var config=_ref_po2.config, onConfig=_ref_po2.onConfig;
   var poFinanceiro=_ref_po2.poFinanceiro||{}, onFinanceiro=_ref_po2.onFinanceiro;
   var onVoltar=_ref_po2.onVoltar, onClose=_ref_po2.onClose, onGerar=_ref_po2.onGerar;
+  var _sGer=useState(false),gerando=_slicedToArray(_sGer,2)[0],setGerando=_slicedToArray(_sGer,2)[1];
 
   var itemIds = Object.keys(config||{});
 
@@ -5714,7 +5724,7 @@ function ModalPedidoStep2(_ref_po2) {
   var hdrStyle = { background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between' };
   var bodyStyle = { padding:14,overflowY:'auto',flex:1 };
   var ftrStyle = { display:'flex',gap:8,padding:'12px 14px',borderTop:'1px solid #eee',alignItems:'center' };
-  var kpiRowStyle = { display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:14 };
+  var kpiRowStyle = { display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginBottom:14 };
   var kpiCardStyle = { background:'#f9f9f9',border:'1px solid #e0e0e0',borderRadius:5,padding:'8px 10px',textAlign:'center' };
 
   function updateLinha(itemId, idx, field, val) {
@@ -5778,7 +5788,7 @@ function ModalPedidoStep2(_ref_po2) {
               /*#__PURE__*/React.createElement('span', { style:{background:'#eee',padding:'2px 6px',borderRadius:3,fontSize:9,color:'#666'} }, item.unid||'')
             ),
             // Qt boxes
-            /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderBottom:'1px solid #eee'} },
+            /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(2,1fr)',borderBottom:'1px solid #eee'} },
               [['Qt. Inicial',ps.qtTotal,'#2a5298'],['Qt. Atendida',ps.qtAtendida,'#3B6D11'],['Qt. Pendente',ps.qtPend,'#b06000'],['Tot. Atendida?',ps.qtPend===0?'✅ SIM':'NÃO',ps.qtPend===0?'#3B6D11':'#b06000']].map(function(b,i){
                 return /*#__PURE__*/React.createElement('div', { key:i, style:{padding:'6px 10px',textAlign:'center',borderRight:i<3?'1px solid #eee':'none'} },
                   /*#__PURE__*/React.createElement('div', { style:{fontSize:8,color:'#888',textTransform:'uppercase',marginBottom:2} }, b[0]),
@@ -5877,6 +5887,13 @@ function ModalPedidoStep2(_ref_po2) {
           var vlFrete  = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
           var vlImp    = impMode==='%'  ? baseImp*impVal/100   : impVal;
           var totalFin = baseImp + vlImp + vlFrete;
+          function updateFin(field, val){
+            onFinanceiro(function(prev){
+              var n = Object.assign({}, prev);
+              n[fid] = Object.assign({}, n[fid]||{}, _defineProperty({},field,val));
+              return n;
+            });
+          }
           function updateFinMode(field, mode){
             onFinanceiro(function(prev){
               var n = Object.assign({}, prev);
@@ -5888,27 +5905,38 @@ function ModalPedidoStep2(_ref_po2) {
           function finInput(label, field, defaultMode){
             var curMode = (poFinanceiro[fid]||{})[field+'_mode']||defaultMode;
             var curVal  = (poFinanceiro[fid]||{})[field]||'';
-            return /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
-              /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#666',textTransform:'uppercase'} }, label),
-              /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:3} },
-                /*#__PURE__*/React.createElement('div', { style:{display:'flex',borderRadius:4,overflow:'hidden',border:'1px solid #d4b8ff'} },
-                  ['%','R$'].map(function(m){
-                    return /*#__PURE__*/React.createElement('button', {
-                      key:m,
-                      onClick: function(){ updateFin(field,''); updateFinMode(field,m); },
-                      style:{padding:'3px 7px',fontSize:9,border:'none',cursor:'pointer',fontWeight:'bold',
-                        background: curMode===m ? '#7c3aed' : '#f0eaff',
-                        color: curMode===m ? '#fff' : '#7c3aed'}
-                    }, m);
-                  })
-                ),
-                /*#__PURE__*/React.createElement('input', {
-                  type:'number', min:0, step:'0.0001',
-                  value: curVal,
-                  onChange: function(e){ updateFin(field, e.target.value); },
-                  placeholder:'0',
-                  style:{width:65,padding:'4px 5px',border:'1px solid #d4b8ff',borderRadius:4,fontSize:11,textAlign:'center'}
+            return /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:6,background:'#fff',border:'1px solid #e0d0ff',borderRadius:6,padding:'8px 10px'} },
+              /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, label),
+              /*#__PURE__*/React.createElement('div', { style:{display:'flex',borderRadius:5,overflow:'hidden',border:'1px solid #7c3aed',marginBottom:4} },
+                ['%','R$'].map(function(m){
+                  return /*#__PURE__*/React.createElement('button', {
+                    key:m,
+                    onClick: function(e){ e.preventDefault(); updateFin(field,''); updateFinMode(field,m); },
+                    style:{
+                      flex:1, padding:'8px 4px', fontSize:11, border:'none',
+                      cursor:'pointer', fontWeight:'bold', minHeight:36,
+                      background: curMode===m ? '#7c3aed' : '#f5f0ff',
+                      color: curMode===m ? '#fff' : '#7c3aed'
+                    }
+                  }, m);
                 })
+              ),
+              /*#__PURE__*/React.createElement('input', {
+                type:'number', min:0, step:'0.0001',
+                value: curVal,
+                onChange: function(e){ updateFin(field, e.target.value); },
+                placeholder: curMode==='%' ? 'Ex: 10,5' : 'Ex: 14,4564',
+                style:{
+                  width:'100%', padding:'8px 10px',
+                  border:'1px solid #d4b8ff', borderRadius:5,
+                  fontSize:14, textAlign:'center', boxSizing:'border-box',
+                  minHeight:40
+                }
+              }),
+              curVal && !isNaN(Number(curVal)) && Number(curVal) > 0 && /*#__PURE__*/React.createElement('div', { style:{fontSize:9,color:'#3B6D11',textAlign:'center',fontWeight:'bold'} },
+                curMode==='%'
+                  ? '= ' + fmtR(subtotal*Number(curVal)/100)
+                  : fmtR(Number(curVal))
               )
             );
           }
@@ -5916,14 +5944,14 @@ function ModalPedidoStep2(_ref_po2) {
             /*#__PURE__*/React.createElement('div', { style:{fontWeight:'bold',fontSize:10,color:'#5b21b6',marginBottom:8} },
               gNome + ' — Subtotal: ' + fmtR(subtotal)
             ),
-            /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:8} },
+            /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10} },
               finInput('Desconto','desconto','%'),
               finInput('Acréscimo','acrescimo','%'),
               finInput('Frete','frete','R$'),
               finInput('Impostos','impostos','%')
             ),
-            /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,fontSize:9,color:'#666',background:'#f0eaff',padding:'6px 8px',borderRadius:4} },
-              vlDesc>0 && /*#__PURE__*/React.createElement('span', null, '- Desc: ' + fmtR(vlDesc)),
+            (vlDesc>0||vlAcr>0||vlFrete>0||vlImp>0) && /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexWrap:'wrap',gap:6,fontSize:10,color:'#666',background:'#f0eaff',padding:'8px 10px',borderRadius:5,marginBottom:8} },
+              vlDesc>0 && /*#__PURE__*/React.createElement('span', null, '\u2212 Desc: ' + fmtR(vlDesc)),
               vlAcr>0 && /*#__PURE__*/React.createElement('span', null, '+ Acr: ' + fmtR(vlAcr)),
               vlFrete>0 && /*#__PURE__*/React.createElement('span', null, '+ Frete: ' + fmtR(vlFrete)),
               vlImp>0 && /*#__PURE__*/React.createElement('span', null, '+ Imp: ' + fmtR(vlImp))
@@ -5943,9 +5971,10 @@ function ModalPedidoStep2(_ref_po2) {
         /*#__PURE__*/React.createElement('button', { onClick:onVoltar, style:{background:'#2a5298',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, '\u2190 Voltar'),
         /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, 'Cancelar'),
         /*#__PURE__*/React.createElement('button', {
-          onClick: function(){ onGerar(config, poFinanceiro); },
-          style:{background:'#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor:'pointer',fontWeight:'bold'}
-        }, '\uD83D\uDED2 Gerar Pedidos')
+          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }); },
+          disabled: gerando,
+          style:{background: gerando ? '#9d6fe8' : '#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor: gerando ? 'not-allowed' : 'pointer',fontWeight:'bold',opacity: gerando ? 0.7 : 1}
+        }, gerando ? '\u23F3 Gerando...' : '\uD83D\uDED2 Gerar Pedidos')
       )
     )
   );
