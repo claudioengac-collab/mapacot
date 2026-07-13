@@ -334,6 +334,7 @@ input{text-transform:uppercase;}
 input[type=password]{text-transform:none;}
 @media(max-width:640px){
   html{width:100%;overflow-x:hidden;overscroll-behavior:none;}body,#root{width:100%;overscroll-behavior:none;}
+  @keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
   .hdr-nav .hdr-lbl{display:none!important;width:0!important;overflow:hidden!important;}
   .hdr-nav button{padding:7px 9px!important;min-width:0;}
   .rsp-appbar{flex-wrap:wrap!important;padding:8px 10px!important;gap:6px!important;}
@@ -4296,8 +4297,9 @@ var _useState27 = useState(init),
   var calcVLResumo = function calcVLResumo() {
     return resumoTotal - (parseMoney(rodapeResumo.desconto) || 0) + (parseMoney(rodapeResumo.impostos) || 0) + (parseMoney(rodapeResumo.frete) || 0);
   };
+  // FIX: usar fornecedoresVisiveis para que colunas ocultas desapareçam completamente
   var chunks = [];
-  for (var i = 0; i < fornecedores.length; i += CHUNK_SIZE) chunks.push(fornecedores.slice(i, i + CHUNK_SIZE));
+  for (var i = 0; i < fornecedoresVisiveis.length; i += CHUNK_SIZE) chunks.push(fornecedoresVisiveis.slice(i, i + CHUNK_SIZE));
   if (chunks.length === 0) chunks.push([]);
   var RODAPE_ROWS = [{
     key: "desconto",
@@ -5321,19 +5323,26 @@ var _useState27 = useState(init),
       gap: 5,
       position: "relative"
     })
-  }, "\uD83D\uDC41 COLUNAS"), showColPanel && /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDC41 COLUNAS"), showColPanel && /*#__PURE__*/React.createElement(React.Fragment, null,
+    /*#__PURE__*/React.createElement("div", {
+      onClick: function(){ setShowColPanel(false); },
+      style: { position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:9998 }
+    }),
+    /*#__PURE__*/React.createElement("div", {
     style: {
-      position: "absolute",
-      top: "110%",
-      right: 0,
+      position: "fixed",
+      top: "60px",
+      right: "8px",
       background: "#fff",
       borderRadius: 10,
-      boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+      boxShadow: "0 4px 24px rgba(0,0,0,0.28)",
       padding: "14px 18px",
       zIndex: 9999,
       minWidth: 240,
-      maxHeight: 400,
-      overflowY: "auto"
+      maxHeight: "70vh",
+      overflowY: "auto",
+      overscrollBehavior: "contain",
+      animation: "fadeInDown 0.15s ease"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -5408,7 +5417,8 @@ var _useState27 = useState(init),
         maxWidth: 180
       }
     }, f.nome || "FORNECEDOR"));
-  }))), /*#__PURE__*/React.createElement("button", {
+  }))
+  )), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
       return setShowTheme(function (s) {
         return !s;
