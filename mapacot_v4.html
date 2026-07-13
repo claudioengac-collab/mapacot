@@ -674,8 +674,14 @@ var sbDeleteOrcamento = function(obraId) {
 };
 // ─── PEDIDOS DE COMPRA — SUPABASE ─────────────────────────────────────────────
 var sbGetPedidos = function() {
-  return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=*&order=numero.desc&limit=500', { headers: SB })
+  return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=*&order=numero.desc&limit=1000', { headers: SB })
     .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(d){
+      if(d && d.length === 1000){
+        console.warn('MAPACOT: limite de 1000 pedidos atingido — pedidos mais antigos podem não aparecer.');
+      }
+      return d||[];
+    })
     .catch(function(){ return []; });
 };
 var sbSavePedido = function(po) {
@@ -4239,7 +4245,10 @@ var _useState27 = useState(init),
   var T = getTheme(mapa.corTema);
   // filteredItens e itensVisiveis ANTES de totalBruto e bestFornId (que os usam)
   var filteredItens = filter ? itens.filter(function (i) {
-    return i.descricao.toUpperCase().includes(filter.toUpperCase());
+    var termo = filter.trim().toUpperCase();
+    if (!termo) return true;
+    return (i.descricao||'').toUpperCase().includes(termo) ||
+           (i.detalhe||'').toUpperCase().includes(termo);
   }) : itens;
   var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
   var fornecedoresVisiveis = fornecedores.filter(function(f) { return !fornOcultos.has(f.id); });
@@ -5326,6 +5335,7 @@ var _useState27 = useState(init),
   }, "\uD83D\uDC41 COLUNAS"), showColPanel && /*#__PURE__*/React.createElement(React.Fragment, null,
     /*#__PURE__*/React.createElement("div", {
       onClick: function(){ setShowColPanel(false); },
+      onKeyDown: function(e){ e.stopPropagation(); },
       style: { position:"fixed", top:0, left:0, right:0, bottom:0, zIndex:9998 }
     }),
     /*#__PURE__*/React.createElement("div", {
@@ -7756,7 +7766,9 @@ function App() {
                 return m.id === updated.id ? updated : m;
               });
             });
-            sbSaveMapa(updated).catch(function () {});
+            sbSaveMapa(updated).catch(function (e) {
+              console.error('MAPACOT: Falha ao salvar mapa no servidor:', e && e.message || e);
+            });
             setCurrent(updated);
           case 1:
             return _context1.a(2);
