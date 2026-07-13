@@ -584,6 +584,8 @@ var sbSaveCadastros = /*#__PURE__*/function () {
               dados: main,
               atualizado_em: new Date().toISOString()
             })
+          }).then(function(r){
+            if(!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar cadastros ('+r.status+'): '+t); });
           });
         case 1:
           return _context6.a(2);
@@ -7671,8 +7673,13 @@ function App() {
         return normalize(x) === v;
       })) return prev;
       var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, [].concat(_toConsumableArray(lista), [v]).sort()));
-      if (tipo === "insumos") sbSaveInsumos(updated.insumos).catch(function () {});
-      else sbSaveCadastros(updated).catch(function () {});
+      if (tipo === "insumos") sbSaveInsumos(updated.insumos).catch(function (e) {
+        console.error('MAPACOT: Erro ao salvar insumos:', e);
+      });
+      else sbSaveCadastros(updated).catch(function (e) {
+        console.error('MAPACOT: Erro ao salvar cadastros:', e);
+        alert('\u26A0\uFE0F N\u00e3o foi poss\u00edvel salvar o cadastro no servidor.\nVerifique sua conex\u00e3o e tente novamente.');
+      });
       return updated;
     });
   }, []);
