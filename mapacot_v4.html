@@ -5820,6 +5820,15 @@ function ModalPedidoStep1(_ref_po1) {
   });
 
   var qtSel = itensSelecionados.length;
+  var _sFiltro = useState(''), filtroStep1 = _slicedToArray(_sFiltro,2)[0], setFiltroStep1 = _slicedToArray(_sFiltro,2)[1];
+  // FIX 2: trim calculado uma vez só
+  var termoBusca = filtroStep1.trim().toUpperCase();
+  var itensFiltrados = termoBusca
+    ? (itens||[]).filter(function(item){
+        return (item.descricao||'').toUpperCase().includes(termoBusca) ||
+               (item.detalhe||'').toUpperCase().includes(termoBusca);
+      })
+    : (itens||[]);
   var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12,overscrollBehavior:'none' };
   var modalStyle = { background:'#fff',borderRadius:8,overflow:'hidden',width:'100%',maxWidth:700,maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 8px 32px rgba(0,0,0,0.3)' };
   var hdrStyle = { background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between' };
@@ -5840,13 +5849,40 @@ function ModalPedidoStep1(_ref_po1) {
           /*#__PURE__*/React.createElement('strong', null, 'independente'),
           ' do campo COMPRA existente no mapa.'
         ),
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,marginBottom:10,background:'#f9f6ff',border:'1px solid #d4b8ff',borderRadius:6,padding:'6px 10px'} },
+          /*#__PURE__*/React.createElement('span', { style:{fontSize:13,color:'#7c3aed'} }, '\uD83D\uDD0D'),
+          /*#__PURE__*/React.createElement('input', {
+            type:'text',
+            value: filtroStep1,
+            onChange: function(e){ setFiltroStep1(e.target.value); },
+            placeholder: 'Buscar insumo por descrição ou detalhe...',
+            maxLength: 80,
+            inputMode: 'search',
+            style:{flex:1,border:'none',background:'transparent',fontSize:11,outline:'none',color:'#333'}
+          }),
+          termoBusca && /*#__PURE__*/React.createElement('span', {
+            onClick: function(){ setFiltroStep1(''); },
+            style:{cursor:'pointer',fontSize:12,color:'#aaa',padding:'4px 10px',minWidth:32,textAlign:'center'}
+          }, '\u2715')
+        ),
         /*#__PURE__*/React.createElement('table', { style:{width:'100%',borderCollapse:'collapse',fontSize:10} },
           /*#__PURE__*/React.createElement('thead', null,
             /*#__PURE__*/React.createElement('tr', null,
               /*#__PURE__*/React.createElement('th', { style:Object.assign({},thStyle,{width:36}) },
                 /*#__PURE__*/React.createElement('input', { type:'checkbox',
-                  checked: itensSelecionados.length===(itens||[]).length && (itens||[]).length>0,
-                  onChange: function(e){ onToggleAll(e.target.checked?(itens||[]).map(function(i){return i.id;}):[]) },
+                  checked: itensFiltrados.length>0 && itensFiltrados.every(function(i){ return itensSelecionados.indexOf(i.id)>=0; }),
+                  onChange: function(e){
+                    var ids = itensFiltrados.map(function(i){ return i.id; });
+                    if(e.target.checked){
+                      // Adiciona filtrados aos já selecionados sem remover outros
+                      var novos = itensSelecionados.slice();
+                      ids.forEach(function(id){ if(novos.indexOf(id)<0) novos.push(id); });
+                      onToggleAll(novos);
+                    } else {
+                      // Remove só os filtrados
+                      onToggleAll(itensSelecionados.filter(function(id){ return ids.indexOf(id)<0; }));
+                    }
+                  },
                   style:{cursor:'pointer'} })
               ),
               ['ITEM','DESCRIÇÃO / DETALHE','QT. TOTAL','JÁ PEDIDA','PENDENTE','PO STATUS'].map(function(h,i){
@@ -5855,7 +5891,13 @@ function ModalPedidoStep1(_ref_po1) {
             )
           ),
           /*#__PURE__*/React.createElement('tbody', null,
-            (itens||[]).map(function(item){
+            itensFiltrados.length === 0
+              ? /*#__PURE__*/React.createElement('tr', null,
+                  /*#__PURE__*/React.createElement('td', { colSpan:7, style:{textAlign:'center',padding:24,color:'#888',fontSize:11} },
+                    '\uD83D\uDD0D Nenhum insumo encontrado para "' + termoBusca + '"'
+                  )
+                )
+              : itensFiltrados.map(function(item){
               var ps = poStatus[item.id]||{};
               var sel = itensSelecionados.indexOf(item.id)>=0;
               var qtPend = Math.max(0,(Number(item.qt)||0) - (ps.qtPedida||0));
@@ -5889,8 +5931,18 @@ function ModalPedidoStep1(_ref_po1) {
       ),
       /*#__PURE__*/React.createElement('div', { style:ftrStyle },
         /*#__PURE__*/React.createElement('span', { style:{flex:1,fontSize:10,color:'#666'} },
-          /*#__PURE__*/React.createElement('strong', { style:{color:'#7c3aed'} }, qtSel),
-          ' item(s) selecionado(s)'
+          termoBusca
+            ? /*#__PURE__*/React.createElement('span', null,
+                /*#__PURE__*/React.createElement('strong', { style:{color:'#7c3aed'} }, qtSel),
+                ' selecionado(s) \u00B7 ',
+                /*#__PURE__*/React.createElement('span', { style:{color:'#888'} },
+                  itensFiltrados.length + ' de ' + (itens||[]).length + ' itens vis\u00edveis'
+                )
+              )
+            : /*#__PURE__*/React.createElement('span', null,
+                /*#__PURE__*/React.createElement('strong', { style:{color:'#7c3aed'} }, qtSel),
+                ' item(s) selecionado(s)'
+              )
         ),
         /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, 'Cancelar'),
         /*#__PURE__*/React.createElement('button', {
