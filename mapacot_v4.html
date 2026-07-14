@@ -1302,6 +1302,7 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
     + '<div class="box"><label>Número do Pedido</label><span style="color:#7c3aed;font-size:16px;">' + num + '</span></div>'
     + '<div class="box"><label>Obra / Projeto</label><span>' + (po.obra||'') + '</span></div>'
     + '<div class="box"><label>Data de Emissão</label><span>' + dt + '</span></div>'
+    + (po.forma_pagamento ? '<div class="box"><label>Forma de Pagamento</label><span>' + esc(po.forma_pagamento) + '</span></div>' : '')
     + '</div>'
     + '<table>'
     + '<thead><tr><th>#</th><th>Descrição</th><th>Detalhe</th><th>Unid.</th><th style="text-align:right">Qt.</th><th style="text-align:right">Vl. Unit.</th><th style="text-align:right">Vl. Total</th></tr></thead>'
@@ -3917,6 +3918,9 @@ var _useState27 = useState(init),
   var _useStatePOM=useState(false),showPedidoModal=_slicedToArray(_useStatePOM,2)[0],setShowPedidoModal=_slicedToArray(_useStatePOM,2)[1];
   var _useStatePOC=useState(false),showPedidoConfig=_slicedToArray(_useStatePOC,2)[0],setShowPedidoConfig=_slicedToArray(_useStatePOC,2)[1];
   var _useStatePOS=useState(false),showPedidos=_slicedToArray(_useStatePOS,2)[0],setShowPedidos=_slicedToArray(_useStatePOS,2)[1];
+  // Estados para edição de pedido existente
+  var _useStatePOEdit=useState(null),poEmEdicao=_slicedToArray(_useStatePOEdit,2)[0],setPoEmEdicao=_slicedToArray(_useStatePOEdit,2)[1];
+  var _useStatePOEShow=useState(false),showPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[0],setShowPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[1];
   var _useStateSIP=useState([]),itensSelecionadosPO=_slicedToArray(_useStateSIP,2)[0],setItensSelecionadosPO=_slicedToArray(_useStateSIP,2)[1];
   var _useStatePOCfg=useState({}),pedidoConfig=_slicedToArray(_useStatePOCfg,2)[0],setPedidoConfig=_slicedToArray(_useStatePOCfg,2)[1];
   var _useStatePOFin=useState({}),poFinanceiro=_slicedToArray(_useStatePOFin,2)[0],setPoFinanceiro=_slicedToArray(_useStatePOFin,2)[1];
@@ -5660,7 +5664,7 @@ var _useState27 = useState(init),
     onFinanceiro: setPoFinanceiro,
     onVoltar: function(){ setShowPedidoConfig(false); setShowPedidoModal(true); },
     onClose: function(){ setShowPedidoConfig(false); },
-    onGerar: function(config, finConfig, onDone){
+    onGerar: function(config, finConfig, onDone, formaPagamento){
       // Agrupar por fornecedor
       var grupos = {};
       Object.keys(config).forEach(function(itemId){
@@ -5746,6 +5750,7 @@ var _useState27 = useState(init),
             },
             total: total,
             status: 'rascunho',
+            forma_pagamento: formaPagamento||'',
             data_emissao: new Date().toISOString(),
             criado_em: new Date().toISOString()
           };
@@ -5765,6 +5770,84 @@ var _useState27 = useState(init),
     }
   }),
   // ── TELA PEDIDOS ─────────────────────────────────────────────────────────
+  // ── Modal Edição de Pedido Existente ──────────────────────────────────────
+  showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
+    mapa: mapa,
+    itens: itensAtivos,
+    pedidos: pedidos,
+    modoEdicao: true,
+    formaPagamentoInicial: poEmEdicao.forma_pagamento||'',
+    config: (function(){
+      var cfg = {};
+      (poEmEdicao.itens||[]).forEach(function(it){
+        cfg[it.item_id] = [{ fornId: poEmEdicao.fornecedor_id, fornNome: poEmEdicao.fornecedor_nome, qt: it.qt_pedida, vlUnit: it.vl_unit, obs: '' }];
+      });
+      return cfg;
+    })(),
+    onConfig: function(){},
+    poFinanceiro: poFinanceiro,
+    onFinanceiro: setPoFinanceiro,
+    onVoltar: function(){},
+    onClose: function(){ setShowPedidoEdicao(false); setPoEmEdicao(null); setPoFinanceiro({}); },
+    onGerar: function(config, finConfig, onDone, formaPagamento){
+      // Modo edição: recalcula itens e total a partir do config atual (igual ao fluxo novo)
+      var itensEditados = [];
+      var sub = 0;
+      Object.keys(config).forEach(function(itemId){
+        var item = itensAtivos.find(function(i){ return i.id===itemId; });
+        if(!item) {
+          // item pode ter sido removido do mapa - usar dados originais do PO
+          var itOrig = (poEmEdicao.itens||[]).find(function(i){ return i.item_id===itemId; });
+          if(itOrig){ itensEditados.push(itOrig); sub += Number(itOrig.vl_total||0); }
+          return;
+        }
+        (config[itemId]||[]).forEach(function(linha){
+          if(!linha.fornId || !linha.qt || Number(linha.qt)<=0) return;
+          var vlUnit = Number(linha.vlUnit)||0;
+          var qtN = Number(linha.qt)||0;
+          var vlTot = vlUnit * qtN;
+          sub += vlTot;
+          itensEditados.push({
+            item_id: item.id,
+            descricao: item.descricao||'',
+            detalhe: item.detalhe||'',
+            unid: item.unid||'',
+            qt_pedida: qtN,
+            qt_total: Number(item.qt)||0,
+            vl_unit: vlUnit,
+            vl_total: vlTot
+          });
+        });
+      });
+      var fin = (finConfig||{})[poEmEdicao.fornecedor_id]||{};
+      var parsePV = function(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
+      var dV=parsePV(fin.desconto), dM=fin.desconto_mode||'%';
+      var aV=parsePV(fin.acrescimo), aM=fin.acrescimo_mode||'%';
+      var fV=parsePV(fin.frete), fM=fin.frete_mode||'R$';
+      var iV=parsePV(fin.impostos), iM=fin.impostos_mode||'%';
+      var vlD=dM==='%'?sub*dV/100:dV, vlA=aM==='%'?sub*aV/100:aV;
+      var base=sub-vlD+vlA;
+      var vlF=fM==='%'?sub*fV/100:fV, vlI=iM==='%'?base*iV/100:iV;
+      var total=base+vlI+vlF;
+      var campos = {
+        itens: itensEditados,
+        financeiro: {desconto:dV,desconto_mode:dM,acrescimo:aV,acrescimo_mode:aM,frete:fV,frete_mode:fM,impostos:iV,impostos_mode:iM},
+        total: total,
+        forma_pagamento: formaPagamento||''
+      };
+      sbUpdatePedido(poEmEdicao.id, campos).then(function(){
+        sbGetPedidos().then(function(d){ setPedidos(d||[]); });
+        setShowPedidoEdicao(false);
+        setPoEmEdicao(null);
+        setPoFinanceiro({});
+        if(onDone) onDone();
+        alert('\u2705 Pedido PO-'+String(poEmEdicao.numero).padStart(3,'0')+' atualizado com sucesso!');
+      }).catch(function(e){
+        if(onDone) onDone();
+        alert('\u274C Erro ao salvar edi\u00e7\u00e3o do pedido. Verifique sua conex\u00e3o e tente novamente.');
+      });
+    }
+  }),
   showPedidos && /*#__PURE__*/React.createElement(TelaPedidos, {
     pedidos: pedidos,
     mapa: mapa,
@@ -5778,6 +5861,12 @@ var _useState27 = useState(init),
     })(),
     onClose: function(){ setShowPedidos(false); },
     onRefresh: function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); },
+    onEditarPedido: function(po){
+      // Abrir Step2 em modo edição com dados do PO existente
+      setPoEmEdicao(po);
+      setPoFinanceiro({ [po.fornecedor_id]: po.financeiro||{} });
+      setShowPedidoEdicao(true);
+    },
     onUpdateStatus: function(id, status){
       // FIX: registra data de emissão real quando PO é emitido
       var campos = { status: status };
@@ -5840,7 +5929,7 @@ function ModalPedidoStep1(_ref_po1) {
   return /*#__PURE__*/React.createElement('div', { style:ovStyle },
     /*#__PURE__*/React.createElement('div', { style:modalStyle },
       /*#__PURE__*/React.createElement('div', { style:hdrStyle },
-        /*#__PURE__*/React.createElement('span', { style:{fontSize:12,fontWeight:'bold'} }, '\uD83D\uDED2 CRIAR PEDIDO DE COMPRA \u00B7 ' + (mapa.obra||'')),
+        /*#__PURE__*/React.createElement('span', { style:{fontSize:12,fontWeight:'bold'} }, (modoEdicao ? '\u270F\uFE0F EDITAR PEDIDO DE COMPRA \u00B7 ' : '\uD83D\uDED2 CRIAR PEDIDO DE COMPRA \u00B7 ') + (mapa.obra||'')),
         /*#__PURE__*/React.createElement('span', { style:{cursor:'pointer',fontSize:16,opacity:.8}, onClick:onClose }, '\u2715')
       ),
       /*#__PURE__*/React.createElement('div', { style:bodyStyle },
@@ -5960,6 +6049,8 @@ function ModalPedidoStep2(_ref_po2) {
   var config=_ref_po2.config, onConfig=_ref_po2.onConfig;
   var poFinanceiro=_ref_po2.poFinanceiro||{}, onFinanceiro=_ref_po2.onFinanceiro;
   var onVoltar=_ref_po2.onVoltar, onClose=_ref_po2.onClose, onGerar=_ref_po2.onGerar;
+  var modoEdicao=_ref_po2.modoEdicao||false;
+  var _sFP=useState(_ref_po2.formaPagamentoInicial||''),formaPagamento=_slicedToArray(_sFP,2)[0],setFormaPagamento=_slicedToArray(_sFP,2)[1];
   var _sGer=useState(false),gerando=_slicedToArray(_sGer,2)[0],setGerando=_slicedToArray(_sGer,2)[1];
 
   var itemIds = Object.keys(config||{});
@@ -6232,10 +6323,20 @@ function ModalPedidoStep2(_ref_po2) {
         /*#__PURE__*/React.createElement('span', { style:{flex:1,fontSize:10,color:'#666'} },
           nPOs>0 && /*#__PURE__*/React.createElement(React.Fragment, null, 'Ser\u00E3o gerados ', /*#__PURE__*/React.createElement('strong', {style:{color:'#7c3aed'}}, nPOs), ' pedido(s)')
         ),
-        /*#__PURE__*/React.createElement('button', { onClick:onVoltar, style:{background:'#2a5298',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, '\u2190 Voltar'),
+                /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,background:'#f9f6ff',border:'1px solid #d4b8ff',borderRadius:6,padding:'6px 10px',minWidth:200} },
+          /*#__PURE__*/React.createElement('span', { style:{fontSize:10,color:'#7c3aed',whiteSpace:'nowrap',fontWeight:600} }, 'Pgto:'),
+          /*#__PURE__*/React.createElement('input', {
+            type:'text', value:formaPagamento,
+            onChange:function(e){ setFormaPagamento(e.target.value.toUpperCase()); },
+            placeholder:'À VISTA, PIX, 30 DIAS...',
+            maxLength:80,
+            style:{flex:1,border:'none',background:'transparent',fontSize:11,outline:'none',color:'#333',textTransform:'uppercase'}
+          })
+        ),
+        !modoEdicao && /*#__PURE__*/React.createElement('button', { onClick:onVoltar, style:{background:'#2a5298',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, '\u2190 Voltar'),
         /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, 'Cancelar'),
         /*#__PURE__*/React.createElement('button', {
-          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }); },
+          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }, formaPagamento); },
           disabled: gerando,
           style:{background: gerando ? '#9d6fe8' : '#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor: gerando ? 'not-allowed' : 'pointer',fontWeight:'bold',opacity: gerando ? 0.7 : 1}
         }, gerando ? '\u23F3 Gerando...' : '\uD83D\uDED2 Gerar Pedidos')
@@ -6247,7 +6348,7 @@ function ModalPedidoStep2(_ref_po2) {
 // ─── V4 CSS — Tela Pedidos ──────────────────────────────────────────────────
 function TelaPedidos(_ref_tp) {
   var pedidos=_ref_tp.pedidos, mapa=_ref_tp.mapa, obras=_ref_tp.obras||[], itensDoMapa=_ref_tp.itensDoMapa||[], itensAtendidosMap=_ref_tp.itensAtendidosMap||{}, onClose=_ref_tp.onClose, onRefresh=_ref_tp.onRefresh;
-  var onUpdateStatus=_ref_tp.onUpdateStatus, onPDF=_ref_tp.onPDF;
+  var onUpdateStatus=_ref_tp.onUpdateStatus, onPDF=_ref_tp.onPDF, onEditarPedido=_ref_tp.onEditarPedido||function(){};
 
   var _sF=useState({obra:'',de:'',ate:'',insumo:'',fornecedor:'',status:''}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
   var _sRM=useState(false),showRelModal=_slicedToArray(_sRM,2)[0],setShowRelModal=_slicedToArray(_sRM,2)[1];
@@ -6361,7 +6462,7 @@ function TelaPedidos(_ref_tp) {
           : /*#__PURE__*/React.createElement('table', { style:{width:'100%',borderCollapse:'collapse',fontSize:10} },
             /*#__PURE__*/React.createElement('thead', null,
               /*#__PURE__*/React.createElement('tr', null,
-                ['Nº PO','Obra','Fornecedor','Insumo / Detalhe','Qt.Ini','Qt.Atend','Qt.Pend','Tot.Atend','Valor','Status','Ações'].map(function(h,i){
+                ['Nº PO','Obra','Fornecedor','Insumo / Detalhe','Qt.Ini','Qt.Atend','Qt.Pend','Tot.Atend','Valor','Pgto','Status','Ações'].map(function(h,i){
                   return /*#__PURE__*/React.createElement('th', { key:i, style:{background:'#7c3aed',color:'#fff',padding:'6px 8px',fontSize:9,textAlign:i>3&&i<8?'center':i>7&&i<10?'right':'left',whiteSpace:'nowrap'} }, h);
                 })
               )
@@ -6398,9 +6499,11 @@ function TelaPedidos(_ref_tp) {
                   /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
                     /*#__PURE__*/React.createElement('span', { style:{background:sc.bg,color:sc.c,padding:'2px 8px',borderRadius:99,fontSize:9,fontWeight:'bold'} }, statusLabel[po.status]||po.status)
                   ),
+                  /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',fontSize:9,color:'#5b21b6',borderBottom:'1px solid #eee',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'} }, po.forma_pagamento||''),
                   /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
                     /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:4} },
                       /*#__PURE__*/React.createElement('button', { onClick:function(){ onPDF(po); }, style:{background:'#c0392b',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer',fontWeight:'bold'} }, 'PDF'),
+                      (po.status==='rascunho'||po.status==='emitido')&&/*#__PURE__*/React.createElement('button', { onClick:function(){ onEditarPedido(po); }, style:{background:'#7c3aed',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer',fontWeight:'bold'} }, 'Editar'),
                       po.status==='rascunho'&&/*#__PURE__*/React.createElement('button', { onClick:function(){ onUpdateStatus(po.id,'emitido'); }, style:{background:'#185FA5',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer'} }, 'Emitir'),
                       po.status==='emitido'&&/*#__PURE__*/React.createElement('button', { onClick:function(){ onUpdateStatus(po.id,'recebido'); }, style:{background:'#3B6D11',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer'} }, 'Receber'),
                       po.status==='recebido'&&/*#__PURE__*/React.createElement('button', { onClick:function(){ if(confirm('Desfazer recebimento de PO-'+String(po.numero).padStart(3,'0')+'?\nO pedido voltará para status Emitido.')) onUpdateStatus(po.id,'emitido'); }, style:{background:'#b06000',color:'#fff',border:'none',padding:'3px 8px',borderRadius:3,fontSize:9,cursor:'pointer'} }, '\u21A9 Desfazer'),
