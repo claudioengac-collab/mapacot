@@ -5821,6 +5821,7 @@ var _useState27 = useState(init),
           alert('\u274C O pedido deve ter pelo menos um insumo. Adicione itens antes de salvar.');
           return;
         }
+      var fin = (finConfig||{})[poEmEdicao.fornecedor_id]||{};
       var dV=parsePOVal(fin.desconto), dM=fin.desconto_mode||'%';
       var aV=parsePOVal(fin.acrescimo), aM=fin.acrescimo_mode||'%';
       var fV=parsePOVal(fin.frete), fM=fin.frete_mode||'R$';
