@@ -332,15 +332,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4ff;min-height:100vh;}
 input{text-transform:uppercase;}
 input[type=password]{text-transform:none;}
+/* Cabeçalho do mapa: nome da obra sempre em cima, botões sempre embaixo (qualquer tamanho de tela) */
+.rsp-appbar{flex-wrap:wrap!important;gap:8px!important;}
+.rsp-appbar>button:first-child{order:1;}
+.rsp-appbar>div:nth-child(2){order:2;flex:1;min-width:0;}
+.rsp-appbar>div:nth-child(3){order:3;width:100%;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
 @media(max-width:640px){
   html{width:100%;overflow-x:hidden;overscroll-behavior:none;}body,#root{width:100%;overscroll-behavior:none;}
   @keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
   .hdr-nav .hdr-lbl{display:none!important;width:0!important;overflow:hidden!important;}
   .hdr-nav button{padding:7px 9px!important;min-width:0;}
-  .rsp-appbar{flex-wrap:wrap!important;padding:8px 10px!important;gap:6px!important;}
-  .rsp-appbar>button:first-child{order:1;}
-  .rsp-appbar>div:nth-child(2){order:2;flex:1;min-width:0;}
-  .rsp-appbar>div:nth-child(3){order:3;width:100%;display:flex;gap:5px;align-items:center;flex-wrap:nowrap;}
+  .rsp-appbar{padding:8px 10px!important;}
+  .rsp-appbar>div:nth-child(3){flex-wrap:nowrap;}
   .rsp-appbar>div:nth-child(3) button{padding:5px 8px!important;font-size:10px!important;gap:2px!important;flex:1;justify-content:center;}
   .rsp-appbar>div:nth-child(3) span{font-size:10px!important;margin-left:auto;flex-shrink:0;white-space:nowrap;}
 }
@@ -1917,6 +1920,8 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
 // ─── DASHBOARD GLOBAL POR FORNECEDOR ──────────────────────────────────────────
 
 var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, associacoes) {
+  // FIX: esc() local para evitar quebra de layout com nomes/descrições contendo < > &
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   now = now || new Date(); orcamentos = orcamentos || {}; associacoes = associacoes || [];
   var T = getTheme(mapa.corTema); var hC = T.hdr;
   var fns = mapa.fornecedores || []; var itens = mapa.itens || []; var precos = mapa.precos || {};
@@ -1938,7 +1943,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
     var rkgs = [];
     fns.forEach(function(f){
       var v = parseMoney(precos[item.id+'_'+f.id]);
-      if (v !== null && v > 0) rkgs.push({ fid:f.id, fname:(f.nome||'\u2014').toUpperCase(), preco:v });
+      if (v !== null && v > 0) rkgs.push({ fid:f.id, fname:esc((f.nome||'\u2014').toUpperCase()), preco:v });
     });
     rkgs.sort(function(a,b){ return a.preco-b.preco; });
     var winner = rkgs[0] || null;
@@ -2012,7 +2017,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
     fnStats.filter(function(s){ return s.itemsWon.length>0; }).forEach(function(s,i){
       donutHTML += '<div style="display:flex;align-items:center;gap:3px;font-size:8px;color:#555;">'
         +'<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+BAR_COLORS[i%BAR_COLORS.length]+';flex-shrink:0;"></span>'
-        +(s.f.nome||'').substring(0,12)+' '+Math.round(s.itemsWon.length/totalWon*100)+'%'
+        +esc((s.f.nome||'').substring(0,12))+' '+Math.round(s.itemsWon.length/totalWon*100)+'%'
         +'</div>';
     });
     donutHTML += '</div>';
@@ -2026,7 +2031,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
     var col = BAR_COLORS[Math.max(0,winnerIdx)%BAR_COLORS.length];
     var ecoVal = temOrcamento ? (r.economy!==null&&r.economy>0?r.economy:0) : (r.winner?r.winner.preco*r.qt:0);
     var pct = Math.max(2, Math.round(ecoVal/maxEcoItem*100));
-    var desc = (r.item.descricao||'').substring(0,18)||('Item '+r.item.num);
+    var desc = esc((r.item.descricao||'').substring(0,18)||('Item '+r.item.num));
     return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;">'
       +'<div style="width:100px;text-align:right;font-size:8px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0">'+desc+'</div>'
       +'<div style="flex:1;background:#e8e8e8;border-radius:2px;height:14px;overflow:hidden;">'
@@ -2055,7 +2060,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
   barChart += '<div style="display:flex;gap:4px;">';
   fnStats.forEach(function(s,i){
     var col = BAR_COLORS[i%BAR_COLORS.length];
-    barChart += '<div style="flex:1;text-align:center;font-size:7px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-top:2px solid '+col+';">'+(s.f.nome||'').substring(0,8)+'</div>';
+    barChart += '<div style="flex:1;text-align:center;font-size:7px;color:#555;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-top:2px solid '+col+';">'+esc((s.f.nome||'').substring(0,8))+'</div>';
   });
   barChart += '</div>';
   barChart += '<div style="font-size:8px;color:#c0392b;margin-top:4px;">--- Melhor cota\u00e7\u00e3o: '+fmtR(totalMelhor)+'</div>';
@@ -2064,12 +2069,12 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
   var hmGrid = 'display:grid;grid-template-columns:90px repeat('+itens.length+',1fr);gap:2px;font-size:8px;';
   var hmHeader = '<div style="padding:3px;"></div>';
   itens.forEach(function(item){
-    hmHeader += '<div style="padding:2px 1px;background:#e8ecf2;border-radius:2px;text-align:center;color:#555;font-size:7px;line-height:1.3;overflow:hidden;"><strong>It.'+item.num+'</strong><br>'+(item.descricao||'').substring(0,7)+'</div>';
+    hmHeader += '<div style="padding:2px 1px;background:#e8ecf2;border-radius:2px;text-align:center;color:#555;font-size:7px;line-height:1.3;overflow:hidden;"><strong>It.'+item.num+'</strong><br>'+esc((item.descricao||'').substring(0,7))+'</div>';
   });
   var hmBody = '';
   fnStats.forEach(function(s,si){
     var fnCol = BAR_COLORS[si%BAR_COLORS.length];
-    hmBody += '<div style="padding:3px 5px;font-size:7px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:2px solid '+fnCol+';text-align:right;">'+(s.f.nome||'').substring(0,14)+'</div>';
+    hmBody += '<div style="padding:3px 5px;font-size:7px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-right:2px solid '+fnCol+';text-align:right;">'+esc((s.f.nome||'').substring(0,14))+'</div>';
     itemResults.forEach(function(r){
       var idx = r.rkgs.findIndex(function(p){ return p.fid===s.f.id; });
       var st, txt;
@@ -2107,7 +2112,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
     var scoreCol = s.score>=70?'#3B6D11':s.score>=40?'#b06000':'#c0392b';
     var row = '<tr style="background:'+bg+';">'
       +'<td style="padding:5px 7px;text-align:center;font-weight:bold;color:'+(rank<=3?hC:'#ccc')+'">'+rank+'\u00b0</td>'
-      +'<td style="padding:5px 7px;font-weight:'+(rank===1?'bold':'normal')+'"><div style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+BAR_COLORS[i%BAR_COLORS.length]+';flex-shrink:0;"></span>'+(s.f.nome||'\u2014').toUpperCase()+'</div></td>'
+      +'<td style="padding:5px 7px;font-weight:'+(rank===1?'bold':'normal')+'"><div style="display:flex;align-items:center;gap:5px;"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+BAR_COLORS[i%BAR_COLORS.length]+';flex-shrink:0;"></span>'+esc((s.f.nome||'\u2014').toUpperCase())+'</div></td>'
       +'<td style="padding:5px 7px;text-align:center;font-size:9px;white-space:nowrap;">'+s.itemsQuoted.length+'/'+n+' ('+fmtPct(s.itemsQuoted.length,n)+')<div style="background:#e0e0e0;border-radius:2px;height:3px;margin-top:2px;overflow:hidden;"><div style="width:'+fmtPct(s.itemsQuoted.length,n)+';height:100%;background:'+BAR_COLORS[i%BAR_COLORS.length]+';border-radius:2px;"></div></div></td>'
       +'<td style="padding:5px 7px;text-align:center;"><span style="background:'+sitB+';color:'+sitC+';padding:1px 7px;border-radius:99px;font-size:8px;font-weight:bold">'+s.itemsWon.length+' item(ns)</span></td>'
       +(temOrcamento?'<td style="padding:5px 7px;text-align:right;color:'+(s.ecoGen>0?'#3B6D11':'#bbb')+';font-weight:'+(s.ecoGen>0?'bold':'normal')+';font-size:9px;">'+(s.ecoGen>0?'\u2193 '+fmtR(s.ecoGen):'\u2014')+'</td>':'')
@@ -2125,7 +2130,7 @@ var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, asso
     if(empate.length>1) return 'Empate t\u00e9cnico: '+empate.length+' fornecedores venceram '+top.itemsWon.length+' item(ns) cada. Avalie a cobertura antes de decidir.';
     var cobPct=Math.round(top.itemsQuoted.length/n*100);
     var aviso=cobPct<70?' (ATEN\u00c7\u00c3O: cobre apenas '+top.itemsQuoted.length+'/'+n+' itens)':' (cobertura: '+top.itemsQuoted.length+'/'+n+' itens)';
-    return (temOrcamento?'Fornecedor destaque: ':'Menor pre\u00e7o: ')+(top.f.nome||'').toUpperCase()+' \u2014 '+top.itemsWon.length+' item(ns)'+aviso+'.';
+    return (temOrcamento?'Fornecedor destaque: ':'Menor pre\u00e7o: ')+esc((top.f.nome||'').toUpperCase())+' \u2014 '+top.itemsWon.length+' item(ns)'+aviso+'.';
   })();
   var resumoBg = temOrcamento ? '#EAF3DE' : '#E6F1FB';
   var resumoBr = temOrcamento ? '3px solid #3B6D11' : '3px solid #185FA5';
@@ -5262,6 +5267,7 @@ var _useState27 = useState(init),
       if (!extraParts) return abrirPDF(htmlMapa);
       return abrirPDF(htmlMapa.replace('</body></html>', extraParts + '</body></html>'));
     },
+    title: "Gerar PDF do mapa de cotação",
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       background: "#c0392b",
       color: "#fff",
@@ -5320,6 +5326,7 @@ var _useState27 = useState(init),
     onClick: function onClick() {
       return setShowCadEditor(true);
     },
+    title: "Gerenciar cadastros: fornecedores, insumos, unidades e obras",
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       background: "#1a7a4a",
       color: "#fff",
@@ -5335,6 +5342,7 @@ var _useState27 = useState(init),
         return !p;
       });
     },
+    title: "Mostrar ou ocultar colunas de fornecedores na tabela",
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       background: "#2a5298",
       color: "#fff",
@@ -5350,7 +5358,7 @@ var _useState27 = useState(init),
     /*#__PURE__*/React.createElement("div", {
     style: {
       position: "fixed",
-      top: "60px",
+      top: "108px",
       right: "8px",
       background: "#fff",
       borderRadius: 10,
@@ -5443,6 +5451,7 @@ var _useState27 = useState(init),
         return !s;
       });
     },
+    title: "Alterar o tema de cores do mapa",
     style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
       gap: 5
     })
