@@ -7020,7 +7020,7 @@ function ModalImportarExcelMapa(_ref_imp) {
     var alarmeTempo = setTimeout(function(){ controladorTempo.abort(); }, 30000); // FIX: máx 30s de espera pela IA
     fetch(SUPABASE_URL+"/functions/v1/match-insumos-ia", {
       method: "POST",
-      headers: Object.assign({}, SB, {"Content-Type":"application/json"}),
+      headers: { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({ itensExcel: itensExcel, catalogoInsumos: cadastrosInsumos }),
       signal: controladorTempo.signal
     })
