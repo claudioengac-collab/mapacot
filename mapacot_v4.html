@@ -7200,7 +7200,8 @@ function ModalImportarExcelMapa(_ref_imp) {
             '\uD83E\uDD16 Resultado gerado pela Intelig\u00eancia Artificial \u00B7 Custo real cobrado: R$ '+custoIA.brl.toFixed(4).replace('.',',')+' \u00B7 '+custoIA.itens+' itens processados'
           ),
           resultadoOrigem === 'fallback' && /*#__PURE__*/React.createElement('div', { style:{background:'#fdecea',border:'1px solid #f5b8b8',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#a32d2d',marginBottom:10,fontWeight:'bold'} },
-            '\u26A0\uFE0F A IA FALHOU \u2014 este resultado veio da compara\u00e7\u00e3o gr\u00e1tis (sem custo, sem IA de verdade). Revise com aten\u00e7\u00e3o extra.'
+            '\u26A0\uFE0F A IA FALHOU \u2014 este resultado veio da compara\u00e7\u00e3o gr\u00e1tis (sem custo, sem IA de verdade). Revise com aten\u00e7\u00e3o extra.',
+            erro && /*#__PURE__*/React.createElement('div', { style:{fontSize:9,color:'#7a1f1f',marginTop:4,fontWeight:'normal'} }, 'Motivo t\u00e9cnico: '+erro)
           ),
           resultadoOrigem === 'local' && /*#__PURE__*/React.createElement('div', { style:{background:'#f0f0f0',border:'1px solid #ddd',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#555',marginBottom:10,fontWeight:'bold'} },
             '\u26A1 Resultado gerado por compara\u00e7\u00e3o gr\u00e1tis (sem IA, sem custo)'
