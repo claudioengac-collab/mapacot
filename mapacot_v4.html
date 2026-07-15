@@ -3929,6 +3929,7 @@ var _useState27 = useState(init),
   var _useStatePOEdit=useState(null),poEmEdicao=_slicedToArray(_useStatePOEdit,2)[0],setPoEmEdicao=_slicedToArray(_useStatePOEdit,2)[1];
   var _useStatePOEShow=useState(false),showPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[0],setShowPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[1];
   var _useStateCfgEd=useState({}),configEdicao=_slicedToArray(_useStateCfgEd,2)[0],setConfigEdicao=_slicedToArray(_useStateCfgEd,2)[1];
+  var _useStateImpExcel=useState(false),showImportExcel=_slicedToArray(_useStateImpExcel,2)[0],setShowImportExcel=_slicedToArray(_useStateImpExcel,2)[1];
   var _useStateSIP=useState([]),itensSelecionadosPO=_slicedToArray(_useStateSIP,2)[0],setItensSelecionadosPO=_slicedToArray(_useStateSIP,2)[1];
   var _useStatePOCfg=useState({}),pedidoConfig=_slicedToArray(_useStatePOCfg,2)[0],setPedidoConfig=_slicedToArray(_useStatePOCfg,2)[1];
   var _useStatePOFin=useState({}),poFinanceiro=_slicedToArray(_useStatePOFin,2)[0],setPoFinanceiro=_slicedToArray(_useStatePOFin,2)[1];
@@ -5456,6 +5457,14 @@ var _useState27 = useState(init),
       gap: 5
     })
   }, "\uD83C\uDFA8 COR"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() { setShowImportExcel(true); },
+    title: "Importar Quantidade, Unidade e Descri\u00e7\u00e3o de uma planilha Excel",
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: "#0e7a5f",
+      color: "#fff",
+      gap: 5
+    })
+  }, "\uD83D\uDCE5 IMPORTAR EXCEL"), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() { setShowLerIA(true); },
     title: "LER OR\xC7AMENTO COM INTELIG\xCANCIA ARTIFICIAL",
     style: { background: "#534AB7", color: "#fff", border: "none", borderRadius: 7, padding: "6px 13px", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
@@ -5783,6 +5792,29 @@ var _useState27 = useState(init),
   }),
   // ── TELA PEDIDOS ─────────────────────────────────────────────────────────
   // ── Modal Edição de Pedido Existente ──────────────────────────────────────
+  showImportExcel && /*#__PURE__*/React.createElement(ModalImportarExcelMapa, {
+    cadastrosInsumos: cadastros.insumos||[],
+    onClose: function(){ setShowImportExcel(false); },
+    onConfirmar: function(itensParaImportar){
+      update(function (m) {
+        var proximoNum = m.itens.length;
+        var novos = itensParaImportar.map(function(it, i){
+          return {
+            id: uid(),
+            num: proximoNum + i + 1,
+            descricao: it.descricaoFinal,
+            detalhe: "",
+            qt: it.qt,
+            unid: it.unid
+          };
+        });
+        return _objectSpread(_objectSpread({}, m), {}, {
+          itens: [].concat(_toConsumableArray(m.itens), novos)
+        });
+      });
+      setShowImportExcel(false);
+    }
+  }),
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
     itens: (mapa && mapa.itens)||[],
@@ -6918,6 +6950,260 @@ function ModalCasarInsumos(_ref_cas) {
 }
 
 // ─── Modal Ler Com IA ─────────────────────────────────────────────────────────
+// ─── Modal Importar Excel para o Mapa (Qt./Unid./Descrição) ─────────────────
+// Colunas fixas SEM cabeçalho: A=Quantidade, B=Unidade, C=Descrição, dados começam na linha 1
+function ModalImportarExcelMapa(_ref_imp) {
+  var cadastrosInsumos = _ref_imp.cadastrosInsumos || [];
+  var onClose = _ref_imp.onClose, onConfirmar = _ref_imp.onConfirmar;
+  var _sLinhas = useState([]), linhas = _slicedToArray(_sLinhas,2)[0], setLinhas = _slicedToArray(_sLinhas,2)[1];
+  var _sErro = useState(""), erro = _slicedToArray(_sErro,2)[0], setErro = _slicedToArray(_sErro,2)[1];
+  var _sProc = useState(false), processando = _slicedToArray(_sProc,2)[0], setProcessando = _slicedToArray(_sProc,2)[1];
+  var _sEnviando = useState(false), enviando = _slicedToArray(_sEnviando,2)[0], setEnviando = _slicedToArray(_sEnviando,2)[1];
+  var _sModo = useState(""), modoEscolhido = _slicedToArray(_sModo,2)[0], setModoEscolhido = _slicedToArray(_sModo,2)[1];
+  var _sCustoIA = useState(null), custoIA = _slicedToArray(_sCustoIA,2)[0], setCustoIA = _slicedToArray(_sCustoIA,2)[1];
+  var _sProcIA = useState(false), processandoIA = _slicedToArray(_sProcIA,2)[0], setProcessandoIA = _slicedToArray(_sProcIA,2)[1];
+
+  // Comparação de semelhança de texto (sem IA, sem custo, sem internet) ------
+  var normalizarTexto = function(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase().replace(/\s+/g,' '); };
+  var encontrarMelhorMatch = function(textoImportado, catalogo){
+    var alvo = normalizarTexto(textoImportado);
+    if(!alvo) return { match:null, score:0 };
+    var palavrasAlvo = alvo.split(' ').filter(function(w){ return w.length > 2; });
+    var melhor = null, melhorScore = 0;
+    catalogo.forEach(function(itemCadastro){
+      var itemNorm = normalizarTexto(itemCadastro);
+      if(!itemNorm) return;
+      if(itemNorm === alvo){ melhor = itemCadastro; melhorScore = 1; return; }
+      var palavrasItem = itemNorm.split(' ').filter(function(w){ return w.length > 2; });
+      if(!palavrasAlvo.length || !palavrasItem.length) return;
+      var inter = palavrasAlvo.filter(function(p){ return palavrasItem.indexOf(p) >= 0; }).length;
+      // FIX: mesma fórmula já aprovada no fluxo de Orçamento (divide pela MAIOR lista, não pela união)
+      var score = inter / Math.max(palavrasAlvo.length, palavrasItem.length);
+      if(itemNorm.indexOf(alvo) >= 0 || alvo.indexOf(itemNorm) >= 0) score = Math.max(score, 0.8);
+      if(score > melhorScore){ melhorScore = score; melhor = itemCadastro; }
+    });
+    return { match: melhor, score: melhorScore };
+  };
+
+  // Casamento via IA (Supabase Edge Function -> Anthropic) --------------------
+  var casarComIA = function(linhasBrutas){
+    // FIX 6: cadastro vazio - avisa sem gastar uma chamada de rede
+    if(!cadastrosInsumos.length){
+      setErro("Seu cadastro de insumos est\u00e1 vazio. Cadastre os insumos primeiro em CADASTROS antes de importar.");
+      setProcessandoIA(false);
+      return;
+    }
+    // FIX 4: planilha muito grande - avisa e não deixa prosseguir sem confirmação de custo maior
+    if(linhasBrutas.length > 200){
+      setErro("Esta planilha tem "+linhasBrutas.length+" itens. Por seguran\u00e7a, importa\u00e7\u00f5es com IA ficam limitadas a 200 itens por vez. Divida em partes menores ou use a compara\u00e7\u00e3o gr\u00e1tis.");
+      setProcessandoIA(false);
+      return;
+    }
+    var itensExcel = linhasBrutas.map(function(l){ return l.descricaoRaw; });
+    var controladorTempo = new AbortController();
+    var alarmeTempo = setTimeout(function(){ controladorTempo.abort(); }, 30000); // FIX: máx 30s de espera pela IA
+    fetch(SUPABASE_URL+"/functions/v1/match-insumos-ia", {
+      method: "POST",
+      headers: Object.assign({}, SB, {"Content-Type":"application/json"}),
+      body: JSON.stringify({ itensExcel: itensExcel, catalogoInsumos: cadastrosInsumos }),
+      signal: controladorTempo.signal
+    })
+    .then(function(r){
+      // FIX 5: função ainda não publicada no Supabase
+      if(r.status === 404) throw new Error("A fun\u00e7\u00e3o de IA ainda n\u00e3o foi publicada no Supabase.");
+      return r.json();
+    })
+    .then(function(data){
+      clearTimeout(alarmeTempo); // FIX 3: desliga o cronômetro — resposta já chegou
+      if(data.error) throw new Error(data.error.message||"Erro na IA");
+      // FIX 2: resposta que não é JSON válido cai no catch abaixo (JSON já foi parseado no servidor,
+      // mas se data.matches vier ausente/corrompido, tratamos aqui também)
+      var matches = Array.isArray(data.matches) ? data.matches : [];
+      var usage = data.usage || {};
+      var inp = usage.input_tokens||0, out = usage.output_tokens||0;
+      var custoBRL = ((inp*3+out*15)/1e6)*6;
+      setCustoIA({ inp:inp, out:out, brl:custoBRL, itens:linhasBrutas.length });
+      sbSaveIaUso({
+        fornecedor:"", arquivo:"importar-excel-mapa",
+        tokens_input:inp, tokens_output:out, custo_brl:custoBRL,
+        itens_lidos:linhasBrutas.length, obra_id:""
+      }).catch(function(){});
+      var resultado = linhasBrutas.map(function(l, idx){
+        var m = matches.find(function(x){ return Number(x.indicePlanilha) === idx; });
+        // FIX 3: valida se o índice retornado pela IA realmente existe na lista do cadastro
+        var indiceValido = m && m.indiceCadastro !== null && m.indiceCadastro !== undefined
+          && m.indiceCadastro >= 0 && m.indiceCadastro < cadastrosInsumos.length;
+        var confiancaIA = (m && m.confianca) || 0;
+        // FIX 7: só aceita automaticamente se a própria IA estiver razoavelmente confiante (>=50%)
+        var descFinal = (indiceValido && confiancaIA >= 0.5) ? cadastrosInsumos[m.indiceCadastro] : "";
+        return Object.assign({}, l, {
+          descricaoFinal: descFinal,
+          status: descFinal ? "auto" : "manual",
+          scoreMatch: confiancaIA
+        });
+      });
+      setLinhas(resultado);
+      setProcessandoIA(false);
+    })
+    .catch(function(err){
+      clearTimeout(alarmeTempo); // FIX 3: desliga o cronômetro — já caiu no erro/fallback
+      // FIX 1: internet caiu / erro qualquer -> cai automaticamente para comparação grátis
+      var resultadoFallback = linhasBrutas.map(function(l){
+        var resMatch = encontrarMelhorMatch(l.descricaoRaw, cadastrosInsumos);
+        var status = resMatch.score >= 0.35 ? "auto" : "manual";
+        return Object.assign({}, l, { descricaoFinal: status==="auto"?resMatch.match:"", status:status, scoreMatch:resMatch.score });
+      });
+      setLinhas(resultadoFallback);
+      setErro("\u26A0\uFE0F N\u00e3o foi poss\u00edvel usar a IA agora ("+(err.message||"erro de conex\u00e3o")+"). Usamos a compara\u00e7\u00e3o gr\u00e1tis como alternativa.");
+      setProcessandoIA(false);
+    });
+  };
+
+  var handleArquivo = function(e){
+    var file = e.target.files[0]; if(!file) return;
+    setProcessando(true); setErro(""); setLinhas([]); setCustoIA(null);
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var wb = XLSX.read(new Uint8Array(ev.target.result), { type:"array" });
+        var sheet = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:"" });
+        var linhasBrutas = [];
+        for(var i=0; i<rows.length; i++){
+          var r = rows[i];
+          var descRaw = String((r[2]!==undefined && r[2]!==null) ? r[2] : "").trim();
+          if(!descRaw) continue; // FIX: pula linha em branco (sem descrição = sem item)
+          var qtRaw = String((r[0]!==undefined && r[0]!==null) ? r[0] : "0").replace(",", ".");
+          var qt = parseFloat(qtRaw) || 0; // FIX: vírgula decimal tratada, texto inválido vira 0
+          var unidBruto = (r[1]!==undefined && r[1]!==null) ? String(r[1]).trim() : "";
+          var unidRaw = (unidBruto || "UN").toUpperCase(); // FIX: célula vazia também cai no padrão "UN"
+          linhasBrutas.push({ linhaOriginal: i+1, qt: qt, unid: unidRaw, descricaoRaw: descRaw.toUpperCase() });
+        }
+        if(!linhasBrutas.length){ setErro("Nenhuma linha com descri\u00e7\u00e3o foi encontrada na planilha."); setProcessando(false); return; }
+        setProcessando(false);
+        if(modoEscolhido === "ia"){
+          setProcessandoIA(true);
+          casarComIA(linhasBrutas);
+        } else {
+          var resultado = linhasBrutas.map(function(l){
+            var resMatch = encontrarMelhorMatch(l.descricaoRaw, cadastrosInsumos);
+            var status = resMatch.score >= 0.35 ? "auto" : "manual"; // FIX: mesmo limite já aprovado no Orçamento
+            return Object.assign({}, l, {
+              descricaoFinal: status==="auto" ? resMatch.match : "",
+              status: status,
+              scoreMatch: resMatch.score
+            });
+          });
+          setLinhas(resultado);
+        }
+      }catch(err){
+        setErro("N\u00e3o foi poss\u00edvel ler o arquivo. Confira se \u00e9 uma planilha Excel v\u00e1lida (.xlsx). Detalhe: "+(err.message||""));
+        setProcessando(false);
+      }
+    };
+    reader.onerror = function(){ setErro("Erro ao abrir o arquivo."); setProcessando(false); };
+    reader.readAsArrayBuffer(file);
+  };
+
+  var atualizarDescricaoManual = function(idx, valor){
+    setLinhas(function(prev){
+      var n = prev.slice();
+      var achado = valor && cadastrosInsumos.find(function(x){ return x.toUpperCase()===valor.toUpperCase(); });
+      n[idx] = Object.assign({}, n[idx], { descricaoFinal: achado || "" });
+      return n;
+    });
+  };
+
+  var totalPendente = linhas.filter(function(l){ return !l.descricaoFinal; }).length;
+  var podeConfirmar = linhas.length > 0 && totalPendente === 0;
+
+  var handleConfirmar = function(){
+    if(!podeConfirmar) return;
+    setEnviando(true);
+    var itensParaImportar = linhas.map(function(l){ return { qt:l.qt, unid:l.unid, descricaoFinal:l.descricaoFinal }; });
+    onConfirmar(itensParaImportar);
+  };
+
+  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9500,display:'flex',alignItems:'center',justifyContent:'center' };
+  var modalStyle = { background:'#fff',borderRadius:8,width:'min(720px,94vw)',maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden' };
+
+  return /*#__PURE__*/React.createElement('div', { style:ovStyle },
+    /*#__PURE__*/React.createElement('div', { style:modalStyle },
+      /*#__PURE__*/React.createElement('div', { style:{background:'#0e7a5f',color:'#fff',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'} },
+        /*#__PURE__*/React.createElement('span', { style:{fontSize:12,fontWeight:'bold'} }, '\uD83D\uDCE5 IMPORTAR EXCEL \u00B7 Quantidade, Unidade e Descri\u00e7\u00e3o'),
+        /*#__PURE__*/React.createElement('span', { style:{cursor:'pointer',fontSize:16,opacity:.8}, onClick:onClose }, '\u2715')
+      ),
+      /*#__PURE__*/React.createElement('div', { style:{padding:14,overflowY:'auto',flex:1} },
+        linhas.length === 0 && /*#__PURE__*/React.createElement('div', { style:{fontSize:11,color:'#555',lineHeight:1.6} },
+          /*#__PURE__*/React.createElement('p', null, 'Selecione uma planilha Excel (.xlsx) com as colunas, ', /*#__PURE__*/React.createElement('strong',null,'sem cabe\u00e7alho'), ', come\u00e7ando na linha 1:'),
+          /*#__PURE__*/React.createElement('p', null, /*#__PURE__*/React.createElement('strong',null,'Coluna A:'), ' Quantidade \u00B7 ', /*#__PURE__*/React.createElement('strong',null,'Coluna B:'), ' Unidade \u00B7 ', /*#__PURE__*/React.createElement('strong',null,'Coluna C:'), ' Descri\u00e7\u00e3o'),
+          /*#__PURE__*/React.createElement('p', { style:{fontWeight:'bold',marginTop:12,marginBottom:6} }, 'Como casar as descri\u00e7\u00f5es com seu cadastro?'),
+          /*#__PURE__*/React.createElement('div', {
+            onClick: function(){ setModoEscolhido('local'); setLinhas([]); setErro(""); setCustoIA(null); },
+            style:{border:'2px solid '+(modoEscolhido==='local'?'#0e7a5f':'#e0e0e0'),background:modoEscolhido==='local'?'#eafaf0':'#fff',borderRadius:6,padding:10,marginBottom:8,cursor:'pointer',display:'flex',gap:8,alignItems:'center'}
+          },
+            /*#__PURE__*/React.createElement('span',{style:{fontSize:18}},'\u26A1'),
+            /*#__PURE__*/React.createElement('div',null,
+              /*#__PURE__*/React.createElement('strong',{style:{display:'block',fontSize:11}},'Compara\u00e7\u00e3o autom\u00e1tica (gr\u00e1tis)'),
+              /*#__PURE__*/React.createElement('span',{style:{fontSize:9,color:'#777'}},'Sem internet, sem custo, instant\u00e2neo')
+            )
+          ),
+          /*#__PURE__*/React.createElement('div', {
+            onClick: function(){ setModoEscolhido('ia'); setLinhas([]); setErro(""); setCustoIA(null); },
+            style:{border:'2px solid '+(modoEscolhido==='ia'?'#0e7a5f':'#e0e0e0'),background:modoEscolhido==='ia'?'#eafaf0':'#fff',borderRadius:6,padding:10,marginBottom:8,cursor:'pointer',display:'flex',gap:8,alignItems:'center'}
+          },
+            /*#__PURE__*/React.createElement('span',{style:{fontSize:18}},'\uD83E\uDD16'),
+            /*#__PURE__*/React.createElement('div',null,
+              /*#__PURE__*/React.createElement('strong',{style:{display:'block',fontSize:11}},'Casar com Intelig\u00eancia Artificial'),
+              /*#__PURE__*/React.createElement('span',{style:{fontSize:9,color:'#777'}},'Mais preciso em casos dif\u00edceis \u00B7 custo pequeno por uso \u00B7 at\u00e9 200 itens')
+            )
+          ),
+          modoEscolhido && /*#__PURE__*/React.createElement('input', { type:'file', accept:'.xlsx,.xls', onChange:handleArquivo, disabled: processando||processandoIA, style:{marginTop:6, opacity:(processando||processandoIA)?0.5:1} }),
+          processando && /*#__PURE__*/React.createElement('p', { style:{color:'#0e7a5f',marginTop:10} }, 'Lendo planilha...'),
+          processandoIA && /*#__PURE__*/React.createElement('p', { style:{color:'#0e7a5f',marginTop:10} }, '\uD83E\uDD16 IA comparando os insumos... isso pode levar alguns segundos.'),
+          erro && /*#__PURE__*/React.createElement('p', { style:{color:'#c0392b',marginTop:10,background:'#fdecea',padding:'8px 10px',borderRadius:4} }, erro)
+        ),
+        linhas.length > 0 && /*#__PURE__*/React.createElement('div', null,
+          /*#__PURE__*/React.createElement('p', { style:{fontSize:11,color:'#333',marginBottom:10} },
+            linhas.length + ' item(ns) lido(s) da planilha \u00B7 ' + (linhas.length-totalPendente) + ' reconhecido(s) automaticamente \u00B7 ' + totalPendente + ' precisam de confer\u00eancia'
+          ),
+          custoIA && /*#__PURE__*/React.createElement('div', { style:{background:'#f0f6ff',border:'1px solid #b5d4f4',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#185FA5',marginBottom:10} },
+            '\uD83D\uDCB0 Custo desta importa\u00e7\u00e3o com IA: R$ '+custoIA.brl.toFixed(4).replace('.',',')+' \u00B7 '+custoIA.itens+' itens processados'
+          ),
+          linhas.map(function(l, idx){
+            var corFundo = l.descricaoFinal ? '#eafaf0' : '#fff8e6';
+            var corBorda = l.descricaoFinal ? '#b8e0c8' : '#f0d080';
+            return /*#__PURE__*/React.createElement('div', { key:idx, style:{background:corFundo,border:'1px solid '+corBorda,borderRadius:6,padding:'8px 10px',marginBottom:6} },
+              /*#__PURE__*/React.createElement('div', { style:{fontSize:10,color:'#555',marginBottom:4} },
+                'Linha '+l.linhaOriginal+' da planilha \u2014 Qt: '+l.qt+' \u00B7 Unid: '+l.unid+' \u00B7 Texto original: "'+l.descricaoRaw+'"'
+              ),
+              l.descricaoFinal
+                ? /*#__PURE__*/React.createElement('div', { style:{fontSize:11,fontWeight:'bold',color:'#1a7a44'} }, '\u2705 '+l.descricaoFinal)
+                : /*#__PURE__*/React.createElement(AutocompleteInput, {
+                    value: '',
+                    onChange: function(){},
+                    onCommit: function(v){ atualizarDescricaoManual(idx, v); },
+                    suggestions: cadastrosInsumos,
+                    strictMatch: true,
+                    placeholder: '\u26A0\uFE0F N\u00e3o reconhecido \u2014 selecione o insumo correto...',
+                    inputStyle: { width:'100%',padding:'6px 8px',border:'1px solid #f0a500',borderRadius:4,fontSize:11 }
+                  })
+            );
+          })
+        )
+      ),
+      /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,padding:'12px 14px',borderTop:'1px solid #eee',justifyContent:'flex-end'} },
+        /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, 'Cancelar'),
+        linhas.length > 0 && /*#__PURE__*/React.createElement('button', {
+          onClick: handleConfirmar,
+          disabled: !podeConfirmar || enviando,
+          style:{background: podeConfirmar ? '#0e7a5f' : '#bbb',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor: podeConfirmar ? 'pointer' : 'not-allowed',fontWeight:'bold'}
+        }, enviando ? 'Importando...' : ('Confirmar Importa\u00e7\u00e3o ('+linhas.length+')'))
+      )
+    )
+  );
+}
+
 function ModalLerComIA(_ref_ia) {
   var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso;
   var CE=React.createElement;
