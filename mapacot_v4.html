@@ -6962,23 +6962,39 @@ function ModalImportarExcelMapa(_ref_imp) {
   var _sModo = useState(""), modoEscolhido = _slicedToArray(_sModo,2)[0], setModoEscolhido = _slicedToArray(_sModo,2)[1];
   var _sCustoIA = useState(null), custoIA = _slicedToArray(_sCustoIA,2)[0], setCustoIA = _slicedToArray(_sCustoIA,2)[1];
   var _sProcIA = useState(false), processandoIA = _slicedToArray(_sProcIA,2)[0], setProcessandoIA = _slicedToArray(_sProcIA,2)[1];
+  var _sEditando = useState({}), linhasEditando = _slicedToArray(_sEditando,2)[0], setLinhasEditando = _slicedToArray(_sEditando,2)[1];
+  var _sTexto = useState({}), textoDigitado = _slicedToArray(_sTexto,2)[0], setTextoDigitado = _slicedToArray(_sTexto,2)[1];
+  var _sOrigem = useState(null), resultadoOrigem = _slicedToArray(_sOrigem,2)[0], setResultadoOrigem = _slicedToArray(_sOrigem,2)[1];
 
   // Comparação de semelhança de texto (sem IA, sem custo, sem internet) ------
   var normalizarTexto = function(s){ return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase().replace(/\s+/g,' '); };
   var encontrarMelhorMatch = function(textoImportado, catalogo){
     var alvo = normalizarTexto(textoImportado);
     if(!alvo) return { match:null, score:0 };
-    var palavrasAlvo = alvo.split(' ').filter(function(w){ return w.length > 2; });
+    var temDigito = function(w){ return /\d/.test(w); };
+    var todasAlvo = alvo.split(' ').filter(function(w){ return w.length > 2; });
+    var palavrasAlvo = todasAlvo.filter(function(w){ return !temDigito(w); });
+    var medidasAlvo = todasAlvo.filter(temDigito);
     var melhor = null, melhorScore = 0;
     catalogo.forEach(function(itemCadastro){
       var itemNorm = normalizarTexto(itemCadastro);
       if(!itemNorm) return;
       if(itemNorm === alvo){ melhor = itemCadastro; melhorScore = 1; return; }
-      var palavrasItem = itemNorm.split(' ').filter(function(w){ return w.length > 2; });
-      if(!palavrasAlvo.length || !palavrasItem.length) return;
-      var inter = palavrasAlvo.filter(function(p){ return palavrasItem.indexOf(p) >= 0; }).length;
-      // FIX: mesma fórmula já aprovada no fluxo de Orçamento (divide pela MAIOR lista, não pela união)
-      var score = inter / Math.max(palavrasAlvo.length, palavrasItem.length);
+      var todasItem = itemNorm.split(' ').filter(function(w){ return w.length > 2; });
+      var palavrasItem = todasItem.filter(function(w){ return !temDigito(w); });
+      var medidasItem = todasItem.filter(temDigito);
+      // FIX B: palavras de NOME (produto) valem o peso principal — medida sozinha nunca decide o match
+      var scoreNome = 0;
+      if(palavrasAlvo.length && palavrasItem.length){
+        var interNome = palavrasAlvo.filter(function(p){ return palavrasItem.indexOf(p) >= 0; }).length;
+        scoreNome = interNome / Math.max(palavrasAlvo.length, palavrasItem.length);
+      }
+      var bonusMedida = 0;
+      if(medidasAlvo.length && medidasItem.length){
+        var interMedida = medidasAlvo.filter(function(p){ return medidasItem.indexOf(p) >= 0; }).length;
+        if(interMedida > 0) bonusMedida = 0.15; // reforço pequeno, nunca decide sozinho
+      }
+      var score = Math.min(1, scoreNome + bonusMedida);
       if(itemNorm.indexOf(alvo) >= 0 || alvo.indexOf(itemNorm) >= 0) score = Math.max(score, 0.8);
       if(score > melhorScore){ melhorScore = score; melhor = itemCadastro; }
     });
@@ -7043,6 +7059,7 @@ function ModalImportarExcelMapa(_ref_imp) {
         });
       });
       setLinhas(resultado);
+      setResultadoOrigem('ia');
       setProcessandoIA(false);
     })
     .catch(function(err){
@@ -7054,6 +7071,7 @@ function ModalImportarExcelMapa(_ref_imp) {
         return Object.assign({}, l, { descricaoFinal: status==="auto"?resMatch.match:"", status:status, scoreMatch:resMatch.score });
       });
       setLinhas(resultadoFallback);
+      setResultadoOrigem('fallback');
       setErro("\u26A0\uFE0F N\u00e3o foi poss\u00edvel usar a IA agora ("+(err.message||"erro de conex\u00e3o")+"). Usamos a compara\u00e7\u00e3o gr\u00e1tis como alternativa.");
       setProcessandoIA(false);
     });
@@ -7061,7 +7079,7 @@ function ModalImportarExcelMapa(_ref_imp) {
 
   var handleArquivo = function(e){
     var file = e.target.files[0]; if(!file) return;
-    setProcessando(true); setErro(""); setLinhas([]); setCustoIA(null);
+    setProcessando(true); setErro(""); setLinhas([]); setCustoIA(null); setResultadoOrigem(null);
     var reader = new FileReader();
     reader.onload = function(ev){
       try{
@@ -7095,6 +7113,7 @@ function ModalImportarExcelMapa(_ref_imp) {
             });
           });
           setLinhas(resultado);
+          setResultadoOrigem('local');
         }
       }catch(err){
         setErro("N\u00e3o foi poss\u00edvel ler o arquivo. Confira se \u00e9 uma planilha Excel v\u00e1lida (.xlsx). Detalhe: "+(err.message||""));
@@ -7112,10 +7131,13 @@ function ModalImportarExcelMapa(_ref_imp) {
       n[idx] = Object.assign({}, n[idx], { descricaoFinal: achado || "" });
       return n;
     });
+    setLinhasEditando(function(prev){ var n = Object.assign({}, prev); n[idx] = false; return n; });
+    setTextoDigitado(function(prev){ var n = Object.assign({}, prev); n[idx] = ""; return n; });
   };
 
   var totalPendente = linhas.filter(function(l){ return !l.descricaoFinal; }).length;
-  var podeConfirmar = linhas.length > 0 && totalPendente === 0;
+  var algumaLinhaEditando = Object.keys(linhasEditando).some(function(k){ return linhasEditando[k]; });
+  var podeConfirmar = linhas.length > 0 && totalPendente === 0 && !algumaLinhaEditando;
 
   var handleConfirmar = function(){
     if(!podeConfirmar) return;
@@ -7139,7 +7161,7 @@ function ModalImportarExcelMapa(_ref_imp) {
           /*#__PURE__*/React.createElement('p', null, /*#__PURE__*/React.createElement('strong',null,'Coluna A:'), ' Quantidade \u00B7 ', /*#__PURE__*/React.createElement('strong',null,'Coluna B:'), ' Unidade \u00B7 ', /*#__PURE__*/React.createElement('strong',null,'Coluna C:'), ' Descri\u00e7\u00e3o'),
           /*#__PURE__*/React.createElement('p', { style:{fontWeight:'bold',marginTop:12,marginBottom:6} }, 'Como casar as descri\u00e7\u00f5es com seu cadastro?'),
           /*#__PURE__*/React.createElement('div', {
-            onClick: function(){ setModoEscolhido('local'); setLinhas([]); setErro(""); setCustoIA(null); },
+            onClick: function(){ setModoEscolhido('local'); setLinhas([]); setErro(""); setCustoIA(null); setResultadoOrigem(null); },
             style:{border:'2px solid '+(modoEscolhido==='local'?'#0e7a5f':'#e0e0e0'),background:modoEscolhido==='local'?'#eafaf0':'#fff',borderRadius:6,padding:10,marginBottom:8,cursor:'pointer',display:'flex',gap:8,alignItems:'center'}
           },
             /*#__PURE__*/React.createElement('span',{style:{fontSize:18}},'\u26A1'),
@@ -7149,7 +7171,7 @@ function ModalImportarExcelMapa(_ref_imp) {
             )
           ),
           /*#__PURE__*/React.createElement('div', {
-            onClick: function(){ setModoEscolhido('ia'); setLinhas([]); setErro(""); setCustoIA(null); },
+            onClick: function(){ setModoEscolhido('ia'); setLinhas([]); setErro(""); setCustoIA(null); setResultadoOrigem(null); },
             style:{border:'2px solid '+(modoEscolhido==='ia'?'#0e7a5f':'#e0e0e0'),background:modoEscolhido==='ia'?'#eafaf0':'#fff',borderRadius:6,padding:10,marginBottom:8,cursor:'pointer',display:'flex',gap:8,alignItems:'center'}
           },
             /*#__PURE__*/React.createElement('span',{style:{fontSize:18}},'\uD83E\uDD16'),
@@ -7167,8 +7189,14 @@ function ModalImportarExcelMapa(_ref_imp) {
           /*#__PURE__*/React.createElement('p', { style:{fontSize:11,color:'#333',marginBottom:10} },
             linhas.length + ' item(ns) lido(s) da planilha \u00B7 ' + (linhas.length-totalPendente) + ' reconhecido(s) automaticamente \u00B7 ' + totalPendente + ' precisam de confer\u00eancia'
           ),
-          custoIA && /*#__PURE__*/React.createElement('div', { style:{background:'#f0f6ff',border:'1px solid #b5d4f4',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#185FA5',marginBottom:10} },
-            '\uD83D\uDCB0 Custo desta importa\u00e7\u00e3o com IA: R$ '+custoIA.brl.toFixed(4).replace('.',',')+' \u00B7 '+custoIA.itens+' itens processados'
+          resultadoOrigem === 'ia' && custoIA && /*#__PURE__*/React.createElement('div', { style:{background:'#eafaf0',border:'1px solid #b8e0c8',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#1a7a44',marginBottom:10,fontWeight:'bold'} },
+            '\uD83E\uDD16 Resultado gerado pela Intelig\u00eancia Artificial \u00B7 Custo real cobrado: R$ '+custoIA.brl.toFixed(4).replace('.',',')+' \u00B7 '+custoIA.itens+' itens processados'
+          ),
+          resultadoOrigem === 'fallback' && /*#__PURE__*/React.createElement('div', { style:{background:'#fdecea',border:'1px solid #f5b8b8',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#a32d2d',marginBottom:10,fontWeight:'bold'} },
+            '\u26A0\uFE0F A IA FALHOU \u2014 este resultado veio da compara\u00e7\u00e3o gr\u00e1tis (sem custo, sem IA de verdade). Revise com aten\u00e7\u00e3o extra.'
+          ),
+          resultadoOrigem === 'local' && /*#__PURE__*/React.createElement('div', { style:{background:'#f0f0f0',border:'1px solid #ddd',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#555',marginBottom:10,fontWeight:'bold'} },
+            '\u26A1 Resultado gerado por compara\u00e7\u00e3o gr\u00e1tis (sem IA, sem custo)'
           ),
           linhas.map(function(l, idx){
             var corFundo = l.descricaoFinal ? '#eafaf0' : '#fff8e6';
@@ -7177,11 +7205,17 @@ function ModalImportarExcelMapa(_ref_imp) {
               /*#__PURE__*/React.createElement('div', { style:{fontSize:10,color:'#555',marginBottom:4} },
                 'Linha '+l.linhaOriginal+' da planilha \u2014 Qt: '+l.qt+' \u00B7 Unid: '+l.unid+' \u00B7 Texto original: "'+l.descricaoRaw+'"'
               ),
-              l.descricaoFinal
-                ? /*#__PURE__*/React.createElement('div', { style:{fontSize:11,fontWeight:'bold',color:'#1a7a44'} }, '\u2705 '+l.descricaoFinal)
+              (l.descricaoFinal && !linhasEditando[idx])
+                ? /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:8} },
+                    /*#__PURE__*/React.createElement('div', { style:{fontSize:11,fontWeight:'bold',color:'#1a7a44',flex:1} }, '\u2705 '+l.descricaoFinal),
+                    /*#__PURE__*/React.createElement('span', {
+                      onClick: function(){ setLinhasEditando(function(prev){ var n=Object.assign({},prev); n[idx]=true; return n; }); setTextoDigitado(function(prev){ var n=Object.assign({},prev); n[idx]=l.descricaoFinal; return n; }); },
+                      style:{fontSize:10,color:'#185FA5',cursor:'pointer',textDecoration:'underline',flexShrink:0}
+                    }, '\u270F\uFE0F Trocar')
+                  )
                 : /*#__PURE__*/React.createElement(AutocompleteInput, {
-                    value: '',
-                    onChange: function(){},
+                    value: textoDigitado[idx] || '',
+                    onChange: function(v){ setTextoDigitado(function(prev){ var n=Object.assign({},prev); n[idx]=v; return n; }); },
                     onCommit: function(v){ atualizarDescricaoManual(idx, v); },
                     suggestions: cadastrosInsumos,
                     strictMatch: true,
