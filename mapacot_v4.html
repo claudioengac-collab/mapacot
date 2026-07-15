@@ -1237,6 +1237,8 @@ var fmtBRL = function fmtBRL(v) {
 };
 var parsePOVal = function(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
 var buildPedidoPDF = function buildPedidoPDF(po) {
+  // FIX 1: esc() local para evitar XSS/layout quebrado no PDF
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   var num = 'PO-' + String(po.numero).padStart(3,'0');
   var dtRaw = po.data_emissao || po.criado_em;
   var dtObj = dtRaw ? new Date(dtRaw) : new Date();
@@ -5751,7 +5753,7 @@ var _useState27 = useState(init),
             total: total,
             status: 'rascunho',
             forma_pagamento: formaPagamento||'',
-            data_emissao: new Date().toISOString(),
+            data_emissao: null,
             criado_em: new Date().toISOString()
           };
           return sbSavePedido(po).then(function(){ return po; });
@@ -5773,7 +5775,7 @@ var _useState27 = useState(init),
   // ── Modal Edição de Pedido Existente ──────────────────────────────────────
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
-    itens: itensAtivos,
+    itens: (mapa && mapa.itens)||[],
     pedidos: pedidos,
     modoEdicao: true,
     formaPagamentoInicial: poEmEdicao.forma_pagamento||'',
@@ -5794,7 +5796,7 @@ var _useState27 = useState(init),
       var itensEditados = [];
       var sub = 0;
       Object.keys(config).forEach(function(itemId){
-        var item = itensAtivos.find(function(i){ return i.id===itemId; });
+        var item = ((mapa && mapa.itens)||[]).find(function(i){ return i.id===itemId; });
         if(!item) {
           // item pode ter sido removido do mapa - usar dados originais do PO
           var itOrig = (poEmEdicao.itens||[]).find(function(i){ return i.item_id===itemId; });
@@ -5820,11 +5822,10 @@ var _useState27 = useState(init),
         });
       });
       var fin = (finConfig||{})[poEmEdicao.fornecedor_id]||{};
-      var parsePV = function(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
-      var dV=parsePV(fin.desconto), dM=fin.desconto_mode||'%';
-      var aV=parsePV(fin.acrescimo), aM=fin.acrescimo_mode||'%';
-      var fV=parsePV(fin.frete), fM=fin.frete_mode||'R$';
-      var iV=parsePV(fin.impostos), iM=fin.impostos_mode||'%';
+      var dV=parsePOVal(fin.desconto), dM=fin.desconto_mode||'%';
+      var aV=parsePOVal(fin.acrescimo), aM=fin.acrescimo_mode||'%';
+      var fV=parsePOVal(fin.frete), fM=fin.frete_mode||'R$';
+      var iV=parsePOVal(fin.impostos), iM=fin.impostos_mode||'%';
       var vlD=dM==='%'?sub*dV/100:dV, vlA=aM==='%'?sub*aV/100:aV;
       var base=sub-vlD+vlA;
       var vlF=fM==='%'?sub*fV/100:fV, vlI=iM==='%'?base*iV/100:iV;
@@ -5864,7 +5865,8 @@ var _useState27 = useState(init),
     onEditarPedido: function(po){
       // Abrir Step2 em modo edição com dados do PO existente
       setPoEmEdicao(po);
-      setPoFinanceiro({ [po.fornecedor_id]: po.financeiro||{} });
+      setPoFinanceiro(_defineProperty({}, po.fornecedor_id, po.financeiro||{}));
+      setShowPedidos(false);
       setShowPedidoEdicao(true);
     },
     onUpdateStatus: function(id, status){
@@ -5889,7 +5891,7 @@ function ModalPedidoStep1(_ref_po1) {
   var poStatus = {};
   (itens||[]).forEach(function(item){
     var posdoItem = (pedidos||[]).filter(function(po){
-      return po.mapa_id===mapa.id && (po.itens||[]).some(function(it){ return it.item_id===item.id; }) && po.status!=='cancelado';
+      return mapa && po.mapa_id===mapa.id && (po.itens||[]).some(function(it){ return it.item_id===item.id; }) && po.status!=='cancelado';
     });
     var qtTotal = Number(item.qt)||0;
     var qtPedida = 0;
