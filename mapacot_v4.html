@@ -3923,6 +3923,7 @@ var _useState27 = useState(init),
   // Estados para edição de pedido existente
   var _useStatePOEdit=useState(null),poEmEdicao=_slicedToArray(_useStatePOEdit,2)[0],setPoEmEdicao=_slicedToArray(_useStatePOEdit,2)[1];
   var _useStatePOEShow=useState(false),showPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[0],setShowPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[1];
+  var _useStateCfgEd=useState({}),configEdicao=_slicedToArray(_useStateCfgEd,2)[0],setConfigEdicao=_slicedToArray(_useStateCfgEd,2)[1];
   var _useStateSIP=useState([]),itensSelecionadosPO=_slicedToArray(_useStateSIP,2)[0],setItensSelecionadosPO=_slicedToArray(_useStateSIP,2)[1];
   var _useStatePOCfg=useState({}),pedidoConfig=_slicedToArray(_useStatePOCfg,2)[0],setPedidoConfig=_slicedToArray(_useStatePOCfg,2)[1];
   var _useStatePOFin=useState({}),poFinanceiro=_slicedToArray(_useStatePOFin,2)[0],setPoFinanceiro=_slicedToArray(_useStatePOFin,2)[1];
@@ -5779,18 +5780,12 @@ var _useState27 = useState(init),
     pedidos: pedidos,
     modoEdicao: true,
     formaPagamentoInicial: poEmEdicao.forma_pagamento||'',
-    config: (function(){
-      var cfg = {};
-      (poEmEdicao.itens||[]).forEach(function(it){
-        cfg[it.item_id] = [{ fornId: poEmEdicao.fornecedor_id, fornNome: poEmEdicao.fornecedor_nome, qt: it.qt_pedida, vlUnit: it.vl_unit, obs: '' }];
-      });
-      return cfg;
-    })(),
-    onConfig: function(){},
+    config: configEdicao,
+    onConfig: setConfigEdicao,
     poFinanceiro: poFinanceiro,
     onFinanceiro: setPoFinanceiro,
     onVoltar: function(){},
-    onClose: function(){ setShowPedidoEdicao(false); setPoEmEdicao(null); setPoFinanceiro({}); },
+    onClose: function(){ setShowPedidoEdicao(false); setPoEmEdicao(null); setPoFinanceiro({}); setConfigEdicao({}); },
     onGerar: function(config, finConfig, onDone, formaPagamento){
       // Modo edição: recalcula itens e total a partir do config atual (igual ao fluxo novo)
       var itensEditados = [];
@@ -5821,7 +5816,11 @@ var _useState27 = useState(init),
           });
         });
       });
-      var fin = (finConfig||{})[poEmEdicao.fornecedor_id]||{};
+        if(itensEditados.length === 0){
+          if(onDone) onDone();
+          alert('\u274C O pedido deve ter pelo menos um insumo. Adicione itens antes de salvar.');
+          return;
+        }
       var dV=parsePOVal(fin.desconto), dM=fin.desconto_mode||'%';
       var aV=parsePOVal(fin.acrescimo), aM=fin.acrescimo_mode||'%';
       var fV=parsePOVal(fin.frete), fM=fin.frete_mode||'R$';
@@ -5841,6 +5840,7 @@ var _useState27 = useState(init),
         setShowPedidoEdicao(false);
         setPoEmEdicao(null);
         setPoFinanceiro({});
+        setConfigEdicao({});
         if(onDone) onDone();
         alert('\u2705 Pedido PO-'+String(poEmEdicao.numero).padStart(3,'0')+' atualizado com sucesso!');
       }).catch(function(e){
@@ -5866,6 +5866,12 @@ var _useState27 = useState(init),
       // Abrir Step2 em modo edição com dados do PO existente
       setPoEmEdicao(po);
       setPoFinanceiro(_defineProperty({}, po.fornecedor_id, po.financeiro||{}));
+      // Inicializar configEdicao com os itens do PO
+      var cfgEd = {};
+      (po.itens||[]).forEach(function(it){
+        cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0, obs: '' }];
+      });
+      setConfigEdicao(cfgEd);
       setShowPedidos(false);
       setShowPedidoEdicao(true);
     },
@@ -6145,6 +6151,14 @@ function ModalPedidoStep2(_ref_po2) {
             /*#__PURE__*/React.createElement('div', { style:{background:'#f5f0ff',padding:'8px 12px',display:'flex',alignItems:'center',gap:8,borderBottom:'1px solid #e0e0e0'} },
               /*#__PURE__*/React.createElement('span', { style:{background:'#7c3aed',color:'#fff',padding:'2px 8px',borderRadius:99,fontSize:9,fontWeight:'bold'} }, 'ITEM '+item.num),
               /*#__PURE__*/React.createElement('span', { style:{fontWeight:'bold',fontSize:11,flex:1} }, (item.descricao||'') + (item.detalhe?' \u2014 '+item.detalhe:'')),
+              modoEdicao && /*#__PURE__*/React.createElement('button', {
+                onClick: function(){
+                  if(!confirm('Remover "'+item.descricao+'" deste pedido?\n\nA quantidade voltará como pendente no mapa.')) return;
+                  onConfig(function(prev){ var n=Object.assign({},prev); delete n[itemId]; return n; });
+                },
+                title: 'Remover item do pedido',
+                style:{background:'#c0392b',color:'#fff',border:'none',borderRadius:4,padding:'2px 8px',cursor:'pointer',fontSize:10,fontWeight:'bold'}
+              }, '\u2715 Remover'),
               /*#__PURE__*/React.createElement('span', { style:{background:'#eee',padding:'2px 6px',borderRadius:3,fontSize:9,color:'#666'} }, item.unid||'')
             ),
             // Qt boxes
