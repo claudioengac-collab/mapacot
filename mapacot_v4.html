@@ -7136,13 +7136,20 @@ function ModalImportarExcelMapa(_ref_imp) {
   };
 
   var totalPendente = linhas.filter(function(l){ return !l.descricaoFinal; }).length;
+  var totalResolvido = linhas.filter(function(l){ return l.descricaoFinal; }).length;
   var algumaLinhaEditando = Object.keys(linhasEditando).some(function(k){ return linhasEditando[k]; });
-  var podeConfirmar = linhas.length > 0 && totalPendente === 0 && !algumaLinhaEditando;
+  // FIX: importação parcial permitida - basta ter ao menos 1 item resolvido
+  var podeConfirmar = totalResolvido > 0 && !algumaLinhaEditando;
 
   var handleConfirmar = function(){
     if(!podeConfirmar) return;
+    // Aviso extra se algum item ficará de fora, para não passar despercebido
+    if(totalPendente > 0){
+      var confirma = window.confirm(totalPendente+' item(ns) sem insumo reconhecido N\u00c3O ser\u00e3o importados agora.\nVoc\u00ea poder\u00e1 adicion\u00e1-los depois direto no mapa.\n\nDeseja continuar mesmo assim?');
+      if(!confirma) return;
+    }
     setEnviando(true);
-    var itensParaImportar = linhas.map(function(l){ return { qt:l.qt, unid:l.unid, descricaoFinal:l.descricaoFinal }; });
+    var itensParaImportar = linhas.filter(function(l){ return l.descricaoFinal; }).map(function(l){ return { qt:l.qt, unid:l.unid, descricaoFinal:l.descricaoFinal }; });
     onConfirmar(itensParaImportar);
   };
 
@@ -7232,7 +7239,7 @@ function ModalImportarExcelMapa(_ref_imp) {
           onClick: handleConfirmar,
           disabled: !podeConfirmar || enviando,
           style:{background: podeConfirmar ? '#0e7a5f' : '#bbb',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor: podeConfirmar ? 'pointer' : 'not-allowed',fontWeight:'bold'}
-        }, enviando ? 'Importando...' : ('Confirmar Importa\u00e7\u00e3o ('+linhas.length+')'))
+        }, enviando ? 'Importando...' : (totalPendente > 0 ? ('Confirmar Importa\u00e7\u00e3o ('+totalResolvido+' de '+linhas.length+')') : ('Confirmar Importa\u00e7\u00e3o ('+linhas.length+')')))
       )
     )
   );
