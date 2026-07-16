@@ -7136,16 +7136,37 @@ function ModalEnsinarSistema(_ref_ens) {
     rd.readAsArrayBuffer(file);
   };
   var parsearTextoDesc = function(txt) {
+    var NUM_BR = /\d{1,3}(?:\.\d{3})*,\d{2,4}/;
+    var NUM_US = /\d{1,3}(?:,\d{3})*\.\d{2,4}/;
+    var CABECALHOS = /^(C[o\u00f3]d\.?|Item|Seq\.?|It|DES|Qtd|Qtde|Quantidade|UN|UND|Unid|Marca|Pre[\u00e7c]o|Valor|Vlr|Total|Desconto|Descri[\u00e7c][\u00e3a]o|Produto|Tipo|Refer[\u00ea e]ncia|NCM|Lote|Fantasia|Endere[\u00e7c]o|Bairro|Cidade|Munic[\u00ed i]pio|CEP|CNPJ|CPF|Telefone|Fone|Vendedor|Data|Status|Cliente|Fax|E-?Mail|Impresso|Obs|Entrada|Frete|ST|Rep|Compl|Inscr|Raz[\u00e3a]o|Contato|Bruto|L[\u00ed i]quido|Acr[\u00e9e]scimo|Volumes|Servi[\u00e7c]o|Servi[\u00e7c]os|Substitui|IPI|ICMS|COFINS|PIS|FCP|Classif|Ordem|Parcela|Parcelas|Cota[\u00e7c][\u00e3a]o|Or[\u00e7c]amento|Emiss[\u00e3a]o|Prazo|Validade|F[\u00e1a]brica|Peso|Subtotal|Detalhe|Outras?|Desp\.?|Subst\.?|Trib\.?|Serv\.?)/i;
+    var EMPRESA = /(LTDA|EIRELI|\bS\/A\b|\bME\b|\bEPP\b|COMERCIO|IND[U\u00da]STRIA|ENGENHARIA)/i;
+    var ehLinhaCabecalho = function(linha){
+      if (linha.length < 8) return true;
+      if (EMPRESA.test(linha)) return true; // nome de empresa/raz\u00e3o social, n\u00e3o \u00e9 insumo
+      var palavras = linha.split(/\s+/).filter(function(w){ return w.length > 1; });
+      if (!palavras.length) return true;
+      var cabCount = 0;
+      palavras.forEach(function(p){ if (CABECALHOS.test(p.replace(/[.:;,]/g,''))) cabCount++; });
+      if (cabCount / palavras.length > 0.4) return true;
+      return false;
+    };
     var descs = [];
-    String(txt||'').split("\n").forEach(function(linha) {
-      linha = linha.trim(); if (linha.length < 4) return;
-      var nums = linha.match(/(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/g);
-      if (!nums || !nums.length) return; // FIX: sem preço na linha, não é item de verdade
-      var lastNum = nums[nums.length-1];
-      var preco = parseFloat(lastNum.replace(/\./g,"").replace(",","."));
-      if (preco <= 0 || preco > 9999999) return;
-      var desc = linha.slice(0,linha.lastIndexOf(lastNum)).replace(/^\d+\s*/,"").replace(/\s{2,}/g," ").trim().toUpperCase();
-      if (desc.length > 3) descs.push(desc);
+    String(txt||'').split(/\r\n|\r|\n/).forEach(function(linhaRaw) {
+      var linha = linhaRaw.trim();
+      if (linha.length < 10) return;
+      if (ehLinhaCabecalho(linha)) return;
+      // FIX: aceita formato de pre\u00e7o BR (1.234,56) OU US (1,234.56) - fornecedores diferentes usam formatos diferentes
+      var temPreco = NUM_BR.test(linha) || NUM_US.test(linha);
+      if (!temPreco) return;
+      var desc = linha
+        .replace(new RegExp(NUM_BR, 'g'), ' ')
+        .replace(new RegExp(NUM_US, 'g'), ' ')
+        .replace(/\b\d+[.,]?\d*\b/g, ' ')
+        .replace(/R\$/g, ' ')
+        .replace(/^\.\s*/, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      if (desc.length > 8 && /[a-zA-Z\u00c0-\u00ff]{4,}/.test(desc)) descs.push(desc.toUpperCase());
     });
     return descs;
   };
@@ -7205,7 +7226,15 @@ function ModalEnsinarSistema(_ref_ens) {
     files.forEach(function(file){
       var ext = (file.name.split(".").pop()||"").toLowerCase();
       if(ext === "pdf"){
-        parsearPDFDesc(file, function(descs, err){ if(!err) todasDescs = todasDescs.concat(descs); finalizar(); });
+        parsearPDFDesc(file, function(descs, err){
+          if(!err){ todasDescs = todasDescs.concat(descs); finalizar(); return; }
+          // FIX: arquivo tem extensão .pdf mas não é um PDF de verdade (ex: texto exportado de um ERP) -
+          // tenta ler como texto puro antes de desistir, em vez de descartar silenciosamente
+          var rd2 = new FileReader();
+          rd2.onload = function(ev){ todasDescs = todasDescs.concat(parsearTextoDesc(ev.target.result)); finalizar(); };
+          rd2.onerror = function(){ finalizar(); };
+          rd2.readAsText(file, "UTF-8");
+        });
       } else if(ext === "xlsx" || ext === "xls"){
         parsearXLSXDesc(file, function(descs, err){ if(!err) todasDescs = todasDescs.concat(descs); finalizar(); });
       } else {
