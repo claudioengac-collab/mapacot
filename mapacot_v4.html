@@ -7085,9 +7085,22 @@ function ModalEnsinarSistema(_ref_ens) {
     var rd = new FileReader();
     rd.onload = function(e) {
       pdfjsLib.getDocument({data: new Uint8Array(e.target.result)}).promise
-        .then(function(pdf) { return pdf.getPage(1).then(function(pg){ return pg.getTextContent(); }); })
-        .then(function(content) {
-          var txts = (content.items||[]).map(function(it){ return it.str||""; }).filter(function(s){ return s.trim()!==""; });
+        .then(function(pdf) {
+          // FIX: ler TODAS as páginas, não só a primeira (evita perder itens que começam na página 2+)
+          var promessasPaginas = [];
+          for (var p = 1; p <= pdf.numPages; p++) {
+            promessasPaginas.push(pdf.getPage(p).then(function(pg){ return pg.getTextContent(); }));
+          }
+          return Promise.all(promessasPaginas);
+        })
+        .then(function(conteudosPorPagina) {
+          var txts = [];
+          conteudosPorPagina.forEach(function(content){
+            (content.items||[]).forEach(function(it){
+              var s = it.str||"";
+              if (s.trim()!=="") txts.push(s);
+            });
+          });
           var itens = parsearPDFTextoEnsinar(txts); // FIX: exige preço próximo, evita cabeçalho/marca solta
           var descs = itens.map(function(it){ return it.desc; });
           cb(descs, null);
