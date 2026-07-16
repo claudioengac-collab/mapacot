@@ -7009,6 +7009,7 @@ function ModalEnsinarSistema(_ref_ens) {
   var _sCarr = useState(false), carregando = _slicedToArray(_sCarr,2)[0], setCarregando = _slicedToArray(_sCarr,2)[1];
   var _sBusca = useState(''), buscaDireita = _slicedToArray(_sBusca,2)[0], setBuscaDireita = _slicedToArray(_sBusca,2)[1];
   var _sSelEsq = useState(null), selecionadoEsquerda = _slicedToArray(_sSelEsq,2)[0], setSelecionadoEsquerda = _slicedToArray(_sSelEsq,2)[1];
+  var _sMarcados = useState({}), marcadosParaExcluir = _slicedToArray(_sMarcados,2)[0], setMarcadosParaExcluir = _slicedToArray(_sMarcados,2)[1];
   var _sToast = useState(''), toast = _slicedToArray(_sToast,2)[0], setToast = _slicedToArray(_sToast,2)[1];
   var _sErroEns = useState(''), erro = _slicedToArray(_sErroEns,2)[0], setErro = _slicedToArray(_sErroEns,2)[1];
 
@@ -7172,9 +7173,24 @@ function ModalEnsinarSistema(_ref_ens) {
     onAprendizadoSalvo(itemDesc, insumoDescricao);
     setItensCarregados(function(prev){ return prev.filter(function(d){ return d !== itemDesc; }); });
     setSelecionadoEsquerda(null);
+    setMarcadosParaExcluir({}); // FIX: evita marcação apontar pro índice errado após a lista mudar
     setToast('\u2705 "'+itemDesc+'" associado com sucesso!');
     setTimeout(function(){ setToast(''); }, 2500);
   };
+
+  var toggleMarcado = function(idx){
+    setMarcadosParaExcluir(function(prev){ var n = Object.assign({}, prev); n[idx] = !n[idx]; return n; });
+  };
+  var totalMarcados = Object.keys(marcadosParaExcluir).filter(function(k){ return marcadosParaExcluir[k]; }).length;
+  var excluirMarcados = function(){
+    if(!totalMarcados) return;
+    if(window.confirm(totalMarcados+' item(ns) ser\u00e3o exclu\u00eddo(s) da lista, sem criar associa\u00e7\u00e3o nenhuma.\nVoc\u00ea pode carregar os or\u00e7amentos de novo depois, se precisar.\n\nConfirma?')){
+      setItensCarregados(function(prev){ return prev.filter(function(x, i){ return !marcadosParaExcluir[i]; }); });
+      setMarcadosParaExcluir({});
+      setSelecionadoEsquerda(null);
+    }
+  };
+  var cancelarSelecao = function(){ setMarcadosParaExcluir({}); };
 
   var clicarEsquerda = function(itemDesc){
     setSelecionadoEsquerda(function(prev){ return prev === itemDesc ? null : itemDesc; });
@@ -7226,7 +7242,12 @@ function ModalEnsinarSistema(_ref_ens) {
           ),
           itensCarregados.length===0 && !carregando && /*#__PURE__*/React.createElement('div', { style:{padding:20,fontSize:11,color:'#888',textAlign:'center'} }, 'Carregue um ou mais or\u00e7amentos acima para come\u00e7ar.'),
           itensCarregados.length>0 && /*#__PURE__*/React.createElement('div', { style:{background:'#fff8e6',border:'1px solid #f0d080',borderRadius:6,margin:'8px 12px 0',padding:'6px 10px',fontSize:10,color:'#7a6010'} },
-            '\uD83D\uDCF1 Toque num item aqui e depois toque no insumo certo \u00e0 direita para associar. Tamb\u00e9m d\u00e1 pra arrastar no computador.'
+            '\uD83D\uDCF1 Toque num item aqui e depois toque no insumo certo \u00e0 direita para associar. Tamb\u00e9m d\u00e1 pra arrastar no computador. Marque a caixinha pra excluir v\u00e1rios de uma vez.'
+          ),
+          totalMarcados > 0 && /*#__PURE__*/React.createElement('div', { style:{background:'#fdecea',border:'1px solid #f5b8b8',borderRadius:6,margin:'8px 12px 0',padding:'8px 10px',display:'flex',alignItems:'center',gap:8} },
+            /*#__PURE__*/React.createElement('span', { style:{fontSize:11,color:'#a32d2d',fontWeight:'bold',flex:1} }, totalMarcados+' selecionado'+(totalMarcados===1?'':'s')),
+            /*#__PURE__*/React.createElement('button', { onClick:excluirMarcados, style:{background:'#c0392b',color:'#fff',border:'none',borderRadius:6,padding:'6px 12px',fontSize:10,fontWeight:'bold',cursor:'pointer'} }, '\uD83D\uDDD1\uFE0F Excluir Selecionados'),
+            /*#__PURE__*/React.createElement('button', { onClick:cancelarSelecao, style:{background:'#f0f0f0',color:'#555',border:'none',borderRadius:6,padding:'6px 12px',fontSize:10,cursor:'pointer'} }, 'Cancelar')
           ),
           /*#__PURE__*/React.createElement('div', { className:'scroll-ensinar', style:{flex:1,overflowY:'scroll',padding:'8px 12px'} },
             itensCarregados.map(function(d, idx){
@@ -7238,6 +7259,13 @@ function ModalEnsinarSistema(_ref_ens) {
                 onClick: function(){ clicarEsquerda(d); },
                 style:{background:sel?'#fde6b8':'#fff',border:'2px dashed '+(sel?'#c0392b':'#f0a500'),borderRadius:8,padding:'9px 12px',marginBottom:7,fontSize:11,color:'#333',cursor:'pointer',display:'flex',alignItems:'center',gap:8}
               },
+                /*#__PURE__*/React.createElement('input', {
+                  type: 'checkbox',
+                  checked: !!marcadosParaExcluir[idx],
+                  onClick: function(e){ e.stopPropagation(); },
+                  onChange: function(){ toggleMarcado(idx); },
+                  style:{flexShrink:0,width:16,height:16,cursor:'pointer'}
+                }),
                 /*#__PURE__*/React.createElement('span', { style:{flex:1} }, d),
                 /*#__PURE__*/React.createElement('span', {
                   onClick: function(e){
@@ -7245,6 +7273,7 @@ function ModalEnsinarSistema(_ref_ens) {
                     if(window.confirm('Excluir "'+d+'" da lista?\nVoc\u00ea pode carregar o or\u00e7amento de novo depois, se precisar.')){
                       setItensCarregados(function(prev){ return prev.filter(function(x, i){ return i !== idx; }); });
                       if(selecionadoEsquerda === d) setSelecionadoEsquerda(null);
+                      setMarcadosParaExcluir({}); // FIX: evita marcação apontar pro índice errado após a lista mudar
                     }
                   },
                   title: 'Excluir sem associar',
