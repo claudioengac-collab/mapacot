@@ -7020,63 +7020,35 @@ function ModalEnsinarSistema(_ref_ens) {
       var st=s.trim();
       if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS\.?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO)$/i.test(st)) return true;
       if(/^(VALOR TOTAL|TOTAL GERAL|TOTAL BRUTO|TOTAL L[I\u00CD]QUIDO|PESO TOTAL|PESO L[I\u00CD]QUIDO|VALOR DO IPI|TOTAL DO IPI|VALOR TOTAL DO|DEMAIS CONDI)/i.test(st)) return true;
+      // FIX: cabeçalhos compostos (frase inteira em um só token), comum quando o PDF junta a linha de cabeçalho
+      if(/DESCRI[C\u00C7][A\u00C3]O DO PRODUTO|TOTAL (ACRESCIMO|DESCONTO|L[I\u00CD]QUIDO|GERAL|BRUTO)|VALOR (UNIT|TOTAL)|C[O\u00D3]DIGO PRODUTO/i.test(st)) return true;
+      if(/^(TOTAL|VALOR|VENDEDOR|CLIENTE|ENDERE[C\u00C7]O)[\s:]/i.test(st)) return true;
       return false;
     };
-    var descTotais=[],unitPrecos=[],items=[],usados=[];
+    var items=[];
     for (var i=0;i<textos.length;i++) {
-      var t=textos[i].trim(), prox=(textos[i+1]||"").trim();
-      var pu=t.match(PRECO);
-      if (pu && prox==="R$") {
-        var unit=parseFloat(pu[1].replace(/\./g,"").replace(",","."));
-        var qty=parseFloat((textos[i-1]||"").trim());
-        if (qty>0&&unit>0) unitPrecos.push({qty:qty,unit:unit});
-      }
+      var t=textos[i].trim();
       var ehDesc=t.length>7&&/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
-      if (ehDesc) {
-        var prevUnit4=null;
-        for (var j=i+1;j<=i+6&&j<textos.length;j++) {
-          var tj=(textos[j]||"").trim();
-          if (PRECO4.test(tj)&&!PRECO.test(tj)) { prevUnit4=parseFloat(tj.replace(/\./g,"").replace(",","."));continue; }
-          var pm=tj.match(PRECO);
-          if (pm) {
-            var tot=parseFloat(pm[1].replace(/\./g,"").replace(",","."));
-            if(tot>0&&tot<9999999) {
-              if (prevUnit4&&prevUnit4>0) {
-                var validado=false;
-                for(var k=i+1;k<j;k++){
-                  var vq=parseFloat((textos[k]||"").trim().replace(",","."));
-                  if(vq>0&&Math.abs(vq*prevUnit4-tot)/Math.max(tot,1)<0.03){
-                    descTotais.push({desc:t.toUpperCase(),total:prevUnit4,idx:i}); validado=true; break;
-                  }
-                }
-                if(!validado) descTotais.push({desc:t.toUpperCase(),total:tot,idx:i});
-              } else {
-                descTotais.push({desc:t.toUpperCase(),total:tot,idx:i});
-              }
-              break;
-            }
-          }
-          if (tj.length>10&&/[a-zA-Z]{4,}/.test(tj)&&/\s/.test(tj)&&!ehCab(tj)&&!/^\d+$/.test(tj)) break;
-          if (!PRECO4.test(tj)) prevUnit4=null;
+      if (!ehDesc) continue;
+      // FIX: busca o preço em AMBAS as direções (antes e depois) — alguns PDFs (ex.: gerados por certos
+      // ERPs) colocam o valor ANTES da descrição na ordem interna do texto, não depois.
+      var precoAchado = null;
+      for (var dist=1; dist<=6; dist++) {
+        var jDepois=i+dist, jAntes=i-dist;
+        if (jDepois<textos.length) {
+          var tjD=(textos[jDepois]||"").trim();
+          if (PRECO.test(tjD)||PRECO4.test(tjD)) { precoAchado=tjD; break; }
+        }
+        if (jAntes>=0) {
+          var tjA=(textos[jAntes]||"").trim();
+          if (PRECO.test(tjA)||PRECO4.test(tjA)) { precoAchado=tjA; break; }
         }
       }
+      if (precoAchado) {
+        var preco=parseFloat(precoAchado.replace(/\./g,"").replace(",","."));
+        items.push({desc:t.toUpperCase(), preco:preco});
+      }
     }
-    if (unitPrecos.length>0) {
-      descTotais.forEach(function(dt){
-        for(var i=0;i<unitPrecos.length;i++){
-          if(usados.indexOf(i)>=0) continue;
-          var exp=unitPrecos[i].qty*unitPrecos[i].unit;
-          if(exp>0&&Math.abs(exp-dt.total)/Math.max(dt.total,1)<0.02){
-            items.push({desc:dt.desc,preco:unitPrecos[i].unit}); usados.push(i); return;
-          }
-        }
-      });
-      if(items.length>0) return items;
-    }
-    var usedIdx=[];
-    descTotais.forEach(function(dt){
-      if(usedIdx.indexOf(dt.idx)<0){items.push({desc:dt.desc,preco:dt.total});usedIdx.push(dt.idx);}
-    });
     return items;
   };
   var parsearPDFDesc = function(file, cb) {
