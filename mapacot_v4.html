@@ -747,6 +747,24 @@ var sbSaveIaUso = function(dados) {
     method: "POST", headers: SB, body: JSON.stringify(dados)
   }).catch(function(){});
 };
+var sbSalvarAprendizado = function(textoOriginal, insumoDescricao) {
+  var texto = String(textoOriginal||'').trim().toUpperCase();
+  if(!texto || !insumoDescricao) return Promise.resolve();
+  return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado", {
+    method: "POST", headers: SB,
+    body: JSON.stringify({ texto_original: texto, insumo_descricao: insumoDescricao, atualizado_em: new Date().toISOString() })
+  }).catch(function(){});
+};
+var sbBuscarAprendizados = function() {
+  return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado?select=texto_original,insumo_descricao", { headers: SB })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      var mapa = {};
+      (rows||[]).forEach(function(r){ mapa[r.texto_original] = r.insumo_descricao; });
+      return mapa;
+    })
+    .catch(function(){ return {}; });
+};
 var sbGetIaUsoDia = function() {
   var hoje = new Date().toISOString().slice(0,10);
   return fetch(SUPABASE_URL + "/rest/v1/ia_uso?select=custo_brl,itens_lidos&created_at=gte." + hoje + "T00:00:00", { headers: SB })
@@ -3939,6 +3957,14 @@ var _useState27 = useState(init),
   // ───────────────────────────────────────────────────────────────────────────
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
+  var _useStateApr=useState({}),aprendizados=_slicedToArray(_useStateApr,2)[0],setAprendizados=_slicedToArray(_useStateApr,2)[1];
+  useEffect(function(){ sbBuscarAprendizados().then(function(m){ setAprendizados(m); }); },[]);
+  var registrarAprendizado = function(textoOriginal, insumoDescricao){
+    sbSalvarAprendizado(textoOriginal, insumoDescricao);
+    var chave = String(textoOriginal||'').trim().toUpperCase();
+    setAprendizados(function(prev){ var n = Object.assign({}, prev); n[chave] = insumoDescricao; return n; });
+  };
+  var _useStateEns=useState(false),showEnsinarSistema=_slicedToArray(_useStateEns,2)[0],setShowEnsinarSistema=_slicedToArray(_useStateEns,2)[1];
   useEffect(function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); },[]);
   useEffect(function(){
     if(mapa && mapa.id){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); }
@@ -5465,6 +5491,14 @@ var _useState27 = useState(init),
       gap: 5
     })
   }, "\uD83D\uDCE5 IMPORTAR EXCEL"), /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() { setShowEnsinarSistema(true); },
+    title: "Ensinar o sistema a reconhecer insumos automaticamente",
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: "#5b3fa0",
+      color: "#fff",
+      gap: 5
+    })
+  }, "\uD83E\uDDE0 ENSINAR SISTEMA"), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() { setShowLerIA(true); },
     title: "LER OR\xC7AMENTO COM INTELIG\xCANCIA ARTIFICIAL",
     style: { background: "#534AB7", color: "#fff", border: "none", borderRadius: 7, padding: "6px 13px", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
@@ -5616,6 +5650,7 @@ var _useState27 = useState(init),
   showCasar && /*#__PURE__*/React.createElement(ModalCasarInsumos, {
     mapa: mapa, itens: itens,
     onClose: function(){ setShowCasar(false); },
+    onAprendizadoSalvo: registrarAprendizado,
     onConfirm: function(ligs) {
       Object.keys(ligs).forEach(function(itemMapaId) {
         var lig=ligs[itemMapaId];
@@ -5794,6 +5829,8 @@ var _useState27 = useState(init),
   // ── Modal Edição de Pedido Existente ──────────────────────────────────────
   showImportExcel && /*#__PURE__*/React.createElement(ModalImportarExcelMapa, {
     cadastrosInsumos: cadastros.insumos||[],
+    aprendizados: aprendizados,
+    onAprendizadoSalvo: registrarAprendizado,
     onClose: function(){ setShowImportExcel(false); },
     onConfirmar: function(itensParaImportar){
       update(function (m) {
@@ -5814,6 +5851,12 @@ var _useState27 = useState(init),
       });
       setShowImportExcel(false);
     }
+  }),
+  showEnsinarSistema && /*#__PURE__*/React.createElement(ModalEnsinarSistema, {
+    cadastrosInsumos: cadastros.insumos||[],
+    aprendizados: aprendizados,
+    onAprendizadoSalvo: registrarAprendizado,
+    onClose: function(){ setShowEnsinarSistema(false); }
   }),
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
@@ -6658,6 +6701,7 @@ function TelaPedidos(_ref_tp) {
 // ─── Modal Casar Insumos ────────────────────────────────────────────────────
 function ModalCasarInsumos(_ref_cas) {
   var mapa=_ref_cas.mapa, itens=_ref_cas.itens, onClose=_ref_cas.onClose, onConfirm=_ref_cas.onConfirm;
+  var onAprendizadoSalvo=_ref_cas.onAprendizadoSalvo||function(){};
   var _sF=useState(""),   fornId=_slicedToArray(_sF,2)[0],    setFornId=_slicedToArray(_sF,2)[1];
   var _sCarr=useState(false),carregando=_slicedToArray(_sCarr,2)[0],setCarregando=_slicedToArray(_sCarr,2)[1];
   var _sI=useState([]),   itemsOrc=_slicedToArray(_sI,2)[0],  setItemsOrc=_slicedToArray(_sI,2)[1];
@@ -6840,6 +6884,11 @@ function ModalCasarInsumos(_ref_cas) {
   var desligar = function(mid){var n=Object.assign({},ligs);delete n[mid];setLigs(n);};
   var confirmar = function(){
     if(!Object.keys(ligs).length){alert("NENHUMA LIGA\xC7\xC3O CRIADA.");return;}
+    // Alimenta a memória: cada "ligação" ensina que aquele texto do orçamento é aquele insumo do mapa
+    Object.keys(ligs).forEach(function(mid){
+      var itemMapa = itens.find(function(i){ return i.id === mid; });
+      if(itemMapa && itemMapa.descricao) onAprendizadoSalvo(ligs[mid].descPDF, itemMapa.descricao);
+    });
     onConfirm(ligs);
   };
   var nLig=Object.keys(ligs).length;
@@ -6949,11 +6998,233 @@ function ModalCasarInsumos(_ref_cas) {
   );
 }
 
+// ─── Modal Ensinar Sistema (Associar Insumos em Lote) ────────────────────────
+function ModalEnsinarSistema(_ref_ens) {
+  var cadastrosInsumos = _ref_ens.cadastrosInsumos || [];
+  var aprendizados = _ref_ens.aprendizados || {};
+  var onAprendizadoSalvo = _ref_ens.onAprendizadoSalvo || function(){};
+  var onClose = _ref_ens.onClose;
+
+  var _sItens = useState([]), itensCarregados = _slicedToArray(_sItens,2)[0], setItensCarregados = _slicedToArray(_sItens,2)[1];
+  var _sCarr = useState(false), carregando = _slicedToArray(_sCarr,2)[0], setCarregando = _slicedToArray(_sCarr,2)[1];
+  var _sBusca = useState(''), buscaDireita = _slicedToArray(_sBusca,2)[0], setBuscaDireita = _slicedToArray(_sBusca,2)[1];
+  var _sSelEsq = useState(null), selecionadoEsquerda = _slicedToArray(_sSelEsq,2)[0], setSelecionadoEsquerda = _slicedToArray(_sSelEsq,2)[1];
+  var _sToast = useState(''), toast = _slicedToArray(_sToast,2)[0], setToast = _slicedToArray(_sToast,2)[1];
+  var _sErroEns = useState(''), erro = _slicedToArray(_sErroEns,2)[0], setErro = _slicedToArray(_sErroEns,2)[1];
+
+  // Leitura de arquivos (mesmo padrão já usado no Casar Insumos - aqui só a descrição interessa)
+  var parsearPDFDesc = function(file, cb) {
+    if (typeof pdfjsLib === "undefined") { cb([], new Error("PDF.js n\u00e3o carregado")); return; }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+    var rd = new FileReader();
+    rd.onload = function(e) {
+      pdfjsLib.getDocument({data: new Uint8Array(e.target.result)}).promise
+        .then(function(pdf) { return pdf.getPage(1).then(function(pg){ return pg.getTextContent(); }); })
+        .then(function(content) {
+          var txts = (content.items||[]).map(function(it){ return it.str||""; }).filter(function(s){ return s.trim()!==""; });
+          var descs = txts.filter(function(t){
+            var s = t.trim();
+            return s.length > 7 && /[a-zA-Z\u00C0-\u00FF]{3,}/.test(s) && !/^\d+([.,]\d+)?$/.test(s);
+          }).map(function(s){ return s.toUpperCase(); });
+          cb(descs, null);
+        })
+        .catch(function(err){ cb([], err); });
+    };
+    rd.onerror = function(){ cb([], new Error("Erro")); };
+    rd.readAsArrayBuffer(file);
+  };
+  var parsearXLSXDesc = function(file, cb) {
+    var rd = new FileReader();
+    rd.onload = function(e) {
+      try {
+        var wb = XLSX.read(new Uint8Array(e.target.result), {type:"array"});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
+        var descs = [];
+        aoa.forEach(function(row) {
+          row.forEach(function(cell){
+            var s = String(cell||'').trim();
+            if(s.length > 4 && /[a-zA-Z\u00C0-\u00FF]{3,}/.test(s) && isNaN(parseFloat(s.replace(',','.')))){
+              descs.push(s.toUpperCase());
+            }
+          });
+        });
+        cb(descs, null);
+      } catch(err) { cb([], err); }
+    };
+    rd.onerror = function(){ cb([], new Error("Erro")); };
+    rd.readAsArrayBuffer(file);
+  };
+  var parsearTextoDesc = function(txt) {
+    var descs = [];
+    String(txt||'').split("\n").forEach(function(linha) {
+      linha = linha.trim();
+      if (linha.length > 4 && /[a-zA-Z\u00C0-\u00FF]{3,}/.test(linha)) descs.push(linha.toUpperCase());
+    });
+    return descs;
+  };
+
+  var adicionarItens = function(descs){
+    // Remove duplicado e o que já está na memória (não faz sentido reensinar)
+    var vistos = {};
+    itensCarregados.forEach(function(d){ vistos[d]=true; });
+    var novos = [];
+    descs.forEach(function(d){
+      var chave = String(d||'').trim().toUpperCase();
+      if(!chave || vistos[chave]) return;
+      if(aprendizados[chave]) return;
+      vistos[chave] = true;
+      novos.push(chave);
+    });
+    if(!novos.length && descs.length){
+      setErro('Todos os itens dessas planilhas j\u00e1 estavam na mem\u00f3ria do sistema.');
+    } else {
+      setErro('');
+    }
+    setItensCarregados(function(prev){ return prev.concat(novos); });
+  };
+
+  var handleArquivos = function(e){
+    var files = Array.prototype.slice.call(e.target.files||[]);
+    e.target.value = "";
+    if(!files.length) return;
+    setCarregando(true); setErro('');
+    var todasDescs = [];
+    var pendentes = files.length;
+    var finalizar = function(){
+      pendentes--;
+      if(pendentes <= 0){ setCarregando(false); adicionarItens(todasDescs); }
+    };
+    files.forEach(function(file){
+      var ext = (file.name.split(".").pop()||"").toLowerCase();
+      if(ext === "pdf"){
+        parsearPDFDesc(file, function(descs, err){ if(!err) todasDescs = todasDescs.concat(descs); finalizar(); });
+      } else if(ext === "xlsx" || ext === "xls"){
+        parsearXLSXDesc(file, function(descs, err){ if(!err) todasDescs = todasDescs.concat(descs); finalizar(); });
+      } else {
+        var rd = new FileReader();
+        rd.onload = function(ev){ todasDescs = todasDescs.concat(parsearTextoDesc(ev.target.result)); finalizar(); };
+        rd.onerror = function(){ finalizar(); };
+        rd.readAsText(file, "UTF-8");
+      }
+    });
+  };
+
+  var handleAssociar = function(itemDesc, insumoDescricao){
+    onAprendizadoSalvo(itemDesc, insumoDescricao);
+    setItensCarregados(function(prev){ return prev.filter(function(d){ return d !== itemDesc; }); });
+    setSelecionadoEsquerda(null);
+    setToast('\u2705 "'+itemDesc+'" associado com sucesso!');
+    setTimeout(function(){ setToast(''); }, 2500);
+  };
+
+  var clicarEsquerda = function(itemDesc){
+    setSelecionadoEsquerda(function(prev){ return prev === itemDesc ? null : itemDesc; });
+  };
+  var clicarDireita = function(insumoDescricao){
+    if(!selecionadoEsquerda) return;
+    handleAssociar(selecionadoEsquerda, insumoDescricao);
+  };
+  var arrastarInicio = function(e, itemDesc){ e.dataTransfer.setData('text/plain', itemDesc); };
+  var soltarDireita = function(e, insumoDescricao){
+    e.preventDefault();
+    var itemDesc = e.dataTransfer.getData('text/plain');
+    if(itemDesc) handleAssociar(itemDesc, insumoDescricao);
+  };
+
+  // Contagem de associações pré-calculada de uma vez (evita recalcular por item, mais rápido)
+  var contagemPorInsumo = {};
+  Object.keys(aprendizados).forEach(function(k){
+    var v = aprendizados[k];
+    contagemPorInsumo[v] = (contagemPorInsumo[v]||0) + 1;
+  });
+
+  var listaDireitaFiltrada = cadastrosInsumos.filter(function(ins){
+    return !buscaDireita || ins.toUpperCase().indexOf(buscaDireita.toUpperCase()) >= 0;
+  });
+
+  var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9600,display:'flex',alignItems:'center',justifyContent:'center' };
+  var modalStyle = { background:'#fff',borderRadius:8,width:'min(920px,96vw)',maxHeight:'92vh',display:'flex',flexDirection:'column',overflow:'hidden' };
+
+  return /*#__PURE__*/React.createElement('div', { style:ovStyle },
+    /*#__PURE__*/React.createElement('div', { style:modalStyle },
+      /*#__PURE__*/React.createElement('div', { style:{background:'#5b3fa0',color:'#fff',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'} },
+        /*#__PURE__*/React.createElement('span', { style:{fontSize:12,fontWeight:'bold'} }, '\uD83E\uDDE0 ENSINAR O SISTEMA \u00B7 Associar Insumos'),
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:10} },
+          /*#__PURE__*/React.createElement('label', { style:{background:'#185FA5',color:'#fff',padding:'6px 12px',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',gap:6} },
+            '\uD83D\uDCC2 Carregar Or\u00e7amentos',
+            /*#__PURE__*/React.createElement('input', { type:'file', accept:'.pdf,.xlsx,.xls,.csv,.txt', multiple:true, style:{display:'none'}, onChange:handleArquivos })
+          ),
+          /*#__PURE__*/React.createElement('span', { style:{cursor:'pointer',fontSize:16,opacity:.8}, onClick:onClose }, '\u2715')
+        )
+      ),
+      carregando && /*#__PURE__*/React.createElement('div', { style:{padding:'8px 16px',fontSize:11,color:'#5b3fa0',background:'#f3f0ff'} }, 'Lendo arquivos...'),
+      erro && /*#__PURE__*/React.createElement('div', { style:{padding:'8px 16px',fontSize:11,color:'#a32d2d',background:'#fdecea'} }, erro),
+      /*#__PURE__*/React.createElement('div', { style:{display:'flex',flex:1,overflow:'hidden'} },
+        /*#__PURE__*/React.createElement('div', { style:{flex:1,display:'flex',flexDirection:'column',borderRight:'1px solid #eee',background:'#fffdf5'} },
+          /*#__PURE__*/React.createElement('div', { style:{padding:'10px 14px',borderBottom:'1px solid #eee',display:'flex',justifyContent:'space-between',alignItems:'center'} },
+            /*#__PURE__*/React.createElement('b', { style:{fontSize:11,color:'#333'} }, '\uD83D\uDCC4 INSUMOS DOS OR\u00c7AMENTOS'),
+            /*#__PURE__*/React.createElement('span', { style:{background:itensCarregados.length?'#c0392b':'#aaa',color:'#fff',borderRadius:20,padding:'2px 10px',fontSize:10,fontWeight:'bold'} }, itensCarregados.length+' pendente'+(itensCarregados.length===1?'':'s'))
+          ),
+          itensCarregados.length===0 && !carregando && /*#__PURE__*/React.createElement('div', { style:{padding:20,fontSize:11,color:'#888',textAlign:'center'} }, 'Carregue um ou mais or\u00e7amentos acima para come\u00e7ar.'),
+          itensCarregados.length>0 && /*#__PURE__*/React.createElement('div', { style:{background:'#fff8e6',border:'1px solid #f0d080',borderRadius:6,margin:'8px 12px 0',padding:'6px 10px',fontSize:10,color:'#7a6010'} },
+            '\uD83D\uDCF1 Toque num item aqui e depois toque no insumo certo \u00e0 direita para associar. Tamb\u00e9m d\u00e1 pra arrastar no computador.'
+          ),
+          /*#__PURE__*/React.createElement('div', { style:{flex:1,overflowY:'auto',padding:'8px 12px'} },
+            itensCarregados.map(function(d, idx){
+              var sel = selecionadoEsquerda === d;
+              return /*#__PURE__*/React.createElement('div', {
+                key: idx,
+                draggable: true,
+                onDragStart: function(e){ arrastarInicio(e, d); },
+                onClick: function(){ clicarEsquerda(d); },
+                style:{background:sel?'#fde6b8':'#fff',border:'2px dashed '+(sel?'#c0392b':'#f0a500'),borderRadius:8,padding:'9px 12px',marginBottom:7,fontSize:11,color:'#333',cursor:'pointer'}
+              }, d);
+            })
+          )
+        ),
+        /*#__PURE__*/React.createElement('div', { style:{flex:1,display:'flex',flexDirection:'column',background:'#f9fbff'} },
+          /*#__PURE__*/React.createElement('div', { style:{padding:'10px 14px',borderBottom:'1px solid #eee',display:'flex',justifyContent:'space-between',alignItems:'center'} },
+            /*#__PURE__*/React.createElement('b', { style:{fontSize:11,color:'#333'} }, '\uD83D\uDCCB CADASTRO DE INSUMOS'),
+            /*#__PURE__*/React.createElement('span', { style:{background:'#0f1f3d',color:'#fff',borderRadius:20,padding:'2px 10px',fontSize:10,fontWeight:'bold'} }, cadastrosInsumos.length+' no total')
+          ),
+          /*#__PURE__*/React.createElement('div', { style:{margin:'8px 12px',padding:'6px 10px',border:'1px solid #ccc',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:6,background:'#fff'} },
+            '\uD83D\uDD0D',
+            /*#__PURE__*/React.createElement('input', {
+              value: buscaDireita, onChange: function(e){ setBuscaDireita(e.target.value); },
+              placeholder: 'Buscar insumo do cadastro...', style:{border:'none',outline:'none',fontSize:12,flex:1}
+            })
+          ),
+          cadastrosInsumos.length===0 && /*#__PURE__*/React.createElement('div', { style:{padding:20,fontSize:11,color:'#888',textAlign:'center'} }, 'Nenhum insumo cadastrado ainda. Cadastre primeiro em CADASTROS.'),
+          /*#__PURE__*/React.createElement('div', { style:{flex:1,overflowY:'auto',padding:'8px 12px'} },
+            listaDireitaFiltrada.map(function(ins, idx){
+              var nAssoc = contagemPorInsumo[ins]||0;
+              return /*#__PURE__*/React.createElement('div', {
+                key: idx,
+                onDragOver: function(e){ e.preventDefault(); },
+                onDrop: function(e){ soltarDireita(e, ins); },
+                onClick: function(){ clicarDireita(ins); },
+                style:{background:selecionadoEsquerda?'#eafaf0':'#fff',border:'1px solid '+(selecionadoEsquerda?'#0e7a5f':'#d5dceb'),borderRadius:8,padding:'9px 12px',marginBottom:7,fontSize:11,color:'#333',display:'flex',justifyContent:'space-between',alignItems:'center',cursor:selecionadoEsquerda?'pointer':'default'}
+              },
+                /*#__PURE__*/React.createElement('span', null, ins),
+                /*#__PURE__*/React.createElement('span', { style:{background:'#e8f0fe',color:'#185FA5',borderRadius:20,padding:'2px 8px',fontSize:9,fontWeight:'bold',whiteSpace:'nowrap',marginLeft:8} }, nAssoc+' associa\u00e7\u00e3o'+(nAssoc===1?'':'\u00f5es'))
+              );
+            })
+          )
+        )
+      )
+    ),
+    toast && /*#__PURE__*/React.createElement('div', { style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#0e7a5f',color:'#fff',padding:'10px 20px',borderRadius:30,fontSize:12,fontWeight:'bold',boxShadow:'0 4px 14px rgba(0,0,0,.25)',zIndex:9999} }, toast)
+  );
+}
+
 // ─── Modal Ler Com IA ─────────────────────────────────────────────────────────
 // ─── Modal Importar Excel para o Mapa (Qt./Unid./Descrição) ─────────────────
 // Colunas fixas SEM cabeçalho: A=Quantidade, B=Unidade, C=Descrição, dados começam na linha 1
 function ModalImportarExcelMapa(_ref_imp) {
   var cadastrosInsumos = _ref_imp.cadastrosInsumos || [];
+  var aprendizados = _ref_imp.aprendizados || {};
+  var onAprendizadoSalvo = _ref_imp.onAprendizadoSalvo || function(){};
   var onClose = _ref_imp.onClose, onConfirmar = _ref_imp.onConfirmar;
   var _sLinhas = useState([]), linhas = _slicedToArray(_sLinhas,2)[0], setLinhas = _slicedToArray(_sLinhas,2)[1];
   var _sErro = useState(""), erro = _slicedToArray(_sErro,2)[0], setErro = _slicedToArray(_sErro,2)[1];
@@ -7015,7 +7286,26 @@ function ModalImportarExcelMapa(_ref_imp) {
       setProcessandoIA(false);
       return;
     }
-    var itensExcel = linhasBrutas.map(function(l){ return l.descricaoRaw; });
+    // MEM\u00d3RIA: separa o que j\u00e1 foi ensinado do que realmente precisa da IA (economiza custo)
+    var indicesParaIA = [];
+    var linhasComMemoria = linhasBrutas.map(function(l, origIdx){
+      var chave = String(l.descricaoRaw||'').trim().toUpperCase();
+      var jaSabido = aprendizados[chave];
+      if(!jaSabido) indicesParaIA.push(origIdx);
+      return Object.assign({}, l, { _origIdx: origIdx, _daMemoria: !!jaSabido, _descMemoria: jaSabido||"" });
+    });
+    if(!indicesParaIA.length){
+      // Tudo já estava na memória - não gasta IA nenhuma
+      var resultadoMemoria = linhasComMemoria.map(function(l){
+        return Object.assign({}, l, { descricaoFinal: l._descMemoria, status: "auto", scoreMatch: 1 });
+      });
+      setLinhas(resultadoMemoria);
+      setResultadoOrigem('memoria');
+      setProcessandoIA(false);
+      return;
+    }
+    var linhasParaIA = indicesParaIA.map(function(origIdx){ return linhasBrutas[origIdx]; });
+    var itensExcel = linhasParaIA.map(function(l){ return l.descricaoRaw; });
     var controladorTempo = new AbortController();
     var alarmeTempo = setTimeout(function(){ controladorTempo.abort(); }, 30000); // FIX: máx 30s de espera pela IA
     fetch(SUPABASE_URL+"/functions/v1/match-insumos-ia", {
@@ -7038,14 +7328,18 @@ function ModalImportarExcelMapa(_ref_imp) {
       var usage = data.usage || {};
       var inp = usage.input_tokens||0, out = usage.output_tokens||0;
       var custoBRL = ((inp*3+out*15)/1e6)*6;
-      setCustoIA({ inp:inp, out:out, brl:custoBRL, itens:linhasBrutas.length });
+      setCustoIA({ inp:inp, out:out, brl:custoBRL, itens:linhasParaIA.length });
       sbSaveIaUso({
         fornecedor:"", arquivo:"importar-excel-mapa",
         tokens_input:inp, tokens_output:out, custo_brl:custoBRL,
-        itens_lidos:linhasBrutas.length, obra_id:""
+        itens_lidos:linhasParaIA.length, obra_id:""
       }).catch(function(){});
-      var resultado = linhasBrutas.map(function(l, idx){
-        var m = matches.find(function(x){ return Number(x.indicePlanilha) === idx; });
+      var resultado = linhasComMemoria.map(function(l){
+        if(l._daMemoria){
+          return Object.assign({}, l, { descricaoFinal: l._descMemoria, status: "auto", scoreMatch: 1 });
+        }
+        var posicaoNaIA = indicesParaIA.indexOf(l._origIdx);
+        var m = matches.find(function(x){ return Number(x.indicePlanilha) === posicaoNaIA; });
         // FIX 3: valida se o índice retornado pela IA realmente existe na lista do cadastro
         var indiceValido = m && m.indiceCadastro !== null && m.indiceCadastro !== undefined
           && m.indiceCadastro >= 0 && m.indiceCadastro < cadastrosInsumos.length;
@@ -7065,7 +7359,10 @@ function ModalImportarExcelMapa(_ref_imp) {
     .catch(function(err){
       clearTimeout(alarmeTempo); // FIX 3: desliga o cronômetro — já caiu no erro/fallback
       // FIX 1: internet caiu / erro qualquer -> cai automaticamente para comparação grátis
-      var resultadoFallback = linhasBrutas.map(function(l){
+      var resultadoFallback = linhasComMemoria.map(function(l){
+        if(l._daMemoria){
+          return Object.assign({}, l, { descricaoFinal: l._descMemoria, status: "auto", scoreMatch: 1 });
+        }
         var resMatch = encontrarMelhorMatch(l.descricaoRaw, cadastrosInsumos);
         var status = resMatch.score >= 0.35 ? "auto" : "manual";
         return Object.assign({}, l, { descricaoFinal: status==="auto"?resMatch.match:"", status:status, scoreMatch:resMatch.score });
@@ -7104,6 +7401,11 @@ function ModalImportarExcelMapa(_ref_imp) {
           casarComIA(linhasBrutas);
         } else {
           var resultado = linhasBrutas.map(function(l){
+            var chave = String(l.descricaoRaw||'').trim().toUpperCase();
+            var jaSabido = aprendizados[chave];
+            if(jaSabido){
+              return Object.assign({}, l, { descricaoFinal: jaSabido, status: "auto", scoreMatch: 1 });
+            }
             var resMatch = encontrarMelhorMatch(l.descricaoRaw, cadastrosInsumos);
             var status = resMatch.score >= 0.35 ? "auto" : "manual"; // FIX: mesmo limite já aprovado no Orçamento
             return Object.assign({}, l, {
@@ -7149,7 +7451,12 @@ function ModalImportarExcelMapa(_ref_imp) {
       if(!confirma) return;
     }
     setEnviando(true);
-    var itensParaImportar = linhas.filter(function(l){ return l.descricaoFinal; }).map(function(l){ return { qt:l.qt, unid:l.unid, descricaoFinal:l.descricaoFinal }; });
+    var resolvidos = linhas.filter(function(l){ return l.descricaoFinal; });
+    // Alimenta a memória com tudo que foi resolvido nesta importação (não repete o que já veio de lá)
+    resolvidos.forEach(function(l){
+      if(!l._daMemoria) onAprendizadoSalvo(l.descricaoRaw, l.descricaoFinal);
+    });
+    var itensParaImportar = resolvidos.map(function(l){ return { qt:l.qt, unid:l.unid, descricaoFinal:l.descricaoFinal }; });
     onConfirmar(itensParaImportar);
   };
 
@@ -7205,6 +7512,9 @@ function ModalImportarExcelMapa(_ref_imp) {
           ),
           resultadoOrigem === 'local' && /*#__PURE__*/React.createElement('div', { style:{background:'#f0f0f0',border:'1px solid #ddd',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#555',marginBottom:10,fontWeight:'bold'} },
             '\u26A1 Resultado gerado por compara\u00e7\u00e3o gr\u00e1tis (sem IA, sem custo)'
+          ),
+          resultadoOrigem === 'memoria' && /*#__PURE__*/React.createElement('div', { style:{background:'#eef0ff',border:'1px solid #c5cdf5',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#3a3aa0',marginBottom:10,fontWeight:'bold'} },
+            '\uD83E\uDDE0 Todos os itens j\u00e1 estavam na mem\u00f3ria do sistema \u2014 nenhum custo de IA foi gerado desta vez!'
           ),
           linhas.map(function(l, idx){
             var corFundo = l.descricaoFinal ? '#eafaf0' : '#fff8e6';
