@@ -5661,6 +5661,7 @@ var _useState27 = useState(init),
   }),
   showLerIA && /*#__PURE__*/React.createElement(ModalLerComIA, {
     mapa: mapa, itens: itens,
+    aprendizados: aprendizados,
     onClose: function(){ setShowLerIA(false); },
     onConfirm: function(ligs) {
       Object.keys(ligs).forEach(function(itemMapaId) {
@@ -7658,6 +7659,7 @@ function ModalImportarExcelMapa(_ref_imp) {
 
 function ModalLerComIA(_ref_ia) {
   var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso;
+  var aprendizados=_ref_ia.aprendizados||{};
   var CE=React.createElement;
   var _sStep=useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
   var _sArq=useState(null),arquivo=_slicedToArray(_sArq,2)[0],setArquivo=_slicedToArray(_sArq,2)[1];
@@ -7685,11 +7687,99 @@ function ModalLerComIA(_ref_ia) {
   var fazerMatchs=function(orcItens){
     var result={};
     orcItens.forEach(function(oi,idx){
+      // FIX: consulta a mem\u00f3ria primeiro - se esse texto j\u00e1 foi ensinado, acha o item do mapa com essa descri\u00e7\u00e3o exata
+      var chave = String(oi.descricao||'').trim().toUpperCase();
+      var descConhecida = aprendizados[chave];
+      if (descConhecida) {
+        var itemConhecido = itens.find(function(mi){ return mi.descricao === descConhecida; });
+        if (itemConhecido) { result[idx] = itemConhecido.id; return; }
+      }
       var best=0,bestId="";
       itens.forEach(function(mi){var sc=wordScore(oi.descricao,mi.descricao);if(sc>best){best=sc;bestId=mi.id;}});
       result[idx]=best>=0.35?bestId:"";
     });
     return result;
+  };
+  var _sModoLer=useState(''),modoLer=_slicedToArray(_sModoLer,2)[0],setModoLer=_slicedToArray(_sModoLer,2)[1];
+  var parsearPDFTextoLerIA = function(textos) {
+    var PRECO=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2})$/;
+    var PRECO4=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{3,4})$/;
+    var ehCabLerIA=function(s){
+      var st=s.trim();
+      if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS\.?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO)$/i.test(st)) return true;
+      if(/DESCRI[C\u00C7][A\u00C3]O DO PRODUTO|TOTAL (ACRESCIMO|DESCONTO|L[I\u00CD]QUIDO|GERAL|BRUTO)|VALOR (UNIT|TOTAL)|C[O\u00D3]DIGO PRODUTO/i.test(st)) return true;
+      if(/^(TOTAL|VALOR|VENDEDOR|CLIENTE|ENDERE[C\u00C7]O)[\s:]/i.test(st)) return true;
+      if(/^(PESO (BRUTO|L[I\u00CD]QUIDO)|QTD\.? TOTAL|QUANTIDADE TOTAL)[\s:]/i.test(st)) return true;
+      return false;
+    };
+    var items=[];
+    for (var i=0;i<textos.length;i++) {
+      var t=textos[i].trim();
+      var ehDesc=t.length>7&&/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCabLerIA(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
+      if (!ehDesc) continue;
+      var precoAchado = null;
+      // FIX CR\u00cdTICO: busca primeiro ANTES da descri\u00e7\u00e3o (formato mais confi\u00e1vel neste tipo de documento),
+      // s\u00f3 tenta DEPOIS se n\u00e3o achar nada antes. Evita confundir quantidade (3 casas decimais) com pre\u00e7o,
+      // e evita "vazar" para o pre\u00e7o do item VIZINHO.
+      for (var dist=1; dist<=4 && !precoAchado; dist++) {
+        var jAntesP=i-dist;
+        if (jAntesP>=0) {
+          var tjAntesP=(textos[jAntesP]||"").trim();
+          if (PRECO.test(tjAntesP)) precoAchado=tjAntesP;
+        }
+      }
+      if (!precoAchado) {
+        for (var dist2=1; dist2<=4 && !precoAchado; dist2++) {
+          var jDepoisP=i+dist2;
+          if (jDepoisP<textos.length) {
+            var tjDepoisP=(textos[jDepoisP]||"").trim();
+            if (PRECO.test(tjDepoisP)) precoAchado=tjDepoisP;
+          }
+        }
+      }
+      if (precoAchado) {
+        var preco=parseFloat(precoAchado.replace(/\./g,"").replace(",","."));
+        // FIX FINAL: nunca aceitar preço zero ou negativo como item válido (nenhum material custa R$ 0,00 -
+        // isso descarta rótulos de rodapé de OUTROS formatos de fornecedor que não foram previstos por nome)
+        if (preco > 0) items.push({descricao:t.toUpperCase(), preco:preco});
+      }
+    }
+    return items;
+  };
+  var lerGratis=function(){
+    if(!arquivo){setErro("Selecione um PDF primeiro.");return;}
+    if(!fornId){setErro("Selecione o fornecedor.");return;}
+    if (typeof pdfjsLib === "undefined") { setErro("PDF.js n\u00e3o carregado."); return; }
+    setErro("");setStep(2);setMsg("Lendo o PDF (sem IA, sem custo)...");
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+    var reader=new FileReader();
+    reader.onload=function(e){
+      pdfjsLib.getDocument({data: new Uint8Array(e.target.result)}).promise
+        .then(function(pdf){
+          var promessas=[];
+          for (var p=1;p<=pdf.numPages;p++) promessas.push(pdf.getPage(p).then(function(pg){return pg.getTextContent();}));
+          return Promise.all(promessas);
+        })
+        .then(function(paginas){
+          var txts=[];
+          paginas.forEach(function(content){
+            (content.items||[]).forEach(function(it){ var s=it.str||""; if(s.trim()!=="") txts.push(s); });
+          });
+          var itensExtraidos=parsearPDFTextoLerIA(txts);
+          if(!itensExtraidos.length){
+            setErro("N\u00e3o foi poss\u00edvel identificar itens com pre\u00e7o neste PDF sem IA. Tente a op\u00e7\u00e3o \uD83E\uDD16 IA, que consegue ler documentos mais dif\u00edceis.");
+            setStep(1); return;
+          }
+          var parsed={ fornecedor:"", itens: itensExtraidos };
+          setCusto(null);
+          setResultado(parsed);
+          var ms=fazerMatchs(parsed.itens);
+          setMatchs(ms); setStep(3);
+        })
+        .catch(function(err){ setErro("Erro ao ler o PDF: "+(err.message||"")); setStep(1); });
+    };
+    reader.onerror=function(){ setErro("Erro ao ler o arquivo."); setStep(1); };
+    reader.readAsArrayBuffer(arquivo);
   };
   var lerComIA=function(){
     if(!arquivo){setErro("Selecione um PDF primeiro.");return;}
@@ -7764,6 +7854,29 @@ function ModalLerComIA(_ref_ia) {
       ),
       step===1&&CE("div",{style:{padding:"18px",flex:1,overflow:"auto"}},
         erro&&CE("div",{style:{background:"#fdecea",border:"1px solid #f5c6c2",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#c0392b"}},erro),
+        CE("div",{style:{marginBottom:14}},
+          CE("label",{style:{fontSize:11,fontWeight:700,color:"#555",display:"block",marginBottom:6}},"COMO CASAR OS ITENS COM O MAPA?"),
+          CE("div",{
+            onClick:function(){setModoLer('gratis');},
+            style:{border:"2px solid "+(modoLer==='gratis'?"#0e7a5f":"#e0e0e0"),background:modoLer==='gratis'?"#eafaf0":"#fff",borderRadius:6,padding:10,marginBottom:8,cursor:"pointer",display:"flex",gap:8,alignItems:"center"}
+          },
+            CE("span",{style:{fontSize:18}},"\u26A1"),
+            CE("div",null,
+              CE("strong",{style:{display:"block",fontSize:11}},"Compara\u00e7\u00e3o autom\u00e1tica (gr\u00e1tis)"),
+              CE("span",{style:{fontSize:9,color:"#777"}},"Sem custo \u00B7 usa a mem\u00f3ria do sistema + compara\u00e7\u00e3o de palavras")
+            )
+          ),
+          CE("div",{
+            onClick:function(){setModoLer('ia');},
+            style:{border:"2px solid "+(modoLer==='ia'?"#534AB7":"#e0e0e0"),background:modoLer==='ia'?"#f3f0ff":"#fff",borderRadius:6,padding:10,cursor:"pointer",display:"flex",gap:8,alignItems:"center"}
+          },
+            CE("span",{style:{fontSize:18}},"\uD83E\uDD16"),
+            CE("div",null,
+              CE("strong",{style:{display:"block",fontSize:11}},"Casar com Intelig\u00eancia Artificial"),
+              CE("span",{style:{fontSize:9,color:"#777"}},"Mais preciso em PDFs dif\u00edceis \u00B7 custo pequeno por uso")
+            )
+          )
+        ),
         CE("div",{style:{marginBottom:14}},
           CE("label",{style:{fontSize:11,fontWeight:700,color:"#555",display:"block",marginBottom:6}},"FORNECEDOR"),
           CE("select",{value:fornId,onChange:function(e){setFornId(e.target.value);},style:{width:"100%",padding:"8px 10px",borderRadius:7,border:"1px solid #d0d8f0",background:"#f8faff",fontSize:13}},
@@ -7857,13 +7970,14 @@ function ModalLerComIA(_ref_ia) {
       ),
       CE("div",{style:stFtr},
         step===1&&CE(React.Fragment,null,
-          CE("span",{style:{fontSize:10,color:"#888"}},"Claude Haiku 4.5 \u00B7 ~R$ 0,01/or\xE7amento"),
+          CE("span",{style:{fontSize:10,color:"#888"}},modoLer==='ia'?"Claude Haiku 4.5 \u00B7 ~R$ 0,01/or\xE7amento":"Sem custo"),
           CE("div",{style:{flex:1}}),
           CE("button",{style:{background:"none",border:"1px solid #d0d8e8",borderRadius:7,padding:"7px 16px",fontSize:12,cursor:"pointer"},onClick:onClose},"CANCELAR"),
           CE("button",{
-            style:{background:arquivo&&fornId?"#534AB7":"#bbb",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:12,fontWeight:800,cursor:arquivo&&fornId?"pointer":"not-allowed"},
-            onClick:lerComIA,disabled:!arquivo||!fornId
-          },"\uD83E\uDD16 LER COM IA \u2192")
+            style:{background:arquivo&&fornId&&modoLer?"#534AB7":"#bbb",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:12,fontWeight:800,cursor:arquivo&&fornId&&modoLer?"pointer":"not-allowed"},
+            onClick:function(){ if(modoLer==='gratis') lerGratis(); else if(modoLer==='ia') lerComIA(); },
+            disabled:!arquivo||!fornId||!modoLer
+          },modoLer==='gratis'?"\u26A1 LER GR\xC1TIS \u2192":"\uD83E\uDD16 LER COM IA \u2192")
         ),
         step===2&&CE(React.Fragment,null,
           CE("span",{style:{fontSize:11,color:"#888"}},"Aguarde, a IA est\xE1 lendo o or\xE7amento..."),
