@@ -765,6 +765,13 @@ var sbBuscarAprendizados = function() {
     })
     .catch(function(){ return {}; });
 };
+var sbExcluirAprendizado = function(textoOriginal) {
+  var texto = String(textoOriginal||'').trim().toUpperCase();
+  if(!texto) return Promise.resolve(false);
+  return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado?texto_original=eq." + encodeURIComponent(texto), {
+    method: "DELETE", headers: SB
+  }).then(function(r){ return r.ok; }).catch(function(){ return false; });
+};
 var sbGetIaUsoDia = function() {
   var hoje = new Date().toISOString().slice(0,10);
   return fetch(SUPABASE_URL + "/rest/v1/ia_uso?select=custo_brl,itens_lidos&created_at=gte." + hoje + "T00:00:00", { headers: SB })
@@ -3964,6 +3971,15 @@ var _useState27 = useState(init),
     var chave = String(textoOriginal||'').trim().toUpperCase();
     setAprendizados(function(prev){ var n = Object.assign({}, prev); n[chave] = insumoDescricao; return n; });
   };
+  var desfazerAprendizado = function(textoOriginal){
+    var chave = String(textoOriginal||'').trim().toUpperCase();
+    return sbExcluirAprendizado(chave).then(function(ok){
+      if(ok){
+        setAprendizados(function(prev){ var n = Object.assign({}, prev); delete n[chave]; return n; });
+      }
+      return ok;
+    });
+  };
   var _useStateEns=useState(false),showEnsinarSistema=_slicedToArray(_useStateEns,2)[0],setShowEnsinarSistema=_slicedToArray(_useStateEns,2)[1];
   useEffect(function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); },[]);
   useEffect(function(){
@@ -5857,6 +5873,7 @@ var _useState27 = useState(init),
     cadastrosInsumos: cadastros.insumos||[],
     aprendizados: aprendizados,
     onAprendizadoSalvo: registrarAprendizado,
+    onAprendizadoRemovido: desfazerAprendizado,
     onClose: function(){ setShowEnsinarSistema(false); }
   }),
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
@@ -7004,7 +7021,13 @@ function ModalEnsinarSistema(_ref_ens) {
   var cadastrosInsumos = _ref_ens.cadastrosInsumos || [];
   var aprendizados = _ref_ens.aprendizados || {};
   var onAprendizadoSalvo = _ref_ens.onAprendizadoSalvo || function(){};
+  var onAprendizadoRemovido = _ref_ens.onAprendizadoRemovido || function(){ return Promise.resolve(false); };
   var onClose = _ref_ens.onClose;
+
+  var _sAba = useState('associar'), abaAtiva = _slicedToArray(_sAba,2)[0], setAbaAtiva = _slicedToArray(_sAba,2)[1];
+  var _sBuscaConf = useState(''), buscaConferir = _slicedToArray(_sBuscaConf,2)[0], setBuscaConferir = _slicedToArray(_sBuscaConf,2)[1];
+  var _sExcluindo = useState(null), excluindoChave = _slicedToArray(_sExcluindo,2)[0], setExcluindoChave = _slicedToArray(_sExcluindo,2)[1];
+  var _sErroConf = useState(''), erroConferir = _slicedToArray(_sErroConf,2)[0], setErroConferir = _slicedToArray(_sErroConf,2)[1];
 
   var _sItens = useState([]), itensCarregados = _slicedToArray(_sItens,2)[0], setItensCarregados = _slicedToArray(_sItens,2)[1];
   var _sNumMapa = useState(''), numeroMapaBusca = _slicedToArray(_sNumMapa,2)[0], setNumeroMapaBusca = _slicedToArray(_sNumMapa,2)[1];
@@ -7259,6 +7282,17 @@ function ModalEnsinarSistema(_ref_ens) {
           /*#__PURE__*/React.createElement('span', { style:{cursor:'pointer',fontSize:16,opacity:.8}, onClick:onClose }, '\u2715')
         )
       ),
+      /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,padding:'8px 16px',background:'#f3f0ff',borderBottom:'1px solid #e0d5f5'} },
+        /*#__PURE__*/React.createElement('button', {
+          onClick: function(){ setAbaAtiva('associar'); },
+          style:{background: abaAtiva==='associar' ? '#5b3fa0' : 'rgba(91,63,160,.12)', color: abaAtiva==='associar' ? '#fff' : '#5b3fa0', border:'none', borderRadius:6, padding:'6px 12px', fontSize:11, fontWeight:'bold', cursor:'pointer'}
+        }, '\u2795 Associar Novos'),
+        /*#__PURE__*/React.createElement('button', {
+          onClick: function(){ setAbaAtiva('conferir'); },
+          style:{background: abaAtiva==='conferir' ? '#5b3fa0' : 'rgba(91,63,160,.12)', color: abaAtiva==='conferir' ? '#fff' : '#5b3fa0', border:'none', borderRadius:6, padding:'6px 12px', fontSize:11, fontWeight:'bold', cursor:'pointer'}
+        }, '\uD83D\uDCCB Conferir Associa\u00e7\u00f5es ('+Object.keys(aprendizados).length+')')
+      ),
+      abaAtiva === 'associar' && /*#__PURE__*/React.createElement(React.Fragment, null,
       carregando && /*#__PURE__*/React.createElement('div', { style:{padding:'8px 16px',fontSize:11,color:'#5b3fa0',background:'#f3f0ff'} }, 'Lendo arquivos...'),
       erro && /*#__PURE__*/React.createElement('div', { style:{padding:'8px 16px',fontSize:11,color:'#a32d2d',background:'#fdecea'} }, erro),
       /*#__PURE__*/React.createElement('div', { style:{display:'flex',flex:1,overflow:'hidden'} },
@@ -7359,7 +7393,49 @@ function ModalEnsinarSistema(_ref_ens) {
           )
         )
       )
-    ),
+      )
+      ),
+      abaAtiva === 'conferir' && /*#__PURE__*/React.createElement('div', { style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'} },
+        erroConferir && /*#__PURE__*/React.createElement('div', { style:{margin:'10px 16px 0',padding:'8px 12px',background:'#fdecea',border:'1px solid #f5b8b8',borderRadius:6,fontSize:11,color:'#a32d2d'} }, erroConferir),
+        /*#__PURE__*/React.createElement('div', { style:{margin:'10px 16px',padding:'6px 10px',border:'1px solid #ccc',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:6,background:'#fff'} },
+          '\uD83D\uDD0D',
+          /*#__PURE__*/React.createElement('input', {
+            value: buscaConferir, onChange: function(e){ setBuscaConferir(e.target.value); },
+            placeholder: 'Buscar por texto ou insumo...', style:{border:'none',outline:'none',fontSize:12,flex:1}
+          })
+        ),
+        /*#__PURE__*/React.createElement('div', { className:'scroll-ensinar', style:{flex:1,overflowY:'scroll',padding:'0 16px 16px'} },
+          Object.keys(aprendizados).length===0 && /*#__PURE__*/React.createElement('div', { style:{padding:20,fontSize:11,color:'#888',textAlign:'center'} }, 'Nenhuma associa\u00e7\u00e3o ensinada ainda.'),
+          Object.keys(aprendizados).filter(function(chave){
+            if(!buscaConferir) return true;
+            var b = buscaConferir.toUpperCase();
+            return chave.indexOf(b) >= 0 || (aprendizados[chave]||'').toUpperCase().indexOf(b) >= 0;
+          }).sort().map(function(chave){
+            var insumo = aprendizados[chave];
+            var estaExcluindo = excluindoChave === chave;
+            return /*#__PURE__*/React.createElement('div', {
+              key: chave,
+              style:{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',border:'1px solid #e5e5e5',borderRadius:8,marginBottom:6,fontSize:11}
+            },
+              /*#__PURE__*/React.createElement('span', { style:{flex:1,color:'#666'} }, '"'+chave+'"'),
+              /*#__PURE__*/React.createElement('span', { style:{color:'#5b3fa0',fontWeight:'bold'} }, '\u2192'),
+              /*#__PURE__*/React.createElement('span', { style:{flex:1,color:'#0f1f3d',fontWeight:'bold'} }, insumo),
+              /*#__PURE__*/React.createElement('button', {
+                disabled: estaExcluindo,
+                onClick: function(){
+                  if(!window.confirm('Desfazer a associa\u00e7\u00e3o de "'+chave+'"?\nDa pr\u00f3xima vez que esse texto aparecer, o sistema vai precisar reconhecer de novo.')) return;
+                  setExcluindoChave(chave); setErroConferir('');
+                  onAprendizadoRemovido(chave).then(function(ok){
+                    setExcluindoChave(null);
+                    if(!ok) setErroConferir('N\u00e3o foi poss\u00edvel desfazer agora. Verifique sua conex\u00e3o e tente de novo.');
+                  });
+                },
+                style:{background:'#fdecea',color:'#c0392b',border:'none',borderRadius:6,padding:'6px 10px',fontSize:10,fontWeight:'bold',cursor: estaExcluindo?'not-allowed':'pointer',whiteSpace:'nowrap'}
+              }, estaExcluindo ? '...' : '\uD83D\uDDD1\uFE0F Desfazer')
+            );
+          })
+        )
+      ),
     toast && /*#__PURE__*/React.createElement('div', { style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#0e7a5f',color:'#fff',padding:'10px 20px',borderRadius:30,fontSize:12,fontWeight:'bold',boxShadow:'0 4px 14px rgba(0,0,0,.25)',zIndex:9999} }, toast)
   );
 }
@@ -7816,9 +7892,23 @@ function ModalLerComIA(_ref_ia) {
             setStep(1); return;
           }
           var parsed={ fornecedor:"", itens: itensExtraidos };
+          var ms=fazerMatchs(parsed.itens);
+          // FIX: converte o valor extra\u00eddo (total da linha) pro unit\u00e1rio ANTES de mostrar a tela de
+          // revis\u00e3o, usando a quantidade J\u00c1 CONHECIDA do item do mapa casado - assim o que aparece
+          // pra conferir j\u00e1 \u00e9 o valor final, sem confundir.
+          parsed.itens = parsed.itens.map(function(oi, idx){
+            var mapaItemId = ms[idx];
+            var itemMapa = mapaItemId ? itens.find(function(mi){ return mi.id === mapaItemId; }) : null;
+            // FIX: qtd do mapa pode vir como string com v\u00edrgula (ex: "7,5") - mesma convers\u00e3o
+            // j\u00e1 usada em todo o resto do sistema, evita quebrar (NaN) nesse caso
+            var qtdMapa = itemMapa ? parseFloat(String(itemMapa.qt||0).replace(",",".")) : 0;
+            if(qtdMapa > 0){
+              return Object.assign({}, oi, { preco: oi.preco / qtdMapa });
+            }
+            return oi;
+          });
           setCusto(null);
           setResultado(parsed);
-          var ms=fazerMatchs(parsed.itens);
           setMatchs(ms); setStep(3);
         })
         .catch(function(err){ setErro("Erro ao ler o PDF: "+(err.message||"")); setStep(1); });
@@ -7868,7 +7958,8 @@ function ModalLerComIA(_ref_ia) {
     var ligs={};
     (resultado.itens||[]).forEach(function(oi,idx){
       var mapaItemId=matchs[idx];
-      if(mapaItemId)ligs[mapaItemId]={descPDF:oi.descricao,preco:oi.preco,fornId:fornId,orcIdx:idx};
+      if(!mapaItemId) return;
+      ligs[mapaItemId]={descPDF:oi.descricao,preco:oi.preco,fornId:fornId,orcIdx:idx};
     });
     if(!Object.keys(ligs).length){setErro("Nenhum item casado para salvar.");return;}
     onConfirm(ligs);
