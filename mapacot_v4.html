@@ -7228,7 +7228,7 @@ function ModalEnsinarSistema(_ref_ens) {
           itensCarregados.length>0 && /*#__PURE__*/React.createElement('div', { style:{background:'#fff8e6',border:'1px solid #f0d080',borderRadius:6,margin:'8px 12px 0',padding:'6px 10px',fontSize:10,color:'#7a6010'} },
             '\uD83D\uDCF1 Toque num item aqui e depois toque no insumo certo \u00e0 direita para associar. Tamb\u00e9m d\u00e1 pra arrastar no computador.'
           ),
-          /*#__PURE__*/React.createElement('div', { style:{flex:1,overflowY:'auto',padding:'8px 12px'} },
+          /*#__PURE__*/React.createElement('div', { className:'scroll-ensinar', style:{flex:1,overflowY:'scroll',padding:'8px 12px'} },
             itensCarregados.map(function(d, idx){
               var sel = selecionadoEsquerda === d;
               return /*#__PURE__*/React.createElement('div', {
@@ -7236,8 +7236,21 @@ function ModalEnsinarSistema(_ref_ens) {
                 draggable: true,
                 onDragStart: function(e){ arrastarInicio(e, d); },
                 onClick: function(){ clicarEsquerda(d); },
-                style:{background:sel?'#fde6b8':'#fff',border:'2px dashed '+(sel?'#c0392b':'#f0a500'),borderRadius:8,padding:'9px 12px',marginBottom:7,fontSize:11,color:'#333',cursor:'pointer'}
-              }, d);
+                style:{background:sel?'#fde6b8':'#fff',border:'2px dashed '+(sel?'#c0392b':'#f0a500'),borderRadius:8,padding:'9px 12px',marginBottom:7,fontSize:11,color:'#333',cursor:'pointer',display:'flex',alignItems:'center',gap:8}
+              },
+                /*#__PURE__*/React.createElement('span', { style:{flex:1} }, d),
+                /*#__PURE__*/React.createElement('span', {
+                  onClick: function(e){
+                    e.stopPropagation();
+                    if(window.confirm('Excluir "'+d+'" da lista?\nVoc\u00ea pode carregar o or\u00e7amento de novo depois, se precisar.')){
+                      setItensCarregados(function(prev){ return prev.filter(function(x, i){ return i !== idx; }); });
+                      if(selecionadoEsquerda === d) setSelecionadoEsquerda(null);
+                    }
+                  },
+                  title: 'Excluir sem associar',
+                  style:{flexShrink:0,width:22,height:22,borderRadius:'50%',background:'#fdecea',color:'#c0392b',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'bold',fontSize:12,cursor:'pointer'}
+                }, '\u2715')
+              );
             })
           )
         ),
@@ -9019,7 +9032,7 @@ function App() {
     onImportarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraImportando(obra); setShowImportOrc(true); }, 200); },
     onLimparOrcamento: limparOrcamento,
     onGerenciarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraGerenciando(obra); setShowGerenciarOrc(true); }, 200); }
-  }), /*#__PURE__*/React.createElement("style", null, "\n        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');\n        *{box-sizing:border-box;margin:0;padding:0;}\n        body{background:#f0f2f5;font-family:'DM Sans',sans-serif;}\n        input,textarea,button{text-transform:uppercase;font-family:inherit;}\n        input[type=date]{text-transform:none;}\n        input::placeholder{color:#bbb;text-transform:uppercase;}\n        input:focus{outline:none;}\n        button{cursor:pointer;}\n        @keyframes spin{to{transform:rotate(360deg)}}\n        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}\n      "));
+  }), /*#__PURE__*/React.createElement("style", null, "\n        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap');\n        *{box-sizing:border-box;margin:0;padding:0;}\n        body{background:#f0f2f5;font-family:'DM Sans',sans-serif;}\n        input,textarea,button{text-transform:uppercase;font-family:inherit;}\n        input[type=date]{text-transform:none;}\n        input::placeholder{color:#bbb;text-transform:uppercase;}\n        input:focus{outline:none;}\n        button{cursor:pointer;}\n        @keyframes spin{to{transform:rotate(360deg)}}\n        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}\n        .scroll-ensinar{scrollbar-width:thin;scrollbar-color:#f0a500 #fff8e6;}\n        .scroll-ensinar::-webkit-scrollbar{width:10px;}\n        .scroll-ensinar::-webkit-scrollbar-track{background:#fff8e6;border-radius:8px;}\n        .scroll-ensinar::-webkit-scrollbar-thumb{background:#f0a500;border-radius:8px;}\n      "));
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
