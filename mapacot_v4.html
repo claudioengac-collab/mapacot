@@ -7009,6 +7009,7 @@ function ModalEnsinarSistema(_ref_ens) {
   var _sItens = useState([]), itensCarregados = _slicedToArray(_sItens,2)[0], setItensCarregados = _slicedToArray(_sItens,2)[1];
   var _sNumMapa = useState(''), numeroMapaBusca = _slicedToArray(_sNumMapa,2)[0], setNumeroMapaBusca = _slicedToArray(_sNumMapa,2)[1];
   var _sBuscMapa = useState(false), buscandoMapa = _slicedToArray(_sBuscMapa,2)[0], setBuscandoMapa = _slicedToArray(_sBuscMapa,2)[1];
+  var _sFiltroMapa = useState(null), filtroInsumosMapa = _slicedToArray(_sFiltroMapa,2)[0], setFiltroInsumosMapa = _slicedToArray(_sFiltroMapa,2)[1];
   var _sCarr = useState(false), carregando = _slicedToArray(_sCarr,2)[0], setCarregando = _slicedToArray(_sCarr,2)[1];
   var _sBusca = useState(''), buscaDireita = _slicedToArray(_sBusca,2)[0], setBuscaDireita = _slicedToArray(_sBusca,2)[1];
   var _sSelEsq = useState(null), selecionadoEsquerda = _slicedToArray(_sSelEsq,2)[0], setSelecionadoEsquerda = _slicedToArray(_sSelEsq,2)[1];
@@ -7148,22 +7149,24 @@ function ModalEnsinarSistema(_ref_ens) {
 
   var buscarMapaPorNumero = function(){
     var numDigitado = String(numeroMapaBusca||'').trim().replace(/^0+(?=\d)/, '');
-    if(!numDigitado){ setErro('Digite o n\u00famero do mapa antes de buscar.'); return; }
+    if(!numDigitado){ setFiltroInsumosMapa(null); setErro(''); return; }
     setBuscandoMapa(true); setErro('');
     sbGetMapasOnce().then(function(mapas){
       var encontrado = (mapas||[]).find(function(m){ return String(m.numero||'').trim() === numDigitado; });
       setBuscandoMapa(false);
-      if(!encontrado){ setErro('Mapa n\u00b0 '+numDigitado+' n\u00e3o encontrado.'); return; }
+      if(!encontrado){ setErro('Mapa n\u00b0 '+numDigitado+' n\u00e3o encontrado.'); setFiltroInsumosMapa(null); return; }
       var itensDoMapa = encontrado.itens||[];
-      if(!itensDoMapa.length){ setErro('O mapa n\u00b0 '+numDigitado+' n\u00e3o tem itens.'); return; }
-      var descsDoMapa = itensDoMapa.map(function(it){ return it.descricao||''; }).filter(function(d){ return d; });
-      adicionarItens(descsDoMapa);
-      setNumeroMapaBusca('');
+      if(!itensDoMapa.length){ setErro('O mapa n\u00b0 '+numDigitado+' n\u00e3o tem itens.'); setFiltroInsumosMapa(null); return; }
+      var descsUnicas = {};
+      itensDoMapa.forEach(function(it){ if(it.descricao) descsUnicas[it.descricao]=true; });
+      if(!Object.keys(descsUnicas).length){ setErro('O mapa n\u00b0 '+numDigitado+' n\u00e3o tem insumos com descri\u00e7\u00e3o preenchida.'); setFiltroInsumosMapa(null); return; }
+      setFiltroInsumosMapa(descsUnicas);
     }).catch(function(){
       setBuscandoMapa(false);
       setErro('Erro ao buscar o mapa. Verifique sua conex\u00e3o.');
     });
   };
+  var limparFiltroMapa = function(){ setNumeroMapaBusca(''); setFiltroInsumosMapa(null); setErro(''); };
 
   var handleArquivos = function(e){
     var files = Array.prototype.slice.call(e.target.files||[]);
@@ -7236,7 +7239,9 @@ function ModalEnsinarSistema(_ref_ens) {
   });
 
   var listaDireitaFiltrada = cadastrosInsumos.filter(function(ins){
-    return !buscaDireita || ins.toUpperCase().indexOf(buscaDireita.toUpperCase()) >= 0;
+    var passaFiltroMapa = !filtroInsumosMapa || filtroInsumosMapa[ins];
+    var passaBusca = !buscaDireita || ins.toUpperCase().indexOf(buscaDireita.toUpperCase()) >= 0;
+    return passaFiltroMapa && passaBusca;
   });
 
   var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9600,display:'flex',alignItems:'center',justifyContent:'center' };
@@ -7253,21 +7258,6 @@ function ModalEnsinarSistema(_ref_ens) {
           ),
           /*#__PURE__*/React.createElement('span', { style:{cursor:'pointer',fontSize:16,opacity:.8}, onClick:onClose }, '\u2715')
         )
-      ),
-      /*#__PURE__*/React.createElement('div', { style:{background:'#f3f0ff',borderBottom:'1px solid #e0d5f5',padding:'8px 16px',display:'flex',alignItems:'center',gap:8} },
-        /*#__PURE__*/React.createElement('span', { style:{fontSize:11,color:'#5b3fa0',fontWeight:'bold',whiteSpace:'nowrap'} }, '\uD83D\uDCCB Ou traga de um mapa:'),
-        /*#__PURE__*/React.createElement('input', {
-          value: numeroMapaBusca,
-          onChange: function(e){ setNumeroMapaBusca(e.target.value); },
-          onKeyDown: function(e){ if(e.key==='Enter') buscarMapaPorNumero(); },
-          placeholder: 'N\u00b0 do mapa (ex: 57)',
-          style:{width:130,padding:'5px 8px',border:'1px solid #c5b3e8',borderRadius:5,fontSize:11}
-        }),
-        /*#__PURE__*/React.createElement('button', {
-          onClick: buscarMapaPorNumero,
-          disabled: buscandoMapa,
-          style:{background:'#5b3fa0',color:'#fff',border:'none',borderRadius:5,padding:'6px 12px',fontSize:11,fontWeight:'bold',cursor: buscandoMapa?'not-allowed':'pointer'}
-        }, buscandoMapa ? 'Buscando...' : '\uD83D\uDD0D Buscar')
       ),
       carregando && /*#__PURE__*/React.createElement('div', { style:{padding:'8px 16px',fontSize:11,color:'#5b3fa0',background:'#f3f0ff'} }, 'Lendo arquivos...'),
       erro && /*#__PURE__*/React.createElement('div', { style:{padding:'8px 16px',fontSize:11,color:'#a32d2d',background:'#fdecea'} }, erro),
@@ -7323,7 +7313,26 @@ function ModalEnsinarSistema(_ref_ens) {
         /*#__PURE__*/React.createElement('div', { style:{flex:1,display:'flex',flexDirection:'column',background:'#f9fbff'} },
           /*#__PURE__*/React.createElement('div', { style:{padding:'10px 14px',borderBottom:'1px solid #eee',display:'flex',justifyContent:'space-between',alignItems:'center'} },
             /*#__PURE__*/React.createElement('b', { style:{fontSize:11,color:'#333'} }, '\uD83D\uDCCB CADASTRO DE INSUMOS'),
-            /*#__PURE__*/React.createElement('span', { style:{background:'#0f1f3d',color:'#fff',borderRadius:20,padding:'2px 10px',fontSize:10,fontWeight:'bold'} }, cadastrosInsumos.length+' no total')
+            /*#__PURE__*/React.createElement('span', { style:{background:'#0f1f3d',color:'#fff',borderRadius:20,padding:'2px 10px',fontSize:10,fontWeight:'bold'} }, (filtroInsumosMapa ? Object.keys(filtroInsumosMapa).length : cadastrosInsumos.length)+(filtroInsumosMapa ? ' do mapa' : ' no total'))
+          ),
+          /*#__PURE__*/React.createElement('div', { style:{margin:'8px 12px 0',display:'flex',gap:6,alignItems:'center'} },
+            /*#__PURE__*/React.createElement('input', {
+              value: numeroMapaBusca,
+              onChange: function(e){ setNumeroMapaBusca(e.target.value); },
+              onKeyDown: function(e){ if(e.key==='Enter') buscarMapaPorNumero(); },
+              placeholder: 'N\u00b0 do mapa (opcional)',
+              style:{flex:1,padding:'5px 8px',border:'1px solid #c5b3e8',borderRadius:5,fontSize:11}
+            }),
+            /*#__PURE__*/React.createElement('button', {
+              onClick: buscarMapaPorNumero,
+              disabled: buscandoMapa,
+              style:{background:'#5b3fa0',color:'#fff',border:'none',borderRadius:5,padding:'5px 10px',fontSize:10,fontWeight:'bold',cursor: buscandoMapa?'not-allowed':'pointer',whiteSpace:'nowrap'}
+            }, buscandoMapa ? '...' : '\uD83D\uDD0D Filtrar'),
+            filtroInsumosMapa && /*#__PURE__*/React.createElement('button', {
+              onClick: limparFiltroMapa,
+              title: 'Voltar a mostrar todos os insumos',
+              style:{background:'#f0f0f0',color:'#555',border:'none',borderRadius:5,padding:'5px 10px',fontSize:10,cursor:'pointer',whiteSpace:'nowrap'}
+            }, '\u2715 Ver todos')
           ),
           /*#__PURE__*/React.createElement('div', { style:{margin:'8px 12px',padding:'6px 10px',border:'1px solid #ccc',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:6,background:'#fff'} },
             '\uD83D\uDD0D',
