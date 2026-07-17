@@ -7044,6 +7044,7 @@ function ModalEnsinarSistema(_ref_ens) {
   var _sFiltroMapa = useState(null), filtroInsumosMapa = _slicedToArray(_sFiltroMapa,2)[0], setFiltroInsumosMapa = _slicedToArray(_sFiltroMapa,2)[1];
   var _sCarr = useState(false), carregando = _slicedToArray(_sCarr,2)[0], setCarregando = _slicedToArray(_sCarr,2)[1];
   var _sBusca = useState(''), buscaDireita = _slicedToArray(_sBusca,2)[0], setBuscaDireita = _slicedToArray(_sBusca,2)[1];
+  var _sBuscaEsq = useState(''), buscaEsquerda = _slicedToArray(_sBuscaEsq,2)[0], setBuscaEsquerda = _slicedToArray(_sBuscaEsq,2)[1];
   var _sSelEsq = useState(null), selecionadoEsquerda = _slicedToArray(_sSelEsq,2)[0], setSelecionadoEsquerda = _slicedToArray(_sSelEsq,2)[1];
   var _sMarcados = useState({}), marcadosParaExcluir = _slicedToArray(_sMarcados,2)[0], setMarcadosParaExcluir = _slicedToArray(_sMarcados,2)[1];
   var _sToast = useState(''), toast = _slicedToArray(_sToast,2)[0], setToast = _slicedToArray(_sToast,2)[1];
@@ -7064,7 +7065,7 @@ function ModalEnsinarSistema(_ref_ens) {
     };
     var items=[];
     for (var i=0;i<textos.length;i++) {
-      var t=textos[i].trim();
+      var t=(textos[i]||"").trim();
       var ehDesc=t.length>7&&/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
       if (!ehDesc) continue;
       // FIX: busca o preço em AMBAS as direções (antes e depois) — alguns PDFs (ex.: gerados por certos
@@ -7354,6 +7355,13 @@ function ModalEnsinarSistema(_ref_ens) {
             /*#__PURE__*/React.createElement('b', { style:{fontSize:11,color:'#333'} }, '\uD83D\uDCC4 INSUMOS DOS OR\u00c7AMENTOS'),
             /*#__PURE__*/React.createElement('span', { style:{background:itensCarregados.length?'#c0392b':'#aaa',color:'#fff',borderRadius:20,padding:'2px 10px',fontSize:10,fontWeight:'bold'} }, itensCarregados.length+' pendente'+(itensCarregados.length===1?'':'s'))
           ),
+          itensCarregados.length>0 && /*#__PURE__*/React.createElement('div', { style:{margin:'8px 12px 0',padding:'7px 10px',border:'1px solid #ccc',borderRadius:6,fontSize:12,display:'flex',alignItems:'center',gap:6,background:'#fff'} },
+            '\uD83D\uDD0D',
+            /*#__PURE__*/React.createElement('input', {
+              value: buscaEsquerda, onChange: function(e){ setBuscaEsquerda(e.target.value); },
+              placeholder: 'Buscar nos itens carregados...', style:{border:'none',outline:'none',fontSize:12,flex:1}
+            })
+          ),
           itensCarregados.length===0 && !carregando && /*#__PURE__*/React.createElement('div', { style:{padding:20,fontSize:11,color:'#888',textAlign:'center'} }, 'Carregue um ou mais or\u00e7amentos acima para come\u00e7ar.'),
           itensCarregados.length>0 && /*#__PURE__*/React.createElement('div', { style:{background:'#fff8e6',border:'1px solid #f0d080',borderRadius:6,margin:'8px 12px 0',padding:'6px 10px',fontSize:10,color:'#7a6010'} },
             '\uD83D\uDCF1 Toque num item aqui e depois toque no insumo certo \u00e0 direita para associar. Tamb\u00e9m d\u00e1 pra arrastar no computador. Marque a caixinha pra excluir v\u00e1rios de uma vez.'
@@ -7364,7 +7372,10 @@ function ModalEnsinarSistema(_ref_ens) {
             /*#__PURE__*/React.createElement('button', { onClick:cancelarSelecao, style:{background:'#f0f0f0',color:'#555',border:'none',borderRadius:6,padding:'6px 12px',fontSize:10,cursor:'pointer'} }, 'Cancelar')
           ),
           /*#__PURE__*/React.createElement('div', { className:'scroll-ensinar', style:{flex:1,minHeight:0,overflowY:'scroll',padding:'8px 12px',width:'100%',boxSizing:'border-box',overscrollBehavior:'contain'} },
-            itensCarregados.map(function(d, idx){
+            itensCarregados.map(function(d, idx){ return {texto:d, idxOriginal:idx}; }).filter(function(item){
+              return !buscaEsquerda || String(item.texto||'').toUpperCase().indexOf(buscaEsquerda.toUpperCase()) >= 0;
+            }).map(function(item){
+              var d = item.texto, idx = item.idxOriginal;
               var sel = selecionadoEsquerda === d;
               return /*#__PURE__*/React.createElement('div', {
                 key: idx,
@@ -7893,7 +7904,7 @@ function ModalLerComIA(_ref_ia) {
     };
     var items=[];
     for (var i=0;i<textos.length;i++) {
-      var t=textos[i].trim();
+      var t=(textos[i]||"").trim();
       var ehDesc=t.length>7&&/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCabLerIA(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
       if (!ehDesc) continue;
 
