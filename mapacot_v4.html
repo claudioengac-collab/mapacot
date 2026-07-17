@@ -1148,11 +1148,11 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
   var sL={rascunho:'Rascunho',emitido:'Emitido',recebido:'Recebido',cancelado:'Cancelado'};
   var sC={rascunho:'#666',emitido:'#185FA5',recebido:'#3B6D11',cancelado:'#A32D2D'};
   var fi=[];
-  if(rf.obra)   fi.push('Obra: <b>'+esc(rf.obra)+'</b>');
+  if(rf.obra && rf.obra.length)   fi.push('Obra: <b>'+rf.obra.map(esc).join(', ')+'</b>');
   if(rf.de)     fi.push('De: <b>'+fD(rf.de)+'</b>');
   if(rf.ate)    fi.push('Ate: <b>'+fD(rf.ate)+'</b>');
-  if(rf.insumo) fi.push('Insumo: <b>'+esc(rf.insumo)+'</b>');
-  if(rf.status) fi.push('Status: <b>'+(sL[rf.status]||esc(rf.status))+'</b>');
+  if(rf.insumo && rf.insumo.length) fi.push('Insumo: <b>'+rf.insumo.map(esc).join(', ')+'</b>');
+  if(rf.status && rf.status.length) fi.push('Status: <b>'+rf.status.map(function(s){ return sL[s]||esc(s); }).join(', ')+'</b>');
   if(!fi.length) fi.push('<b>Todos os pedidos (sem filtros)</b>');
   var vT=pedidosFilt.reduce(function(s,p){ return s+Number(p.total||0); },0);
   var nR=pedidosFilt.filter(function(p){ return p.status==='recebido'; }).length;
@@ -6485,19 +6485,108 @@ function TelaPedidos(_ref_tp) {
   var pedidos=_ref_tp.pedidos, mapa=_ref_tp.mapa, obras=_ref_tp.obras||[], itensDoMapa=_ref_tp.itensDoMapa||[], itensAtendidosMap=_ref_tp.itensAtendidosMap||{}, onClose=_ref_tp.onClose, onRefresh=_ref_tp.onRefresh;
   var onUpdateStatus=_ref_tp.onUpdateStatus, onPDF=_ref_tp.onPDF, onEditarPedido=_ref_tp.onEditarPedido||function(){};
 
-  var _sF=useState({obra:'',de:'',ate:'',insumo:'',fornecedor:'',status:''}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
+  var _sF=useState({obra:[],de:'',ate:'',insumo:[],fornecedor:[],status:[]}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
   var _sRM=useState(false),showRelModal=_slicedToArray(_sRM,2)[0],setShowRelModal=_slicedToArray(_sRM,2)[1];
-  var _sRF=useState({obra:'',de:'',ate:'',insumo:'',status:''}),relFiltros=_slicedToArray(_sRF,2)[0],setRelFiltros=_slicedToArray(_sRF,2)[1];
+  var _sRF=useState({obra:[],de:'',ate:'',insumo:[],status:[]}),relFiltros=_slicedToArray(_sRF,2)[0],setRelFiltros=_slicedToArray(_sRF,2)[1];
 
   var statusCores = { rascunho:{bg:'#f0f0f0',c:'#666'}, emitido:{bg:'#E6F1FB',c:'#185FA5'}, recebido:{bg:'#EAF3DE',c:'#3B6D11'}, cancelado:{bg:'#FCEBEB',c:'#A32D2D'} };
   var statusLabel = { rascunho:'Rascunho', emitido:'Emitido', recebido:'Recebido', cancelado:'Cancelado' };
+  var statusOpcoes = ['rascunho','emitido','recebido','cancelado'];
+
+  // FIX: listas \u00danicas derivadas dos PEDIDOS de verdade (n\u00e3o de todo o cadastro do sistema)
+  var obrasComPedido = Array.from(new Set((pedidos||[]).map(function(p){ return p.obra; }).filter(Boolean))).sort();
+  var fornecedoresComPedido = Array.from(new Set((pedidos||[]).map(function(p){ return p.fornecedor_nome; }).filter(Boolean))).sort();
+  var insumosComPedido = Array.from(new Set((pedidos||[]).reduce(function(acc,p){
+    (p.itens||[]).forEach(function(it){ if(it.descricao) acc.push(it.descricao); });
+    return acc;
+  }, []))).sort();
+
+  var _sDrop = useState(null), dropdownAberto = _slicedToArray(_sDrop,2)[0], setDropdownAberto = _slicedToArray(_sDrop,2)[1];
+  var _sBuscaDrop = useState({}), buscaDropdown = _slicedToArray(_sBuscaDrop,2)[0], setBuscaDropdown = _slicedToArray(_sBuscaDrop,2)[1];
+  var dropRefAtual = useRef(null);
+
+  // FIX: fecha o painel aberto ao clicar fora dele (em qualquer lugar da tela)
+  useEffect(function(){
+    function aoClicarFora(e){
+      if (dropRefAtual.current && !dropRefAtual.current.contains(e.target)) {
+        setDropdownAberto(null);
+      }
+    }
+    document.addEventListener('mousedown', aoClicarFora);
+    return function(){ document.removeEventListener('mousedown', aoClicarFora); };
+  }, []);
+
+  // Componente reutiliz\u00e1vel: bot\u00e3o + painel de m\u00faltipla sele\u00e7\u00e3o, usado nos dois lugares (barra principal e modal de relat\u00f3rio)
+  function multiSelect(config) {
+    var chave = config.chave, opcoes = config.opcoes||[], selecionados = config.selecionados||[], aoMudar = config.aoMudar, comBusca = config.comBusca, labelPlural = config.labelPlural||'os';
+    var aberto = dropdownAberto === chave;
+    var termoBusca = buscaDropdown[chave]||'';
+    var opcoesFiltradas = (comBusca && termoBusca) ? opcoes.filter(function(o){ return o.toUpperCase().indexOf(termoBusca.toUpperCase())>=0; }) : opcoes;
+    var qtd = selecionados.filter(function(s){ return opcoes.indexOf(s) >= 0; }).length;
+    var textoBotao = qtd===0 ? 'Todos' : (qtd+' selecionado'+(qtd===1?'':'s'));
+    return /*#__PURE__*/React.createElement('div', {
+      style:{display:'flex',flexDirection:'column',gap:3,position:'relative'},
+      ref: function(el){ if(aberto) dropRefAtual.current = el; }
+    },
+      /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, config.label),
+      /*#__PURE__*/React.createElement('div', {
+        onClick: function(){ setDropdownAberto(aberto ? null : chave); },
+        style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,minWidth:config.minWidth||140,background:'#fff',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',gap:6,whiteSpace:'nowrap'}
+      }, textoBotao, /*#__PURE__*/React.createElement('span',null,'\u25be')),
+      aberto && /*#__PURE__*/React.createElement('div', {
+        style:{position:'absolute',top:'calc(100% + 4px)',left:0,background:'#fff',border:'1px solid #ccc',borderRadius:6,boxShadow:'0 4px 14px rgba(0,0,0,.15)',padding:8,zIndex:50,minWidth:200,maxHeight:230,overflowY:'auto'}
+      },
+        comBusca && /*#__PURE__*/React.createElement('input', {
+          value: termoBusca,
+          onChange: function(e){ setBuscaDropdown(function(prev){ return Object.assign({},prev,_defineProperty({},chave,e.target.value)); }); },
+          placeholder: 'Buscar...',
+          style:{padding:'5px 6px',border:'1px solid #ddd',borderRadius:4,fontSize:10,width:'100%',boxSizing:'border-box',marginBottom:6}
+        }),
+        opcoesFiltradas.length===0 && /*#__PURE__*/React.createElement('div', { style:{fontSize:10,color:'#999',padding:'4px 6px'} }, 'Nenhuma op\u00e7\u00e3o encontrada.'),
+        opcoesFiltradas.map(function(op){
+          var marcado = selecionados.indexOf(op) >= 0;
+          return /*#__PURE__*/React.createElement('div', {
+            key: op,
+            onClick: function(){
+              var novo = marcado ? selecionados.filter(function(x){ return x!==op; }) : selecionados.concat([op]);
+              aoMudar(novo);
+            },
+            style:{display:'flex',alignItems:'center',gap:7,padding:'5px 6px',fontSize:11,borderRadius:4,cursor:'pointer'}
+          },
+            /*#__PURE__*/React.createElement('input',{type:'checkbox',checked:marcado,readOnly:true}),
+            config.rotulos ? (config.rotulos[op]||op) : op
+          );
+        }),
+        opcoes.length>0 && /*#__PURE__*/React.createElement('div', {
+          onClick: function(){
+            var todasFiltradasJaMarcadas = opcoesFiltradas.length>0 && opcoesFiltradas.every(function(o){ return selecionados.indexOf(o)>=0; });
+            if (todasFiltradasJaMarcadas) {
+              aoMudar(selecionados.filter(function(s){ return opcoesFiltradas.indexOf(s)<0; }));
+            } else {
+              var novoSet = selecionados.slice();
+              opcoesFiltradas.forEach(function(o){ if(novoSet.indexOf(o)<0) novoSet.push(o); });
+              aoMudar(novoSet);
+            }
+          },
+          style:{display:'flex',alignItems:'center',gap:7,padding:'5px 6px',fontSize:11,borderRadius:4,cursor:'pointer',borderTop:'1px solid #eee',marginTop:4,paddingTop:4,color:'#5b3fa0',fontWeight:'bold'}
+        },
+          /*#__PURE__*/React.createElement('input',{type:'checkbox',checked:opcoesFiltradas.length>0 && opcoesFiltradas.every(function(o){ return selecionados.indexOf(o)>=0; }),readOnly:true}),
+          'Marcar tod'+labelPlural
+        ),
+        /*#__PURE__*/React.createElement('button', {
+          onClick: function(){ setDropdownAberto(null); },
+          style:{width:'100%',marginTop:6,padding:6,background:'#0e7a5f',color:'#fff',border:'none',borderRadius:4,fontSize:10,fontWeight:'bold',cursor:'pointer'}
+        }, '\u2713 Conclu\u00eddo')
+      )
+    );
+  }
 
   var pedidosFiltrados = (pedidos||[]).filter(function(po){
-    if (filtros.status && po.status !== filtros.status) return false;
-    if (filtros.obra && po.obra !== filtros.obra) return false;
-    if (filtros.fornecedor && !(po.fornecedor_nome||'').toLowerCase().includes(filtros.fornecedor.toLowerCase())) return false;
-    if (filtros.insumo) {
-      var hasInsumo = (po.itens||[]).some(function(it){ return (it.descricao||'').toLowerCase().includes(filtros.insumo.toLowerCase())||(it.detalhe||'').toLowerCase().includes(filtros.insumo.toLowerCase()); });
+    if (filtros.status.length && filtros.status.indexOf(po.status) < 0) return false;
+    if (filtros.obra.length && filtros.obra.indexOf(po.obra) < 0) return false;
+    if (filtros.fornecedor.length && filtros.fornecedor.indexOf(po.fornecedor_nome) < 0) return false;
+    if (filtros.insumo.length) {
+      var hasInsumo = (po.itens||[]).some(function(it){ return filtros.insumo.indexOf(it.descricao) >= 0; });
       if (!hasInsumo) return false;
     }
     if (filtros.de || filtros.ate) {
@@ -6540,27 +6629,18 @@ function TelaPedidos(_ref_tp) {
           /*#__PURE__*/React.createElement('div', { style:{fontSize:9,opacity:.85,marginTop:2} }, 'Controle completo \u00B7 Por obra \u00B7 Por per\u00EDodo \u00B7 Por insumo')
         ),
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
-          /*#__PURE__*/React.createElement('button', { onClick:function(){ setRelFiltros({obra:'',de:'',ate:'',insumo:'',status:''}); setShowRelModal(true); }, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, 'Relatorio PDF'), /*#__PURE__*/React.createElement('button', { onClick:onRefresh, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, '\uD83D\uDD04 Atualizar'),
+          /*#__PURE__*/React.createElement('button', { onClick:function(){ setRelFiltros({obra:[],de:'',ate:'',insumo:[],status:[]}); setShowRelModal(true); }, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, 'Relatorio PDF'), /*#__PURE__*/React.createElement('button', { onClick:onRefresh, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, '\uD83D\uDD04 Atualizar'),
           /*#__PURE__*/React.createElement('span', { onClick:onClose, style:{cursor:'pointer',fontSize:18,opacity:.8} }, '\u2715')
         )
       ),
       // Filtros
-      /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,padding:'10px 14px',background:'#f5f5f5',borderBottom:'1px solid #eee',flexWrap:'wrap',alignItems:'flex-end'} },
-        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
-          /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, 'Obra'),
-          /*#__PURE__*/React.createElement('select', {
-            value: filtros.obra||'',
-            onChange: function(e){ setFiltros(function(prev){ return Object.assign({},prev,{obra:e.target.value}); }); },
-            style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,minWidth:150,maxWidth:200}
-          },
-            /*#__PURE__*/React.createElement('option', {value:''}, 'Todas as obras'),
-            obras.map(function(o,i){
-              return /*#__PURE__*/React.createElement('option', {key:i, value:o}, o);
-            })
-          )
-        ),
-        fInput('Insumo','insumo'),
-        fInput('Fornecedor','fornecedor'),
+      /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,padding:'10px 14px',background:'#f5f5f5',borderBottom:'1px solid #eee',flexWrap:'wrap',alignItems:'flex-start'} },
+        multiSelect({ chave:'principal_obra', label:'Obra', opcoes:obrasComPedido, selecionados:filtros.obra, comBusca:obrasComPedido.length>8, minWidth:150, labelPlural:'as',
+          aoMudar:function(novo){ setFiltros(function(prev){ return Object.assign({},prev,{obra:novo}); }); } }),
+        multiSelect({ chave:'principal_insumo', label:'Insumo', opcoes:insumosComPedido, selecionados:filtros.insumo, comBusca:true, labelPlural:'os',
+          aoMudar:function(novo){ setFiltros(function(prev){ return Object.assign({},prev,{insumo:novo}); }); } }),
+        multiSelect({ chave:'principal_fornecedor', label:'Fornecedor', opcoes:fornecedoresComPedido, selecionados:filtros.fornecedor, comBusca:fornecedoresComPedido.length>8, labelPlural:'os',
+          aoMudar:function(novo){ setFiltros(function(prev){ return Object.assign({},prev,{fornecedor:novo}); }); } }),
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
           /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, 'Per\u00EDodo De'),
           /*#__PURE__*/React.createElement('input', { type:'date', value:filtros.de||'',
@@ -6573,13 +6653,8 @@ function TelaPedidos(_ref_tp) {
             onChange:function(e){ setFiltros(function(prev){ return Object.assign({},prev,{ate:e.target.value}); }); },
             style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,minWidth:110} })
         ),
-        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:3} },
-          /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, 'Status'),
-          /*#__PURE__*/React.createElement('select', { value:filtros.status||'', onChange:function(e){ setFiltros(function(prev){ return Object.assign({},prev,{status:e.target.value}); }); }, style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,minWidth:110} },
-            /*#__PURE__*/React.createElement('option',{value:''},'Todos'),
-            ['rascunho','emitido','recebido','cancelado'].map(function(s){ return /*#__PURE__*/React.createElement('option',{key:s,value:s},statusLabel[s]); })
-          )
-        )
+        multiSelect({ chave:'principal_status', label:'Status', opcoes:statusOpcoes, selecionados:filtros.status, rotulos:statusLabel, labelPlural:'os',
+          aoMudar:function(novo){ setFiltros(function(prev){ return Object.assign({},prev,{status:novo}); }); } })
       ),
       // KPIs
       /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(5,1fr)',borderBottom:'1px solid #eee'} },
@@ -6668,10 +6743,8 @@ function TelaPedidos(_ref_tp) {
       /*#__PURE__*/React.createElement('div', { style:{padding:16,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',flex:1,overscrollBehavior:'contain'} },
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
           /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Obra'),
-          /*#__PURE__*/React.createElement('select', { value:relFiltros.obra||'', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{obra:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:12,width:'100%',minHeight:40} },
-            /*#__PURE__*/React.createElement('option',{value:''},'Todas as obras'),
-            obras.map(function(o,i){ return /*#__PURE__*/React.createElement('option',{key:i,value:o},o); })
-          )
+          multiSelect({ chave:'rel_obra', label:'', opcoes:obrasComPedido, selecionados:relFiltros.obra, comBusca:obrasComPedido.length>8, minWidth:'100%', labelPlural:'as',
+            aoMudar:function(novo){ setRelFiltros(function(p){ return Object.assign({},p,{obra:novo}); }); } })
         ),
         /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8} },
           /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
@@ -6685,14 +6758,13 @@ function TelaPedidos(_ref_tp) {
         ),
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
           /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Insumo'),
-          /*#__PURE__*/React.createElement('input', { type:'text',value:relFiltros.insumo||'',placeholder:'Ex: LIXA DISCO (vazio = todos)', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{insumo:e.target.value.toUpperCase()}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:12,width:'100%',minHeight:40} })
+          multiSelect({ chave:'rel_insumo', label:'', opcoes:insumosComPedido, selecionados:relFiltros.insumo, comBusca:true, minWidth:'100%', labelPlural:'os',
+            aoMudar:function(novo){ setRelFiltros(function(p){ return Object.assign({},p,{insumo:novo}); }); } })
         ),
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
           /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Status'),
-          /*#__PURE__*/React.createElement('select', { value:relFiltros.status||'', onChange:function(e){ setRelFiltros(function(p){ return Object.assign({},p,{status:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:12,width:'100%',minHeight:40} },
-            /*#__PURE__*/React.createElement('option',{value:''},'Todos os status'),
-            [['rascunho','Rascunho'],['emitido','Emitido'],['recebido','Recebido'],['cancelado','Cancelado']].map(function(s){ return /*#__PURE__*/React.createElement('option',{key:s[0],value:s[0]},s[1]); })
-          )
+          multiSelect({ chave:'rel_status', label:'', opcoes:statusOpcoes, selecionados:relFiltros.status, rotulos:statusLabel, minWidth:'100%', labelPlural:'os',
+            aoMudar:function(novo){ setRelFiltros(function(p){ return Object.assign({},p,{status:novo}); }); } })
         )
       ),
       /*#__PURE__*/React.createElement('div', { style:{padding:'12px 16px',borderTop:'1px solid #eee',display:'flex',gap:8,justifyContent:'flex-end',flexShrink:0} },
@@ -6700,9 +6772,9 @@ function TelaPedidos(_ref_tp) {
         /*#__PURE__*/React.createElement('button', {
           onClick:function(){
             var ped=(pedidos||[]).filter(function(po){
-              if(relFiltros.obra && po.obra!==relFiltros.obra) return false;
-              if(relFiltros.status && po.status!==relFiltros.status) return false;
-              if(relFiltros.insumo){ var has=(po.itens||[]).some(function(it){ return (it.descricao||'').toLowerCase().includes(relFiltros.insumo.toLowerCase())||(it.detalhe||'').toLowerCase().includes(relFiltros.insumo.toLowerCase()); }); if(!has) return false; }
+              if(relFiltros.obra.length && relFiltros.obra.indexOf(po.obra) < 0) return false;
+              if(relFiltros.status.length && relFiltros.status.indexOf(po.status) < 0) return false;
+              if(relFiltros.insumo.length){ var has=(po.itens||[]).some(function(it){ return relFiltros.insumo.indexOf(it.descricao) >= 0; }); if(!has) return false; }
               if(relFiltros.de||relFiltros.ate){ var dt=new Date(po.data_emissao||po.criado_em); if(isNaN(dt.getTime())) return false; if(relFiltros.de && dt<new Date(relFiltros.de+'T00:00:00')) return false; if(relFiltros.ate && dt>new Date(relFiltros.ate+'T23:59:59')) return false; }
               return true;
             });
@@ -7056,18 +7128,70 @@ function ModalEnsinarSistema(_ref_ens) {
     var PRECO4=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{3,4})$/;
     var ehCab=function(s){
       var st=s.trim();
-      if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS\.?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO)$/i.test(st)) return true;
+      if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS[\.:]?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO)$/i.test(st)) return true;
       if(/^(VALOR TOTAL|TOTAL GERAL|TOTAL BRUTO|TOTAL L[I\u00CD]QUIDO|PESO TOTAL|PESO L[I\u00CD]QUIDO|VALOR DO IPI|TOTAL DO IPI|VALOR TOTAL DO|DEMAIS CONDI)/i.test(st)) return true;
       // FIX: cabeçalhos compostos (frase inteira em um só token), comum quando o PDF junta a linha de cabeçalho
       if(/DESCRI[C\u00C7][A\u00C3]O DO PRODUTO|TOTAL (ACRESCIMO|DESCONTO|L[I\u00CD]QUIDO|GERAL|BRUTO)|VALOR (UNIT|TOTAL)|C[O\u00D3]DIGO PRODUTO/i.test(st)) return true;
       if(/^(TOTAL|VALOR|VENDEDOR|CLIENTE|ENDERE[C\u00C7]O)[\s:]/i.test(st)) return true;
+      // FIX: documentos tipo "nota/orçamento avulso" (cabeçalho de estabelecimento, endereço, nome de empresa, cidade-UF)
+      if(/^(N[\u00C3A]O [\u00C9E] DOCUMENTO|DOCUMENTO AUXILIAR|IDENTIFICA[C\u00C7][\u00C3A]O DO|RAZ[\u00C3A]O SOCIAL|EMISS[\u00C3A]O|VALIDADE|FANTASIA|COMPLEM|PAGAMENTO|SUBTOTAL|ACR[E\u00C9]SCIMO|VENCIMENTO)/i.test(st)) return true;
+      if(/^(AV\.|AVENIDA|RUA|R\s)/i.test(st)) return true;
+      if(/LTDA|EIRELI|\bS\/A\b|\bME\b|\bEPP\b/i.test(st)) return true;
+      if(/^[A-Z\u00C0-\u0178\s]+\s-\s[A-Z]{2}(\s|$)/.test(st)) return true; // "CIDADE - UF"
+      if(/^VL\.?\s*UNIT/i.test(st)) return true;
+      if(/^Vendedor\(es\)/i.test(st)) return true;
+      if(/^CE-/i.test(st)) return true; // cabe\u00e7alho de se\u00e7\u00e3o (local de retirada), n\u00e3o \u00e9 produto
+      if(/^(PR\.?\s*UNIT|PRE[C\u00C7]O\s*TOTAL|PRE[C\u00C7]O\s*UNIT)/i.test(st)) return true; // cabe\u00e7alho de coluna abreviado
+      // FIX: mais padr\u00f5es de rodap\u00e9/cabe\u00e7alho encontrados em outros formatos (Gerdau, Ferracre, Ferrosul, Acreferro)
+      if(/^(AMBIENTE|CD RETIRA|PROPOSTA V[A\u00C1]LIDA|DADOS DO FATURAMENTO|DADOS DO PARCEIRO|ORCAMENTO \/|OR[C\u00C7]AMENTO \/|PARCELA [U\u00DA]NICA|V\.?\s*DESC|V\.?\s*BRUTO|VLR\.?\s*TOTAL|C[O\u00D3]D\.?\s*F[A\u00C1]BRICA|C[O\u00D3]D\.?\s*REF|C[O\u00D3]D\.?\s*DE ORIGEM|PESO L[I\u00CD]Q|CONTAS BANC[A\u00C1]RIAS|N[A\u00C3]O VALE COMO|N[A\u00C3]O [E\u00C9] DOCUMENTO|ESTOU DE ACORDO|NOME FANT|DATA DE VENCIMENTO|DESC\.?\s*DESTACADO|SERVI[C\u00C7]O DESCRITO|OUTROS SERVI[C\u00C7]OS|OUTRAS DESP)/i.test(st)) return true;
+      if(/^(TRV|TRAV\.|TRAVESSA)\s/i.test(st)) return true; // endere\u00e7o (travessa), al\u00e9m de RUA/AV j\u00e1 cobertos
+      if(/^Prazo\s*(de\s*)?Entrega/i.test(st)) return true;
+      // FIX: mais padr\u00f5es que escapavam (forma de pagamento, valor unit\u00e1rio, observa\u00e7\u00e3o com espa\u00e7o, frete)
+      if(/^(FORMA\s*DE\s*PAGAMENTO|V\.?\s*UNIT[A\u00C1]RIO|OBSERVA[C\u00C7][A\u00C3]O|FRETE\s*\(|DESCONTO\s*ITENS)/i.test(st)) return true;
+      // FIX: estes padr\u00f5es j\u00e1 existiam em outra fun\u00e7\u00e3o irm\u00e3 (Ler com IA) mas faltavam aqui
+      if(/^(PESO (BRUTO|L[I\u00CD]QUIDO)|QTD\.?\s*TOTAL|QUANTIDADE TOTAL)[\s:]/i.test(st)) return true;
+      if(/^(ASSINATURA DO|[E\u00C9] VEDADA A AUTENTICA[C\u00C7][A\u00C3]O|TELE-?VENDAS)/i.test(st)) return true;
+      if(/^\d+\s*-\s*Mexichem/i.test(st)) return true; // nome de filial espec\u00edfico deste fornecedor
+      if(/IND[U\u00DA]STRIA E COM[E\u00C9]RCIO|IND\s*E\s*COM\s*DE|IMP\.?\s*(E\s*)?EXP\b|IMPORTA[C\u00C7][A\u00C3]O E EXPORTA[C\u00C7][A\u00C3]O/i.test(st)) return true;
       return false;
     };
     var items=[];
     for (var i=0;i<textos.length;i++) {
       var t=(textos[i]||"").trim();
-      var ehDesc=t.length>7&&/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
+      // FIX: aceita tamb\u00e9m descri\u00e7\u00f5es no formato "C\u00d3DIGO - TEXTO" (come\u00e7am com n\u00famero, n\u00e3o letra) -
+      // esse formato \u00e9 usado por alguns fornecedores (ex: notas/or\u00e7amentos avulsos tipo Agroboi)
+      var comecaComLetra=/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t);
+      var comecaComCodigoHifen=/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(t);
+      // FIX: mesmo batendo no formato "c\u00f3digo - texto", rejeita se for forma de pagamento (boleto/pix/
+      // transfer\u00eancia/contra entrega) ou nome de vendedor seguido de telefone - esses N\u00c3O s\u00e3o produtos
+      var pareceFormaPagamento = /BOLETO|PIX|TRANSFEREN|CONTRA ENTREGA|FORMA DE PAGAMENTO|CART[A\u00C3]O|CHEQUE|DINHEIRO|VENDA A RECEBER/i.test(t);
+      var pareceVendedorComTelefone = /\d{4,5}[\s-]?\d{4}\s*$/.test(t) && !/\d+[.,]\d{2}\s*$/.test(t);
+      if (comecaComCodigoHifen && (pareceFormaPagamento || pareceVendedorComTelefone)) comecaComCodigoHifen = false;
+      // FIX: se o token ANTERIOR for um r\u00f3tulo de pessoa (Vendedor:, Cliente:, Comprador:, etc.), o
+      // token atual \u00e9 o NOME dessa pessoa, n\u00e3o um produto - rejeita independente do formato do texto
+      var rotuloPessoaRegex = /^(Vendedor(\(es\))?|Cliente|Comprador|Respons[a\u00E1]vel|Atendente|Representante|Solicitante|Atenciosamente|Tele-?Vendas|Fone\s*Vendedor)\s*:?\s*$/i;
+      var anteriorEhRotuloPessoa = false;
+      for (var distRotulo=1; distRotulo<=4; distRotulo++) {
+        if (i-distRotulo>=0 && rotuloPessoaRegex.test((textos[i-distRotulo]||"").trim())) { anteriorEhRotuloPessoa = true; break; }
+      }
+      // FIX: se o item anterior j\u00e1 foi identificado como nome de empresa/cabe\u00e7alho (ex: "...LTDA"),
+      // o token atual costuma ser a assinatura da pessoa (rodap\u00e9 tipo "Atenciosamente, Empresa, Nome") - rejeita tamb\u00e9m
+      var anteriorEhEmpresa = i>0 && /LTDA|EIRELI|IMP\.?\s*(E\s*)?EXP\b/i.test((textos[i-1]||"").trim());
+      // FIX: forma de pagamento agora rejeitada em QUALQUER formato de texto, n\u00e3o s\u00f3 c\u00f3digo-h\u00edfen
+      var ehDesc=!anteriorEhRotuloPessoa&&!anteriorEhEmpresa&&!pareceFormaPagamento&&t.length>7&&(comecaComLetra||comecaComCodigoHifen)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t)&&!/^C[\u00F3o]d\.?\s*Barras/i.test(t);
       if (!ehDesc) continue;
+      // FIX: quando a descri\u00e7\u00e3o vem quebrada em 2 partes (comum nesse formato), concatena com o
+      // pr\u00f3ximo token se ele parecer ser a continua\u00e7\u00e3o (n\u00e3o \u00e9 c\u00f3digo de barras, pre\u00e7o, cabe\u00e7alho, ou outro item)
+      var descParaUsar = t;
+      // FIX: a concatena\u00e7\u00e3o s\u00f3 acontece quando a descri\u00e7\u00e3o atual est\u00e1 no formato "C\u00d3DIGO - TEXTO"
+      // (onde sabemos que pode vir quebrada em 2 partes, ex: Agroboi) - em formatos onde a descri\u00e7\u00e3o
+      // j\u00e1 come\u00e7a com letra normal (Costa, Paranorte, etc), ela j\u00e1 vem completa e N\u00c3O deve ser
+      // concatenada com o pr\u00f3ximo token (que normalmente \u00e9 um C\u00d3DIGO/REFER\u00caNCIA do produto, n\u00e3o texto)
+      if (comecaComCodigoHifen && i+1 < textos.length && !/^CE-/i.test(t)) {
+        var prox=(textos[i+1]||"").trim();
+        var proxEhContinuacao = prox.length>2 && !/^C[\u00F3o]d\.?\s*Barras/i.test(prox) && !PRECO.test(prox) && !PRECO4.test(prox) && !ehCab(prox) && !/^\d+$/.test(prox) && /[A-Za-z\u00C0-\u00FF]/.test(prox) && !/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(prox);
+        if (proxEhContinuacao) descParaUsar = t + ' ' + prox;
+      }
       // FIX: busca o preço em AMBAS as direções (antes e depois) — alguns PDFs (ex.: gerados por certos
       // ERPs) colocam o valor ANTES da descrição na ordem interna do texto, não depois.
       var precoAchado = null;
@@ -7084,7 +7208,7 @@ function ModalEnsinarSistema(_ref_ens) {
       }
       if (precoAchado) {
         var preco=parseFloat(precoAchado.replace(/\./g,"").replace(",","."));
-        items.push({desc:t.toUpperCase(), preco:preco});
+        items.push({desc:descParaUsar.toUpperCase(), preco:preco});
       }
     }
     return items;
