@@ -7084,6 +7084,11 @@ function ModalEnsinarSistema(_ref_ens) {
   var _sToast = useState(''), toast = _slicedToArray(_sToast,2)[0], setToast = _slicedToArray(_sToast,2)[1];
   var _sErroEns = useState(''), erro = _slicedToArray(_sErroEns,2)[0], setErro = _slicedToArray(_sErroEns,2)[1];
 
+  // FIX: novos estados para "Importar Planilha de Sinônimos" (3ª forma de ensinar o sistema)
+  var _sPrevPlan = useState(null), previewPlanilha = _slicedToArray(_sPrevPlan,2)[0], setPreviewPlanilha = _slicedToArray(_sPrevPlan,2)[1];
+  var _sProcPlan = useState(false), processandoPlanilha = _slicedToArray(_sProcPlan,2)[0], setProcessandoPlanilha = _slicedToArray(_sProcPlan,2)[1];
+  var _sErroPlan = useState(''), erroPlanilha = _slicedToArray(_sErroPlan,2)[0], setErroPlanilha = _slicedToArray(_sErroPlan,2)[1];
+
   // Leitura de arquivos (mesmo padrão já usado no Casar Insumos - aqui só a descrição interessa)
   var parsearPDFTextoEnsinar = function(textos) {
     var PRECO=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2})$/;
@@ -7308,6 +7313,74 @@ function ModalEnsinarSistema(_ref_ens) {
   };
   var limparFiltroMapa = function(){ setNumeroMapaBusca(''); setFiltroInsumosMapa(null); setErro(''); };
 
+  // FIX: leitura da planilha de sinônimos (3ª forma de ensinar) — trata células mescladas na coluna A
+  var handleArquivoPlanilha = function(e){
+    var file = e.target.files[0]; e.target.value=''; if(!file) return;
+    setProcessandoPlanilha(true); setErroPlanilha(''); setPreviewPlanilha(null);
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try {
+        var wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var merges = ws['!merges'] || [];
+        var aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+        // Acha o valor "efetivo" da coluna A para uma linha, considerando merge de células
+        var valorColunaA = function(linhaIdx){
+          var direto = String((aoa[linhaIdx] && aoa[linhaIdx][0]) || '').trim();
+          if (direto) return direto;
+          for (var i=0; i<merges.length; i++){
+            var m = merges[i];
+            if (m.s.c === 0 && m.e.c === 0 && linhaIdx >= m.s.r && linhaIdx <= m.e.r){
+              var linhaBase = aoa[m.s.r];
+              return String((linhaBase && linhaBase[0]) || '').trim();
+            }
+          }
+          return '';
+        };
+
+        var catalogoUpper = cadastrosInsumos.map(function(s){ return String(s||'').toUpperCase(); });
+        var pares = [];
+        for (var i=0; i<aoa.length; i++){
+          var oficial = valorColunaA(i).toUpperCase();
+          var sinonimo = String((aoa[i] && aoa[i][1]) || '').trim().toUpperCase();
+          if (!oficial || !sinonimo) continue; // linha incompleta - pula
+          if (oficial === sinonimo) continue; // não faz sentido ensinar X=X
+          var existeNoCatalogo = catalogoUpper.indexOf(oficial) >= 0;
+          var status;
+          if (!existeNoCatalogo) status = 'nao_encontrado';
+          else if (aprendizados[sinonimo] === oficial) status = 'ja_existe';
+          else if (aprendizados[sinonimo] && aprendizados[sinonimo] !== oficial) status = 'atualizado';
+          else status = 'novo';
+          pares.push({ oficial: oficial, sinonimo: sinonimo, status: status });
+        }
+
+        if (!pares.length){
+          setErroPlanilha('Nenhum par válido encontrado na planilha. Confira se a coluna A tem o insumo oficial e a coluna B tem o apelido.');
+          setProcessandoPlanilha(false);
+          return;
+        }
+        setPreviewPlanilha(pares);
+        setProcessandoPlanilha(false);
+      } catch(err){
+        setErroPlanilha('Não foi possível ler o arquivo. Confira se é um .xlsx válido.');
+        setProcessandoPlanilha(false);
+      }
+    };
+    reader.onerror = function(){ setErroPlanilha('Erro ao ler o arquivo.'); setProcessandoPlanilha(false); };
+    reader.readAsArrayBuffer(file);
+  };
+
+  var confirmarImportacaoPlanilha = function(){
+    if (!previewPlanilha) return;
+    var paraEnsinar = previewPlanilha.filter(function(p){ return p.status === 'novo' || p.status === 'atualizado'; });
+    paraEnsinar.forEach(function(p){ onAprendizadoSalvo(p.sinonimo, p.oficial); });
+    setPreviewPlanilha(null);
+    setToast(paraEnsinar.length + ' aprendizado' + (paraEnsinar.length===1?'':'s') + ' adicionado' + (paraEnsinar.length===1?'':'s') + ' com sucesso!');
+    setTimeout(function(){ setToast(''); }, 3500);
+    setAbaAtiva('conferir');
+  };
+
   var handleArquivos = function(e){
     var files = Array.prototype.slice.call(e.target.files||[]);
     e.target.value = "";
@@ -7430,7 +7503,11 @@ function ModalEnsinarSistema(_ref_ens) {
         /*#__PURE__*/React.createElement('button', {
           onClick: function(){ setAbaAtiva('conferir'); },
           style:{background: abaAtiva==='conferir' ? '#5b3fa0' : 'rgba(91,63,160,.12)', color: abaAtiva==='conferir' ? '#fff' : '#5b3fa0', border:'none', borderRadius:6, padding:'6px 12px', fontSize:11, fontWeight:'bold', cursor:'pointer'}
-        }, '\uD83D\uDCCB Conferir Associa\u00e7\u00f5es ('+Object.keys(aprendizados).length+')')
+        }, '\uD83D\uDCCB Conferir Associa\u00e7\u00f5es ('+Object.keys(aprendizados).length+')'),
+        /*#__PURE__*/React.createElement('button', {
+          onClick: function(){ setAbaAtiva('importarPlanilha'); },
+          style:{background: abaAtiva==='importarPlanilha' ? '#5b3fa0' : 'rgba(91,63,160,.12)', color: abaAtiva==='importarPlanilha' ? '#fff' : '#5b3fa0', border:'none', borderRadius:6, padding:'6px 12px', fontSize:11, fontWeight:'bold', cursor:'pointer'}
+        }, '\uD83D\uDCCA Importar Planilha')
       ),
       abaAtiva === 'associar' && /*#__PURE__*/React.createElement(React.Fragment, null,
       carregando && /*#__PURE__*/React.createElement('div', { style:{padding:'8px 16px',fontSize:11,color:'#5b3fa0',background:'#f3f0ff'} }, 'Lendo arquivos...'),
@@ -7591,6 +7668,82 @@ function ModalEnsinarSistema(_ref_ens) {
           })
         )
       )
+      ),
+      abaAtiva === 'importarPlanilha' && /*#__PURE__*/React.createElement('div', { style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0,background:'#fff',padding:'16px'} },
+        !previewPlanilha && /*#__PURE__*/React.createElement(React.Fragment, null,
+          /*#__PURE__*/React.createElement('div', { style:{fontSize:12,color:'#555',lineHeight:1.6,marginBottom:14} },
+            /*#__PURE__*/React.createElement('b', null, 'Como montar a planilha:'), /*#__PURE__*/React.createElement('br'),
+            '\u2022 Coluna A: nome do insumo já cadastrado no sistema.', /*#__PURE__*/React.createElement('br'),
+            '\u2022 Coluna B: apelidos/variações que significam o mesmo insumo — uma linha por apelido.', /*#__PURE__*/React.createElement('br'),
+            '\u2022 Mescle as células da coluna A quando o mesmo insumo tiver vários apelidos.'
+          ),
+          erroPlanilha && /*#__PURE__*/React.createElement('div', { style:{padding:'10px 14px',background:'#fdecea',border:'1px solid #f5b8b8',borderRadius:6,fontSize:12,color:'#a32d2d',marginBottom:12} }, erroPlanilha),
+          processandoPlanilha && /*#__PURE__*/React.createElement('div', { style:{padding:'10px 14px',fontSize:12,color:'#5b3fa0'} }, 'Lendo planilha...'),
+          /*#__PURE__*/React.createElement('label', {
+            style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8,border:'2px dashed #c5d0e0',borderRadius:10,padding:'32px 16px',cursor:'pointer',color:'#8a9bb0',fontSize:13}
+          },
+            /*#__PURE__*/React.createElement('span', {style:{fontSize:28}}, '\uD83D\uDCC1'),
+            'Toque para escolher o arquivo .xlsx',
+            /*#__PURE__*/React.createElement('input', { type:'file', accept:'.xlsx,.xls', style:{display:'none'}, onChange:handleArquivoPlanilha })
+          )
+        ),
+        previewPlanilha && /*#__PURE__*/React.createElement(React.Fragment, null,
+          (function(){
+            var novos = previewPlanilha.filter(function(p){ return p.status==='novo'; }).length;
+            var atualizados = previewPlanilha.filter(function(p){ return p.status==='atualizado'; }).length;
+            var jaExiste = previewPlanilha.filter(function(p){ return p.status==='ja_existe'; }).length;
+            var naoEncontrado = previewPlanilha.filter(function(p){ return p.status==='nao_encontrado'; }).length;
+            var porOficial = {};
+            previewPlanilha.forEach(function(p){
+              var chave = p.status === 'nao_encontrado' ? ('\u26A0\uFE0F ' + p.oficial + ' (não cadastrado)') : p.oficial;
+              if (!porOficial[chave]) porOficial[chave] = [];
+              porOficial[chave].push(p);
+            });
+            return /*#__PURE__*/React.createElement('div', { style:{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0} },
+              naoEncontrado > 0 && /*#__PURE__*/React.createElement('div', { style:{padding:'10px 14px',background:'#fdecea',border:'1px solid #f5b8b8',borderRadius:6,fontSize:12,color:'#a32d2d',marginBottom:10,flexShrink:0} },
+                '\u26A0\uFE0F ' + naoEncontrado + ' linha(s) ignorada(s): o nome da coluna A não foi encontrado no seu cadastro de insumos.'
+              ),
+              /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:10,marginBottom:12,flexShrink:0} },
+                /*#__PURE__*/React.createElement('div', { style:{flex:1,background:'#f0fdf4',borderRadius:8,padding:'10px 12px',textAlign:'center'} },
+                  /*#__PURE__*/React.createElement('div', { style:{fontSize:20,fontWeight:800,color:'#1a7a44'} }, novos + atualizados),
+                  /*#__PURE__*/React.createElement('div', { style:{fontSize:10,color:'#777',marginTop:2} }, 'Novos aprendizados')
+                ),
+                /*#__PURE__*/React.createElement('div', { style:{flex:1,background:'#f5f5f5',borderRadius:8,padding:'10px 12px',textAlign:'center'} },
+                  /*#__PURE__*/React.createElement('div', { style:{fontSize:20,fontWeight:800,color:'#888'} }, jaExiste),
+                  /*#__PURE__*/React.createElement('div', { style:{fontSize:10,color:'#777',marginTop:2} }, 'Já conhecidos (ignorados)')
+                )
+              ),
+              /*#__PURE__*/React.createElement('div', { style:{flex:1,minHeight:0,overflowY:'auto'} },
+                Object.keys(porOficial).map(function(chaveOficial){
+                  var itens = porOficial[chaveOficial];
+                  var ehErro = chaveOficial.indexOf('\u26A0\uFE0F') === 0;
+                  return /*#__PURE__*/React.createElement('div', { key:chaveOficial, style:{border:'1px solid '+(ehErro?'#f5b8b8':'#e0e0e0'),borderRadius:8,marginBottom:10} },
+                    /*#__PURE__*/React.createElement('div', { style:{background: ehErro?'#a32d2d':'#0f1f3d',color:'#fff',padding:'8px 12px',fontSize:11,fontWeight:700} }, '\uD83D\uDCE6 ' + chaveOficial),
+                    /*#__PURE__*/React.createElement('div', { style:{padding:'2px 12px'} },
+                      itens.map(function(p, idx){
+                        var pulado = p.status === 'ja_existe' || p.status === 'nao_encontrado';
+                        return /*#__PURE__*/React.createElement('div', { key:idx, style:{display:'flex',alignItems:'center',gap:8,padding:'5px 0',fontSize:12,color: pulado?'#aaa':'#333',textDecoration: pulado?'line-through':'none',borderBottom: idx<itens.length-1 ? '1px solid #f5f5f5' : 'none'} },
+                          /*#__PURE__*/React.createElement('span', {style:{color:'#f0a500'}}, '\u21B3'),
+                          p.sinonimo,
+                          p.status === 'ja_existe' && /*#__PURE__*/React.createElement('span', {style:{fontSize:9,background:'#eee',color:'#888',padding:'1px 6px',borderRadius:3,marginLeft:'auto'}}, 'já existe'),
+                          p.status === 'atualizado' && /*#__PURE__*/React.createElement('span', {style:{fontSize:9,background:'#fff3c0',color:'#8a6d00',padding:'1px 6px',borderRadius:3,marginLeft:'auto'}}, 'atualiza')
+                        );
+                      })
+                    )
+                  );
+                })
+              ),
+              /*#__PURE__*/React.createElement('div', { style:{display:'flex',justifyContent:'flex-end',gap:9,paddingTop:12,flexShrink:0} },
+                /*#__PURE__*/React.createElement('button', { onClick:function(){ setPreviewPlanilha(null); }, style:{background:'#f0f2f5',color:'#555',border:'none',borderRadius:9,padding:'10px 18px',fontSize:12,fontWeight:600,cursor:'pointer'} }, 'Cancelar'),
+                /*#__PURE__*/React.createElement('button', {
+                  onClick: confirmarImportacaoPlanilha,
+                  disabled: (novos+atualizados) === 0,
+                  style:{background: (novos+atualizados)===0 ? '#ccc' : '#f0a500',color:'#0f1f3d',border:'none',borderRadius:9,padding:'10px 18px',fontSize:12,fontWeight:700,cursor: (novos+atualizados)===0?'not-allowed':'pointer'}
+                }, '\u2713 Confirmar e Aprender ' + (novos+atualizados) + ' itens')
+              )
+            );
+          })()
+        )
       ),
     toast && /*#__PURE__*/React.createElement('div', { style:{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#0e7a5f',color:'#fff',padding:'10px 20px',borderRadius:30,fontSize:12,fontWeight:'bold',boxShadow:'0 4px 14px rgba(0,0,0,.25)',zIndex:9999} }, toast)
   );
