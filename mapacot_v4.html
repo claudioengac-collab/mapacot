@@ -680,14 +680,17 @@ var sbDeleteOrcamento = function(obraId) {
 // ─── PEDIDOS DE COMPRA — SUPABASE ─────────────────────────────────────────────
 var sbGetPedidos = function() {
   return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=*&order=numero.desc&limit=1000', { headers: SB })
-    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(r){
+      if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar os pedidos. Verifique sua conexão.'); return []; }
+      return r.json();
+    })
     .then(function(d){
       if(d && d.length === 1000){
-        console.warn('MAPACOT: limite de 1000 pedidos atingido — pedidos mais antigos podem não aparecer.');
+        window.avisarErroSalvamento('Limite de 1000 pedidos atingido — os mais antigos podem não aparecer.');
       }
       return d||[];
     })
-    .catch(function(){ return []; });
+    .catch(function(){ window.avisarErroSalvamento('Não foi possível carregar os pedidos. Verifique sua conexão.'); return []; });
 };
 var sbSavePedido = function(po) {
   return fetch(SUPABASE_URL + '/rest/v1/pedidos', {
@@ -703,7 +706,7 @@ var sbUpdatePedido = function(id, fields) {
   }).then(function(r){
     if (!r.ok) return r.text().then(function(t){ throw new Error('Erro ao atualizar pedido ('+r.status+'): '+t); });
   }).catch(function(e){
-    alert('Não foi possível atualizar o pedido.\n' + (e.message||'Verifique sua conexão.'));
+    window.avisarErroSalvamento('Não foi possível atualizar o pedido. Verifique sua conexão.');
   });
 };
 var sbGetNextNumeroPO = function() {
@@ -723,9 +726,12 @@ var sbGetNextNumeroPO = function() {
 var sbCarregarOrcamento = function(obraId) {
   var id = orcObraId(obraId);
   return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=dados", { headers: SB })
-    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(r){
+      if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar o orçamento. Verifique sua conexão.'); return []; }
+      return r.json();
+    })
     .then(function(rows){ return (rows && rows[0] && rows[0].dados) ? rows[0].dados : null; })
-    .catch(function(){ return null; });
+    .catch(function(){ window.avisarErroSalvamento('Não foi possível carregar o orçamento. Verifique sua conexão.'); return null; });
 };
 var sbSaveAssociacoes = function(lista) {
   var payload = JSON.stringify({ id: "assocv2", dados: { lista: lista }, atualizado_em: new Date().toISOString() });
@@ -737,9 +743,12 @@ var sbSaveAssociacoes = function(lista) {
 };
 var sbCarregarAssociacoes = function() {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.assocv2&select=dados", { headers: SB })
-    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(r){
+      if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar as associações. Verifique sua conexão.'); return []; }
+      return r.json();
+    })
     .then(function(rows){ return (rows && rows[0] && rows[0].dados && rows[0].dados.lista) ? rows[0].dados.lista : []; })
-    .catch(function(){ return []; });
+    .catch(function(){ window.avisarErroSalvamento('Não foi possível carregar as associações. Verifique sua conexão.'); return []; });
 };
 // ─── IA Uso — funções Supabase ────────────────────────────────────────────────
 var sbSaveIaUso = function(dados) {
@@ -757,13 +766,16 @@ var sbSalvarAprendizado = function(textoOriginal, insumoDescricao) {
 };
 var sbBuscarAprendizados = function() {
   return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado?select=texto_original,insumo_descricao", { headers: SB })
-    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(r){
+      if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar a memória de aprendizados. Verifique sua conexão.'); return []; }
+      return r.json();
+    })
     .then(function(rows){
       var mapa = {};
       (rows||[]).forEach(function(r){ mapa[r.texto_original] = r.insumo_descricao; });
       return mapa;
     })
-    .catch(function(){ return {}; });
+    .catch(function(){ window.avisarErroSalvamento('Não foi possível carregar a memória de aprendizados. Verifique sua conexão.'); return {}; });
 };
 var sbExcluirAprendizado = function(textoOriginal) {
   var texto = String(textoOriginal||'').trim().toUpperCase();
@@ -775,11 +787,14 @@ var sbExcluirAprendizado = function(textoOriginal) {
 var sbGetIaUsoDia = function() {
   var hoje = new Date().toISOString().slice(0,10);
   return fetch(SUPABASE_URL + "/rest/v1/ia_uso?select=custo_brl,itens_lidos&created_at=gte." + hoje + "T00:00:00", { headers: SB })
-    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(r){
+      if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar o uso diário da IA. Verifique sua conexão.'); return []; }
+      return r.json();
+    })
     .then(function(rows){
       var total = rows.reduce(function(a,r){ return a + (parseFloat(r.custo_brl)||0); }, 0);
       return { leituras: rows.length, custo: total };
-    }).catch(function(){ return { leituras:0, custo:0 }; });
+    }).catch(function(){ window.avisarErroSalvamento('Não foi possível carregar o uso diário da IA. Verifique sua conexão.'); return { leituras:0, custo:0 }; });
 };
 
 var CHUNK_SIZE = 4;
@@ -933,6 +948,8 @@ var getTheme = function getTheme(id) {
 
 // ─── ANÁLISE DE PREÇOS ────────────────────────────────────────────────────────
 var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associacoes) {
+  // FIX: esc() local para evitar XSS/quebra de layout com nomes/descrições contendo < > & "
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   now = now || new Date(); orcamentos = orcamentos || {}; associacoes = associacoes || [];
   var T = getTheme(mapa.corTema); var hdrColor = T.hdr;
   var fns = mapa.fornecedores || []; var itens = mapa.itens || []; var precos = mapa.precos || {};
@@ -960,7 +977,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
     var rkgs = [];
     fns.forEach(function(f){
       var v = parseMoney(precos[item.id+'_'+f.id]);
-      if (v !== null && v > 0) rkgs.push({ forn:(f.nome||'—').toUpperCase(), preco:v });
+      if (v !== null && v > 0) rkgs.push({ forn:esc((f.nome||'—').toUpperCase()), preco:v });
     });
     rkgs.sort(function(a,b){ return a.preco-b.preco; });
     // Contadores
@@ -1029,7 +1046,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
       });
     }
     return '<div class="alb"><div class="aln" style="background:'+hdrColor+';">'
-      +'<span>'+(idx+1)+' \u2014 '+(item.descricao||'').toUpperCase()+' \u00b7 QT: '+item.qt+' '+(item.unid||'')+'</span>'
+      +'<span>'+(idx+1)+' \u2014 '+esc((item.descricao||'').toUpperCase())+' \u00b7 QT: '+item.qt+' '+(item.unid||'')+'</span>'
       +badge+'</div>'+rows+'</div>';
   }).join('');
 
@@ -1106,7 +1123,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
   var hdr = '<div style="background:#1a3a78;padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
     +'<span style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">\uD83D\uDCCA AN\u00c1LISE DE PRE\u00c7OS POR INSUMO</span>'
     +'<span style="font-size:11px;color:rgba(255,255,255,.95);font-weight:700;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;">MP N\u00ba: '+(mapa.numero||'')+'</span>'
-    +'<span style="font-size:11px;color:rgba(255,255,255,.9);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">OBRA: '+(mapa.obra||'').toUpperCase()+'</span>'
+    +'<span style="font-size:11px;color:rgba(255,255,255,.9);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">OBRA: '+esc((mapa.obra||'').toUpperCase())+'</span>'
     +'<span style="font-size:11px;color:rgba(255,255,255,.85);border-left:1px solid rgba(255,255,255,.35);padding-left:14px;white-space:nowrap;margin-left:auto;">DATA: '+fmtDate(now)+'</span>'
     +'</div>';
 
@@ -1270,7 +1287,7 @@ var fmtBRL = function fmtBRL(v) {
 var parsePOVal = function(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
 var buildPedidoPDF = function buildPedidoPDF(po) {
   // FIX 1: esc() local para evitar XSS/layout quebrado no PDF
-  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var num = 'PO-' + String(po.numero).padStart(3,'0');
   var dtRaw = po.data_emissao || po.criado_em;
   var dtObj = dtRaw ? new Date(dtRaw) : new Date();
@@ -1328,13 +1345,13 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   return '<!DOCTYPE html><html><head><meta charset="UTF-8">' + css + '</head><body>'
     + '<div class="hdr">'
     + '<h2>🛒 PEDIDO DE COMPRA &nbsp; ' + num + '</h2>'
-    + '<p style="margin:3px 0 0;font-size:9px;opacity:.85;">' + (po.obra||'') + ' &nbsp;·&nbsp; Emitido em ' + dt + '</p>'
+    + '<p style="margin:3px 0 0;font-size:9px;opacity:.85;">' + esc(po.obra||'') + ' &nbsp;·&nbsp; Emitido em ' + dt + '</p>'
     + '</div>'
     + '<div class="body">'
     + '<div class="grid">'
-    + '<div class="box"><label>Fornecedor</label><span>' + (po.fornecedor_nome||'') + '</span></div>'
+    + '<div class="box"><label>Fornecedor</label><span>' + esc(po.fornecedor_nome||'') + '</span></div>'
     + '<div class="box"><label>Número do Pedido</label><span style="color:#7c3aed;font-size:16px;">' + num + '</span></div>'
-    + '<div class="box"><label>Obra / Projeto</label><span>' + (po.obra||'') + '</span></div>'
+    + '<div class="box"><label>Obra / Projeto</label><span>' + esc(po.obra||'') + '</span></div>'
     + '<div class="box"><label>Data de Emissão</label><span>' + dt + '</span></div>'
     + (po.forma_pagamento ? '<div class="box"><label>Forma de Pagamento</label><span>' + esc(po.forma_pagamento) + '</span></div>' : '')
     + '</div>'
@@ -1355,6 +1372,8 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
+  // FIX: esc() local para evitar XSS/quebra de layout com nomes/descrições contendo < > & "
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var dt = (now instanceof Date ? now : new Date(now))
     .toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});
   var hr = (now instanceof Date ? now : new Date(now))
@@ -1371,14 +1390,14 @@ buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
   var rows = itens.map(function(item, idx){
     return '<tr>'
       + '<td style="width:40px;text-align:center;">'+(idx+1)+'</td>'
-      + '<td>'+((item.descricao||'').toUpperCase())+(item.detalhe?'<div style="font-size:9px;color:#4a6888;margin-top:2px;word-break:break-word;">\u21b3 '+item.detalhe+'</div>':'')+'</td>'
+      + '<td>'+esc((item.descricao||'').toUpperCase())+(item.detalhe?'<div style="font-size:9px;color:#4a6888;margin-top:2px;word-break:break-word;">\u21b3 '+esc(item.detalhe)+'</div>':'')+'</td>'
       + '<td style="width:80px;text-align:right;">'+(item.qt||'')+'</td>'
       + '<td style="width:60px;text-align:center;">'+(item.unidade||item.und||'UN')+'</td>'
       + '</tr>';
   }).join('');
   return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
     + '<h2>RELAÇÃO DE INSUMOS — MAPA DE COTAÇÃO</h2>'
-    + '<div class="sub">'+((obraName||'').toUpperCase())+' &nbsp;|&nbsp; GERADO EM '+dt+' – '+hr+' – MAPACOT V3 CSS</div>'
+    + '<div class="sub">'+esc((obraName||'').toUpperCase())+' &nbsp;|&nbsp; GERADO EM '+dt+' – '+hr+' – MAPACOT V3 CSS</div>'
     + '<table>'
     + '<thead><tr>'
     + '<th style="width:40px;text-align:center;">#</th>'
@@ -1394,6 +1413,8 @@ buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
 
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 var buildMapaHTML = function buildMapaHTML(mapa) {
+  // FIX: esc() local para evitar XSS/quebra de layout com nomes/descrições contendo < > & "
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var now = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : new Date();
   var orcamentos = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
   var associacoes = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : [];
@@ -1449,7 +1470,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       var vt0=r0.vlUnit!==null?r0.vlUnit*qt0:0;
       var res0=vo0&&vt0>0?(vo0*qt0)-vt0:null;
       var semA0=!a0||!oi0;
-      var desc0=item.descricao+(item.detalhe?'<div style="font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;word-break:break-word;">\u21b3 '+item.detalhe+'</div>':'');
+      var desc0=esc(item.descricao)+(item.detalhe?'<div style="font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;word-break:break-word;">\u21b3 '+esc(item.detalhe)+'</div>':'');
       var orcC0=semA0
         ?'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;"><span style="font-size:9px;color:#ccc;">SEM ASSOC.</span></td>'
          +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
@@ -1542,7 +1563,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       +'<div style="background:'+hC0+';padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;">'
         +'<div style="font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;">MAPA DE COTA\u00c7\u00c3O</div>'
         +'<div style="font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;">MP N\u00ba: '+(mapa.numero||1)+'</div>'
-        +(mapa.obra?'<div style="font-size:11px;color:#fff;font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;">OBRA: '+(mapa.obra||'').toUpperCase()+'</div>':'')
+        +(mapa.obra?'<div style="font-size:11px;color:#fff;font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;">OBRA: '+esc((mapa.obra||'').toUpperCase())+'</div>':'')
         +'<div style="font-size:11px;color:#fff;font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;">DATA: '+fmtDate(now)+'&nbsp;&nbsp;HORA: '+fmtHora(now)+'</div>'
       +'</div>'
       +'<table style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;">'
@@ -1619,7 +1640,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : isPdfRank2 ? "#ffe4b0" : isPdfRank3 ? "#ffcece" : bg, ";font-weight:").concat(isMin ? "bold" : isPdfRank2 ? "bold" : isPdfRank3 ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : isPdfRank2 ? "#a05000" : isPdfRank3 ? "#a01010" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
       }).join("");
       var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
-      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(item.descricao || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;word-break:break-word;\">\u21b3 " + item.detalhe + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
+      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(esc(item.descricao) || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;word-break:break-word;\">\u21b3 " + esc(item.detalhe) + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
     }).join("");
     var rodapeRows = RODAPE_ROWS.map(function (row) {
       var resumoCell = isFirst ? function () {
@@ -1657,7 +1678,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#f0f2f8;\">".concat(t > 0 ? fmtMoney(t) : "—", "</td>");
     }).join("");
     var fornHdrs = emptyChunk ? th("—", "background:".concat(hdrColor, ";color:#fff;")) : chunk.map(function (f) {
-      return th(f.nome || "FORNECEDOR", "background:".concat(hdrColor, ";color:#fff;"));
+      return th(esc(f.nome) || "FORNECEDOR", "background:".concat(hdrColor, ";color:#fff;"));
     }).join("");
     var fornSubHdrs = emptyChunk ? th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;")) : chunk.map(function () {
       return th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"));
@@ -1671,14 +1692,16 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
       return "<col style=\"width:".concat(isFirst ? emptyChunk ? 39 : Math.floor(39 / Math.max(chunk.length, 1)) : Math.floor(60 / Math.max(chunk.length, 1)), "%\"/>");
     }).join(""), "</colgroup><thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(isFirst ? "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:".concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO</th>") : "").concat(fornHdrs, "</tr><tr>").concat(isFirst ? "".concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;"))) : "", " ").concat(fornSubHdrs, "</tr></thead><tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>").concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
   };
-  var obsGeralHTML = mapa.obsGeral ? "<div style=\"margin-top:14px;border:1.5px solid ".concat(hdrColor, ";border-radius:4px;overflow:hidden;\"><div style=\"background:").concat(hdrColor, ";color:#fff;padding:7px 12px;font-weight:700;font-size:11px;letter-spacing:0.4px;\">OBSERVACAO GERAL DO MAPA</div><div style=\"padding:10px 12px;font-size:11px;white-space:pre-wrap;background:#fff;\">").concat((mapa.obsGeral || "").toUpperCase(), "</div></div>") : "";
+  var obsGeralHTML = mapa.obsGeral ? "<div style=\"margin-top:14px;border:1.5px solid ".concat(hdrColor, ";border-radius:4px;overflow:hidden;\"><div style=\"background:").concat(hdrColor, ";color:#fff;padding:7px 12px;font-weight:700;font-size:11px;letter-spacing:0.4px;\">OBSERVACAO GERAL DO MAPA</div><div style=\"padding:10px 12px;font-size:11px;white-space:pre-wrap;background:#fff;\">").concat(esc((mapa.obsGeral || "").toUpperCase()), "</div></div>") : "";
   var pagesHTML = chunks.map(function (chunk, ci) {
-    return "<div style=\"margin-bottom:20px;".concat(ci > 0 ? "page-break-before:always;" : "", "\"><div style=\"background:").concat(hdrColor, ";padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;\"><div style=\"font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;\">MAPA DE COTA\xC7\xC3O</div><div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;\">MP N\xBA: ").concat(mapa.numero || 1, "</div>").concat(mapa.obra ? "<div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;\">OBRA: ".concat((mapa.obra || "").toUpperCase(), "</div>") : "", "<div style=\"font-size:11px;color:rgba(255,255,255,0.9);font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;margin-left:auto;\">DATA: ").concat(fmtDate(now), "&nbsp;&nbsp;HORA: ").concat(fmtHora(now), "</div></div>").concat(renderChunk(chunk, ci), "</div>").concat(ci === chunks.length - 1 ? obsGeralHTML : "");
+    return "<div style=\"margin-bottom:20px;".concat(ci > 0 ? "page-break-before:always;" : "", "\"><div style=\"background:").concat(hdrColor, ";padding:9px 14px;border-radius:4px 4px 0 0;display:flex;align-items:center;gap:14px;\"><div style=\"font-size:13px;font-weight:bold;color:#fff;white-space:nowrap;\">MAPA DE COTA\xC7\xC3O</div><div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:700;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;\">MP N\xBA: ").concat(mapa.numero || 1, "</div>").concat(mapa.obra ? "<div style=\"font-size:11px;color:rgba(255,255,255,0.95);font-weight:600;flex:1;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;\">OBRA: ".concat(esc((mapa.obra || "").toUpperCase()), "</div>") : "", "<div style=\"font-size:11px;color:rgba(255,255,255,0.9);font-weight:600;border-left:1px solid rgba(255,255,255,0.35);padding-left:14px;white-space:nowrap;margin-left:auto;\">DATA: ").concat(fmtDate(now), "&nbsp;&nbsp;HORA: ").concat(fmtHora(now), "</div></div>").concat(renderChunk(chunk, ci), "</div>").concat(ci === chunks.length - 1 ? obsGeralHTML : "");
   }).join("");
   var pdfTitle = "MAPA DE COTACAO - MP N".concat(mapa.numero || 1).concat(mapa.obra ? " - " + (mapa.obra || "").replace(/[^a-zA-Z0-9 ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÒÓÔÕÖÙÚÛÜàáâãäåçèéêëìíîïòóôõöùúûü]/g, "").trim().slice(0, 40) : "", " - ").concat(fmtDate(now));
   return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>".concat(pdfTitle, "</title><style>@page{size:A4 landscape;margin:8mm;}*{box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:11px;color:#222;text-transform:uppercase;margin:0;padding:6px;background:#fff;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>").concat(pagina0HTML + pagesHTML, "</body></html>");
 };
 var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, obra, orcamentos, associacoes) {
+  // FIX: esc() local para evitar XSS/quebra de layout com descrições/justificativas contendo < > & "
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var obraUp = (obra||"").toUpperCase();
   var obraOrc = orcamentos[obra] ? (orcamentos[obra].itens || orcamentos[obra]) : null;
   if (!obraOrc) { alert("OBRA SEM OR\xC7AMENTO IMPORTADO."); return; }
@@ -1845,7 +1868,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
       : "<span style=\"color:#aaa;font-size:9px;\">SEM COTA\xc7\xc3O</span>";
     var row = "<tr class=\""+cls+"\">"
       + "<td style=\"font-size:9px;color:#555;\">"+(oi.codigo||"\u2014")+"</td>"
-      + "<td style=\"text-align:left;\">"+(oi.descricao||"")+"</td>"
+      + "<td style=\"text-align:left;\">"+esc(oi.descricao||"")+"</td>"
       + "<td style=\"text-align:center;\">"+(oi.unidade||"")+"</td>"
       + "<td style=\"text-align:right;\">"+(x.previsto||0)+"</td>"
       + "<td style=\"text-align:right;"+(x.saldo<0?"font-weight:700;color:#aa1c1c;":"")+"\">"+(x.consumido||0)+"</td>"
@@ -1858,7 +1881,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
       + "</tr>";
     if (x.excedentes.length) {
       row += "<tr style=\"background:#fff5f5;\"><td colspan=\"11\" style=\"font-size:9px;color:#aa1c1c;padding:3px 14px;border-top:none;\">"
-        + x.excedentes.map(function(e){ return "\u21b3 <strong>JUSTIFICATIVA EXCEDENTE (+"+(parseFloat(e.excedente)||0)+" "+(oi.unidade||"")+"): </strong>"+(e.justificativa||"S/J")+" \u2014 MP N\xBA "+(mapasFiltrados.find(function(m){return m.id===e.mapaId;})||{}).numero; }).join(" | ")
+        + x.excedentes.map(function(e){ return "\u21b3 <strong>JUSTIFICATIVA EXCEDENTE (+"+(parseFloat(e.excedente)||0)+" "+(oi.unidade||"")+"): </strong>"+esc(e.justificativa||"S/J")+" \u2014 MP N\xBA "+(mapasFiltrados.find(function(m){return m.id===e.mapaId;})||{}).numero; }).join(" | ")
         + "</td></tr>";
     }
     return row;
@@ -1868,7 +1891,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
   var rowsAdd = itensAdicionados.map(function(x) {
     return "<tr class=\"add\">"
       + "<td style=\"font-size:9px;color:#888;\">\u2014</td>"
-      + "<td style=\"text-align:left;\">"+x.item.descricao+"<div style=\"font-size:8px;color:#4a6888;margin-top:2px;\">\u21b3 ITEM ADICIONADO \u2014 MP N\xBA "+x.mapa.numero+"</div></td>"
+      + "<td style=\"text-align:left;\">"+esc(x.item.descricao)+"<div style=\"font-size:8px;color:#4a6888;margin-top:2px;\">\u21b3 ITEM ADICIONADO \u2014 MP N\xBA "+x.mapa.numero+"</div></td>"
       + "<td style=\"text-align:center;\">"+(x.item.unid||"")+"</td>"
       + "<td style=\"text-align:right;color:#888;\">\u2014</td>"
       + "<td style=\"text-align:right;\">"+(x.item.qt||"")+"</td>"
@@ -1950,7 +1973,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
 
 var buildDashboardHTML = function buildDashboardHTML(mapa, now, orcamentos, associacoes) {
   // FIX: esc() local para evitar quebra de layout com nomes/descrições contendo < > &
-  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   now = now || new Date(); orcamentos = orcamentos || {}; associacoes = associacoes || [];
   var T = getTheme(mapa.corTema); var hC = T.hdr;
   var fns = mapa.fornecedores || []; var itens = mapa.itens || []; var precos = mapa.precos || {};
@@ -2240,6 +2263,8 @@ var abrirPDF = function abrirPDF(html) {
 
 // ─── Report PDFs ──────────────────────────────────────────────────────────────
 var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim, orcamentos, associacoes) {
+  // FIX: esc() local para evitar XSS/quebra de layout com nomes contendo < > & "
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var de = new Date(inicio + "T00:00:00"),
     ate = new Date(fim + "T23:59:59");
   var filtrados = mapas.filter(function (m) {
@@ -2257,7 +2282,7 @@ var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim, o
       var r = calcResumo(item, m.fornecedores || [], m.precos || {});
       return a + (r.vlTotal || 0);
     }, 0);
-    return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(m.numero || "—", "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat((m.nome || "").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat((m.obra || "—").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat((m.responsavel || "—").toUpperCase(), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(fmtDate(new Date(m.criadoEm)), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(((_m$itens = m.itens) === null || _m$itens === void 0 ? void 0 : _m$itens.length) || 0, "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:right;font-weight:bold;\">").concat(rt > 0 ? fmtMoney(rt) : "—", "</td></tr>");
+    return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(m.numero || "—", "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.nome || "").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.obra || "—").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.responsavel || "—").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(fmtDate(new Date(m.criadoEm)), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(((_m$itens = m.itens) === null || _m$itens === void 0 ? void 0 : _m$itens.length) || 0, "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:right;font-weight:bold;\">").concat(rt > 0 ? fmtMoney(rt) : "—", "</td></tr>");
   }).join("");
   abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:10px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO DE MAPAS POR PER\xCDODO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">PER\xCDODO: ".concat(fmtDate(de), " A ").concat(fmtDate(ate), " \u2014 ").concat(filtrados.length, " MAPA(S)</div></div><table style=\"border-collapse:collapse;width:100%;font-size:11px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">NOME</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">RESPONS\xC1VEL</th><th style=\"border:1px solid #999;padding:5px 7px;width:80px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;width:55px;\">ITENS</th><th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">TOTAL RESUMO</th></tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
 };
@@ -2276,6 +2301,8 @@ var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orca
   }).join(""), "</body></html>"));
 };
 var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo) {
+  // FIX: esc() local para evitar XSS/quebra de layout com nomes/descrições contendo < > & "
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var resultados = [];
   mapasComCurrent.forEach(function (mapa) {
     (mapa.itens || []).forEach(function (item) {
@@ -2315,7 +2342,7 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
 
   // --- Header row ---
   var fornHdrs = allForns.map(function(f) {
-    return "<th style=\"width:65px;\">" + f + "</th>";
+    return "<th style=\"width:65px;\">" + esc(f) + "</th>";
   }).join("");
 
   // --- Data rows ---
@@ -2338,15 +2365,15 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
     }).join("");
 
     return "<tr" + rowCls + ">"
-      + "<td style=\"text-align:center;width:28px;\">"  + (mapa.numero||"\u2014") + "</td>"
-      + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + (mapa.obra||"\u2014").toUpperCase() + "</td>"
+      + "<td style=\"text-align:center;width:28px;\">"  + esc(mapa.numero||"\u2014") + "</td>"
+      + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + esc((mapa.obra||"\u2014").toUpperCase()) + "</td>"
       + "<td style=\"text-align:center;width:58px;\">" + fmtDate(new Date(mapa.criadoEm)) + "</td>"
-      + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + (item.descricao||"").toUpperCase() + "</td>"
+      + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc((item.descricao||"").toUpperCase()) + "</td>"
       + "<td class=\"num\" style=\"width:34px;\">" + (item.qt||"") + "</td>"
       + "<td style=\"text-align:center;width:28px;\">" + (item.unid||"") + "</td>"
       + "<td class=\"menor-cell\" style=\"width:80px;\">"
         + "<div class=\"menor-val\">" + (resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "\u2014") + "</div>"
-        + (menorForn ? "<div class=\"menor-forn\">" + menorForn + "</div>" : "")
+        + (menorForn ? "<div class=\"menor-forn\">" + esc(menorForn) + "</div>" : "")
       + "</td>"
       + fornCells
       + "</tr>";
@@ -3411,7 +3438,7 @@ function ModalGerenciarOrcamento(_ref_ger) {
     return associacoes.some(function(a){ return a.orcItemIndex === idx && mapasDaObra.indexOf(a.mapaId) >= 0; });
   };
   var calcSaldo = function(it) { return (parseFloat(it.quantidade)||0) - (parseFloat(it.consumido)||0); };
-  var fmtN = function(v) { return (parseFloat(v)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var fmtN = function(v) { return (parseFloat(String(v||0).replace(",","."))||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}); };
 
   var itensFilt = itensRef.current.filter(function(it) {
     var bOk = !busca || (it.descricao||"").toUpperCase().indexOf(busca.toUpperCase()) >= 0 || (it.codigo||"").indexOf(busca) >= 0;
@@ -4015,6 +4042,20 @@ var _useState27 = useState(init),
     _useState38 = _slicedToArray(_useState37, 2),
     showColPanel = _useState38[0],
     setShowColPanel = _useState38[1];
+  var _useStateConfigMenu = useState(false),
+    _useStateConfigMenu2 = _slicedToArray(_useStateConfigMenu, 2),
+    showConfigMenu = _useStateConfigMenu2[0],
+    setShowConfigMenu = _useStateConfigMenu2[1];
+  var configMenuRef = useRef(null);
+  useEffect(function(){
+    function aoClicarForaConfig(e){
+      if (configMenuRef.current && !configMenuRef.current.contains(e.target)) {
+        setShowConfigMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', aoClicarForaConfig);
+    return function(){ document.removeEventListener('mousedown', aoClicarForaConfig); };
+  }, []);
   var _useStateCad = useState(false),
     _useStateCad2 = _slicedToArray(_useStateCad, 2),
     showCadEditor = _useStateCad2[0],
@@ -4169,70 +4210,6 @@ var _useState27 = useState(init),
       });
     });
   };
-  // ── Helpers de orçamento ──────────────────────────────────────────────────
-  var obraOrc = mapa.obra ? (orcamentos[mapa.obra]||null) : null;
-  var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
-  var temOrcamento = obraOrcItens.length > 0;
-  var getAssocItem = function(iid) {
-    return associacoes.find(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; })||null;
-  };
-  var getAssocItens = function(iid) {
-    return associacoes.filter(function(a){ return a.mapaId===mapa.id && a.itemMapaId===iid; });
-  };
-  var calcVlOrc = function(assoc) {
-    if (!assoc) return null;
-    var oi = obraOrcItens.find(function(it){ return it.codigo===assoc.orcItemCodigo; });
-    return oi ? (parseFloat(oi.valorUnitario)||0) * (parseFloat(assoc.fator)||1) : null;
-  };
-  var calcRes = function(item, assoc) {
-    if (!assoc) return null;
-    var vlo = calcVlOrc(assoc); if (!vlo) return null;
-    var res = calcResumo(item, mapa.fornecedores, mapa.precos);
-    if (res.vlUnit === null) return null;
-    var diff = vlo - res.vlUnit;
-    var qt = parseFloat(String(item.qt).replace(",","."))||0;
-    return { diff: diff, pct: (diff/vlo)*100, lucro: diff>=0, total: diff*qt };
-  };
-  var abrirAssoc = function(item) {
-    if (!temOrcamento) return;
-    var aes = getAssocItens(item.id);
-    setItemAssociando(item);
-    setAssocBusca(item.descricao||"");
-    var selInicial = {};
-    aes.forEach(function(ae) {
-      var idx = ae.orcItemIndex != null ? ae.orcItemIndex : obraOrcItens.findIndex(function(it){ return it.codigo===ae.orcItemCodigo; });
-      if (idx >= 0) selInicial[idx] = { qt: String(ae.qtCompra||""), fator: String(ae.fator||"1") };
-    });
-    setAssocSelecionados(selInicial);
-  };
-  var confirmarAssoc = function() {
-    if (!itemAssociando || !onCriarAssociacao) return;
-    var indices = Object.keys(assocSelecionados);
-    if (indices.length === 0) return;
-    var aesExistentes = getAssocItens(itemAssociando.id);
-    var idsRemover = aesExistentes.map(function(ae){ return ae.id; });
-    var novasAssocs = [];
-    indices.forEach(function(idxStr) {
-      var idx = parseInt(idxStr, 10);
-      var orcItem = obraOrcItens[idx];
-      if (!orcItem) return;
-      var sel = assocSelecionados[idxStr];
-      var fator = parseFloat(sel.fator)||1;
-      var qt = parseFloat(String(sel.qt).replace(",","."))||0;
-      if (qt <= 0) return;
-      novasAssocs.push({
-        id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
-        obraId: mapa.obra, orcItemCodigo: orcItem.codigo,
-        orcItemIndex: idx,
-        orcItemDesc: orcItem.descricao, fator: fator,
-        unidMapa: itemAssociando.unid, unidOrc: orcItem.unidade,
-        qtCompra: qt, excedente: 0, justificativa: ""
-      });
-    });
-    if (onSubstituirAssociacoes) onSubstituirAssociacoes(idsRemover, novasAssocs);
-    setItemAssociando(null);
-  };
-
   // ── Helpers de orçamento ──────────────────────────────────────────────────
   var obraOrc = mapa.obra ? (orcamentos[mapa.obra]||null) : null;
   var obraOrcItens = obraOrc ? (Array.isArray(obraOrc) ? obraOrc : (obraOrc.itens||[])) : [];
@@ -5303,100 +5280,69 @@ var _useState27 = useState(init),
       gap: 8,
       alignItems: "center"
     }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      var mapaVis = Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
-      var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
-      // Dashboard e Análise são independentes também no PDF
-      var extraParts = '';
-      if (showDashboard) extraParts += '<div style="page-break-before:always;">' + buildDashboardHTML(mapaVis, clock, orcamentos, associacoes) + '</div>';
-      if (inclAnalise) extraParts += '<div style="page-break-before:always;">' + buildAnaliseHTML(mapaVis, clock, orcamentos, associacoes) + '</div>';
-      if (!extraParts) return abrirPDF(htmlMapa);
-      return abrirPDF(htmlMapa.replace('</body></html>', extraParts + '</body></html>'));
+  },
+  /*#__PURE__*/React.createElement("div", { style:{ position:"relative" }, ref: configMenuRef },
+    /*#__PURE__*/React.createElement("button", {
+      onClick: function(){ setShowConfigMenu(function(p){ return !p; }); },
+      title: "Mais opções do mapa",
+      style: _objectSpread(_objectSpread({}, SC.backBtn), {}, { background:"#3a4a63", color:"#fff", gap:5 })
+    }, "\u2699\uFE0F CONFIGURA\u00c7\u00d5ES"),
+    showConfigMenu && /*#__PURE__*/React.createElement("div", {
+      style: { position:"absolute", top:"calc(100% + 4px)", left:0, background:"#fff", borderRadius:8, boxShadow:"0 8px 28px rgba(0,0,0,.28)", padding:8, zIndex:9999, minWidth:220 }
     },
-    title: "Gerar PDF do mapa de cotação",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: "#c0392b",
-      color: "#fff",
-      gap: 5
-    })
-  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF"), /*#__PURE__*/React.createElement("button", {
-    onClick: function(){ setInclAnalise(!inclAnalise); },
-    title: inclAnalise ? "Clique para remover análise do PDF" : "Clique para incluir análise de preços no PDF",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: inclAnalise ? "#6a0dad" : "#555",
-      color: "#fff",
-      gap: 4,
-      opacity: inclAnalise ? 1 : 0.7
-    })
-  }, "\uD83D\uDCCA", inclAnalise ? " \u2713 AN\u00c1LISE" : " + AN\u00c1LISE"),
-  /*#__PURE__*/React.createElement("button", {
-    onClick: function(){ setShowDashboard(!showDashboard); },
-    title: showDashboard ? "Dashboard global ativo — clique para desativar" : "Clique para ativar o Dashboard Global por Fornecedor",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: showDashboard ? "#059669" : "#555",
-      color: "#fff",
-      gap: 4,
-      opacity: showDashboard ? 1 : 0.7
-    })
-  }, "\uD83C\uDF10", showDashboard ? " \u2713 DASHBOARD" : " + DASHBOARD"),
-  /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      setItensSelecionadosPO([]);
-      setPedidoConfig({});
-      setPoFinanceiro({});
-      setShowPedidoModal(true);
-    },
-    title: "Criar Pedido de Compra",
-    style: Object.assign({}, SC.backBtn, { background:"#7c3aed", border:"2px solid #a78bfa", fontWeight:"bold" })
-  }, "\uD83D\uDED2 PEDIDO"),
-  /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      sbGetPedidos().then(function(d){ setPedidos(d||[]); });
-      setShowPedidos(true);
-    },
-    title: "Ver todos os pedidos de compra",
-    style: Object.assign({}, SC.backBtn, { background:"#5b21b6" })
-  }, "\uD83D\uDCCB PEDIDOS"),
-  /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      return abrirPDF(buildInsumosHTML(mapa.obra, clock, itensAtivos));
-    },
-    title: "Gerar PDF com a rela\u00e7\u00e3o dos insumos vis\u00edveis",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: "#1d6a2e",
-      color: "#fff",
-      gap: 4
-    })
-  }, "\uD83D\uDCCB INSUMOS"),
-  /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      return setShowCadEditor(true);
-    },
-    title: "Gerenciar cadastros: fornecedores, insumos, unidades e obras",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: "#1a7a4a",
-      color: "#fff",
-      gap: 5
-    })
-  }, "\uD83D\uDCC2 CADASTROS"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: "relative"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      return setShowColPanel(function (p) {
-        return !p;
-      });
-    },
-    title: "Mostrar ou ocultar colunas de fornecedores na tabela",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: "#2a5298",
-      color: "#fff",
-      gap: 5,
-      position: "relative"
-    })
-  }, "\uD83D\uDC41 COLUNAS"), showColPanel && /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setInclAnalise(!inclAnalise); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDCCA", inclAnalise ? " \u2713 An\u00e1lise no PDF" : " An\u00e1lise no PDF"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setShowDashboard(!showDashboard); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83C\uDF10", showDashboard ? " \u2713 Dashboard Global" : " Dashboard Global"),
+      /*#__PURE__*/React.createElement("div", { style:{ borderTop:"1px solid #eee", margin:"6px 0" } }),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setItensSelecionadosPO([]); setPedidoConfig({}); setPoFinanceiro({}); setShowPedidoModal(true); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDED2 Criar Pedido"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); setShowPedidos(true); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDCCB Ver Pedidos"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ abrirPDF(buildInsumosHTML(mapa.obra, clock, itensAtivos)); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDCCB PDF de Insumos"),
+      /*#__PURE__*/React.createElement("div", { style:{ borderTop:"1px solid #eee", margin:"6px 0" } }),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setShowCadEditor(true); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDCC2 Cadastros"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setShowColPanel(function(p){ return !p; }); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDC41 Ocultar Colunas"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setShowTheme(function(s){ return !s; }); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83C\uDFA8 Cor do Tema"),
+      /*#__PURE__*/React.createElement("div", { style:{ borderTop:"1px solid #eee", margin:"6px 0" } }),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setShowImportExcel(true); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDCE5 Importar Excel"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setShowEnsinarSistema(true); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83E\uDDE0 Ensinar Sistema"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setShowLerIA(true); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      },
+        /*#__PURE__*/React.createElement("span",null,"\uD83E\uDD16 Ler com IA"),
+        iaUsoDia.leituras > 0 && /*#__PURE__*/React.createElement("span", { style:{ fontSize:10, color:"#7c3aed" } }, "R$\u00A0" + iaUsoDia.custo.toFixed(3).replace(".",","))
+      )
+    )
+  ),
+  showColPanel && /*#__PURE__*/React.createElement(React.Fragment, null,
     /*#__PURE__*/React.createElement("div", {
       onClick: function(){ setShowColPanel(false); },
       onKeyDown: function(e){ e.stopPropagation(); },
@@ -5492,40 +5438,8 @@ var _useState27 = useState(init),
       }
     }, f.nome || "FORNECEDOR"));
   }))
-  )), /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      return setShowTheme(function (s) {
-        return !s;
-      });
-    },
-    title: "Alterar o tema de cores do mapa",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      gap: 5
-    })
-  }, "\uD83C\uDFA8 COR"), /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() { setShowImportExcel(true); },
-    title: "Importar Quantidade, Unidade e Descri\u00e7\u00e3o de uma planilha Excel",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: "#0e7a5f",
-      color: "#fff",
-      gap: 5
-    })
-  }, "\uD83D\uDCE5 IMPORTAR EXCEL"), /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() { setShowEnsinarSistema(true); },
-    title: "Ensinar o sistema a reconhecer insumos automaticamente",
-    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
-      background: "#5b3fa0",
-      color: "#fff",
-      gap: 5
-    })
-  }, "\uD83E\uDDE0 ENSINAR SISTEMA"), /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() { setShowLerIA(true); },
-    title: "LER OR\xC7AMENTO COM INTELIG\xCANCIA ARTIFICIAL",
-    style: { background: "#534AB7", color: "#fff", border: "none", borderRadius: 7, padding: "6px 13px", fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }
-  }, "\uD83E\uDD16 LER COM IA"), /*#__PURE__*/React.createElement("span", {
-    style: { fontSize: 10, color: "#AFA9EC", marginLeft: 2, cursor: "pointer", whiteSpace: "nowrap" },
-    onClick: function(){ setShowLerIA(true); }
-  }, iaUsoDia.leituras > 0 ? ("\uD83D\uDCB0\u00A0R$\u00A0" + iaUsoDia.custo.toFixed(3).replace(".",",")) : ""), /*#__PURE__*/React.createElement("span", {
+  ),
+  /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
       fontWeight: 600,
@@ -5533,7 +5447,25 @@ var _useState27 = useState(init),
       minWidth: 72,
       textAlign: "right"
     }
-  }, saved ? "✓ SALVO" : "SALVANDO…"))), showTheme && /*#__PURE__*/React.createElement("div", {
+  }, saved ? "✓ SALVO" : "SALVANDO…"),
+  /*#__PURE__*/React.createElement("button", {
+    onClick: function onClick() {
+      var mapaVis = Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
+      var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
+      var extraParts = '';
+      if (showDashboard) extraParts += '<div style="page-break-before:always;">' + buildDashboardHTML(mapaVis, clock, orcamentos, associacoes) + '</div>';
+      if (inclAnalise) extraParts += '<div style="page-break-before:always;">' + buildAnaliseHTML(mapaVis, clock, orcamentos, associacoes) + '</div>';
+      if (!extraParts) return abrirPDF(htmlMapa);
+      return abrirPDF(htmlMapa.replace('</body></html>', extraParts + '</body></html>'));
+    },
+    title: "Gerar PDF do mapa de cotação",
+    style: _objectSpread(_objectSpread({}, SC.backBtn), {}, {
+      background: "#c0392b",
+      color: "#fff",
+      gap: 5
+    })
+  }, /*#__PURE__*/React.createElement(IcoPDF, null), " PDF")
+  )), showTheme && /*#__PURE__*/React.createElement("div", {
     style: {
       background: "#162840",
       padding: "10px 20px",
@@ -7995,7 +7927,7 @@ function ModalLerComIA(_ref_ia) {
   var _sMD=useState({}),matchDesc=_slicedToArray(_sMD,2)[0],setMatchDesc=_slicedToArray(_sMD,2)[1];
   var _sSA=useState(null),seletorAberto=_slicedToArray(_sSA,2)[0],setSeletorAberto=_slicedToArray(_sSA,2)[1];
   var _sSB=useState(""),seletorBusca=_slicedToArray(_sSB,2)[0],setSeletorBusca=_slicedToArray(_sSB,2)[1];
-  var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); return f?f.descricao:""; };
+  var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); return f?(f.descricao||""):""; };
   var forns=mapa.fornecedores||[];
   var normalizar=function(s){return (s||"").toUpperCase().replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();};
   var wordScore=function(a,b){
@@ -8933,6 +8865,7 @@ function App() {
           case 2:
             _context8.p = 2;
             _t = _context8.v;
+            window.avisarErroSalvamento('Não foi possível carregar os mapas. Verifique sua conexão.');
           case 3:
             _context8.p = 3;
             _context8.n = 4;
@@ -9164,7 +9097,7 @@ function App() {
     };
   }();
   var filtered = mapas.filter(function (m) {
-    var passaSearch = (m.nome + m.obra + m.responsavel).toLowerCase().includes(search.toLowerCase());
+    var passaSearch = ((m.nome||"") + (m.obra||"") + (m.responsavel||"")).toLowerCase().includes(search.toLowerCase());
     var passaInsumo = !searchInsumo.trim() || (m.itens || []).some(function (i) {
       return (i.descricao || "").toLowerCase().includes(searchInsumo.toLowerCase());
     });
