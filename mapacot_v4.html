@@ -7090,9 +7090,21 @@ function ModalEnsinarSistema(_ref_ens) {
   var _sErroPlan = useState(''), erroPlanilha = _slicedToArray(_sErroPlan,2)[0], setErroPlanilha = _slicedToArray(_sErroPlan,2)[1];
 
   // Leitura de arquivos (mesmo padrão já usado no Casar Insumos - aqui só a descrição interessa)
-  var parsearPDFTextoEnsinar = function(textos) {
-    var PRECO=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2})$/;
-    var PRECO4=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{3,4})$/;
+  var parsearPDFTextoEnsinar = function(textosOriginaisEntradaEns) {
+    // FIX: alguns fornecedores (ex: Gerdau) colam um sufixo de unidade/moeda no final do número
+    // (ex: "6,000 RL", "1.666,80 BRL/RL"). Normaliza isso ANTES de qualquer lógica, removendo o
+    // sufixo quando o token for só número + sufixo conhecido — mesma estratégia já validada na
+    // função irmã (Ler com IA).
+    var temAssinaturaGerdauEns = textosOriginaisEntradaEns.some(function(tk){ return /BRL/i.test(tk||""); });
+    var textos = textosOriginaisEntradaEns.map(function(tok){
+      var t = (tok||"");
+      var mPrefixo = t.match(/^R\$\s*([\d.,]+)$/);
+      if (mPrefixo) return mPrefixo[1];
+      var m = t.match(/^([\d.,]+)\s*(RL|KG|BRL\/RL|BRL|UN|PC|MT|M2|M3)$/);
+      return m ? m[1] : t;
+    });
+    var PRECO=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2}|,[\d]{2})$/;
+    var PRECO4=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{3,4}|,[\d]{3,4})$/;
     var ehCab=function(s){
       var st=s.trim();
       if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS[\.:]?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO)$/i.test(st)) return true;
@@ -7113,6 +7125,18 @@ function ModalEnsinarSistema(_ref_ens) {
       if(/^(AMBIENTE|CD RETIRA|PROPOSTA V[A\u00C1]LIDA|DADOS DO FATURAMENTO|DADOS DO PARCEIRO|ORCAMENTO \/|OR[C\u00C7]AMENTO \/|PARCELA [U\u00DA]NICA|V\.?\s*DESC|V\.?\s*BRUTO|VLR\.?\s*TOTAL|C[O\u00D3]D\.?\s*F[A\u00C1]BRICA|C[O\u00D3]D\.?\s*REF|C[O\u00D3]D\.?\s*DE ORIGEM|PESO L[I\u00CD]Q|CONTAS BANC[A\u00C1]RIAS|N[A\u00C3]O VALE COMO|N[A\u00C3]O [E\u00C9] DOCUMENTO|ESTOU DE ACORDO|NOME FANT|DATA DE VENCIMENTO|DESC\.?\s*DESTACADO|SERVI[C\u00C7]O DESCRITO|OUTROS SERVI[C\u00C7]OS|OUTRAS DESP)/i.test(st)) return true;
       if(/^(TRV|TRAV\.|TRAVESSA)\s/i.test(st)) return true; // endere\u00e7o (travessa), al\u00e9m de RUA/AV j\u00e1 cobertos
       if(/^Prazo\s*(de\s*)?Entrega/i.test(st)) return true;
+      if(/^Prazo\s*de\s*Pagamento\s*:/i.test(st)) return true; // FIX: "Prazo de Pagamento:" (formato Gerdau)
+      if(/^\d+\s*\/\s*\d+\s*\/\s*\d+\s*dias/i.test(st) || /trademaster/i.test(st)) return true; // FIX: condição de pagamento "30/60/90 dias" ou Trademaster
+      if(/^Descarga\s*por\s*conta/i.test(st)) return true; // FIX: "Descarga por conta do cliente" (rodapé)
+      if(/^Material\s*sujeito/i.test(st)) return true; // FIX: "Material sujeito a confirmação de estoque" (rodapé)
+      if(/^Data\s*(Emiss[a\u00E3]o|Previs[a\u00E3]o)\s*:/i.test(st)) return true; // FIX: "Data Emissão:"/"Data Previsão:" (formato Acretec)
+      if(/^Classif\.?\s*IPI\s*:/i.test(st)) return true; // FIX: "Classif. IPI:" (formato Acretec)
+      if(/^Desconto\s*Total\s*:/i.test(st)) return true; // FIX: "Desconto Total:" (formato Acretec)
+      if(/^CONJ\s/i.test(st)) return true; // FIX: "CONJ [nome]" (conjunto habitacional, endereço/bairro)
+      if(/^N[U\u00DA]MERO\s*DE\s*ITENS\s*:/i.test(st)) return true; // FIX: "Número de Itens:" do rodapé (formato Mexichem/Amanco)
+      if(/^OR[C\u00C7]AMENTO\s*EM\s*NEGOCIA[C\u00C7][A\u00C3]O$/i.test(st)) return true; // FIX: "ORCAMENTO EM NEGOCIACAO" (status, formato Paranorte)
+      if(/^Cota[C\u00E7\u00C7][a\u00E3\u00C3]o\s*com\s*validade/i.test(st)) return true; // FIX: texto longo de rodapé legal (formato Mexichem/Amanco)
+      if(/^Com\s*o\s*aceite\s*da\s*presente/i.test(st)) return true; // FIX: outro texto de rodapé legal (formato Mexichem/Amanco)
       // FIX: mais padr\u00f5es que escapavam (forma de pagamento, valor unit\u00e1rio, observa\u00e7\u00e3o com espa\u00e7o, frete)
       if(/^(FORMA\s*DE\s*PAGAMENTO|V\.?\s*UNIT[A\u00C1]RIO|OBSERVA[C\u00C7][A\u00C3]O|FRETE\s*\(|DESCONTO\s*ITENS)/i.test(st)) return true;
       // FIX: estes padr\u00f5es j\u00e1 existiam em outra fun\u00e7\u00e3o irm\u00e3 (Ler com IA) mas faltavam aqui
@@ -7129,10 +7153,24 @@ function ModalEnsinarSistema(_ref_ens) {
       // esse formato \u00e9 usado por alguns fornecedores (ex: notas/or\u00e7amentos avulsos tipo Agroboi)
       var comecaComLetra=/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t);
       var comecaComCodigoHifen=/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(t);
+      // FIX: aceita também "CÓDIGO DESCRIÇÃO" sem hífen (ex: "31529 TORN LAV BANC..."), protegido
+      // contra confundir com abreviação de unidade solta (ex: "5 UN")
+      var UNIDADE_RE_PREFIXO_ENS = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ)$/i;
+      var comecaComCodigoEspaco = /^\d+\s+[A-Za-z\u00C0-\u00DE]/.test(t) && !UNIDADE_RE_PREFIXO_ENS.test((t.split(/\s+/)[1]||""));
       // FIX: mesmo batendo no formato "c\u00f3digo - texto", rejeita se for forma de pagamento (boleto/pix/
       // transfer\u00eancia/contra entrega) ou nome de vendedor seguido de telefone - esses N\u00c3O s\u00e3o produtos
       var pareceFormaPagamento = /BOLETO|PIX|TRANSFEREN|CONTRA ENTREGA|FORMA DE PAGAMENTO|CART[A\u00C3]O|CHEQUE|DINHEIRO|VENDA A RECEBER/i.test(t);
-      var pareceVendedorComTelefone = /\d{4,5}[\s-]?\d{4}\s*$/.test(t) && !/\d+[.,]\d{2}\s*$/.test(t);
+      // FIX: a detecção antiga só olhava se HAVIA um padrão de telefone no fim, o que confundia descrições
+      // de produto terminadas em código de referência (ex: "...JET 30 26010600") com nome+telefone.
+      // Agora conta quantos GRUPOS de dígitos existem no restante do texto: nome de pessoa só tem o
+      // telefone (0 grupos restantes); descrição de produto tem outros números espalhados (medidas, códigos).
+      var temPadraoTelefoneNoFim = /\d{4,5}[\s-]?\d{4}\s*$/.test(t) && !/\d+[.,]\d{2}\s*$/.test(t);
+      var pareceVendedorComTelefone = false;
+      if (temPadraoTelefoneNoFim) {
+        var semTelefoneNoFim = t.replace(/[\d\s-]{4,}$/, "").trim();
+        var gruposDeDigitosRestantes = (semTelefoneNoFim.match(/\d+/g) || []).length;
+        pareceVendedorComTelefone = gruposDeDigitosRestantes === 0;
+      }
       if (comecaComCodigoHifen && (pareceFormaPagamento || pareceVendedorComTelefone)) comecaComCodigoHifen = false;
       // FIX: se o token ANTERIOR for um r\u00f3tulo de pessoa (Vendedor:, Cliente:, Comprador:, etc.), o
       // token atual \u00e9 o NOME dessa pessoa, n\u00e3o um produto - rejeita independente do formato do texto
@@ -7145,8 +7183,40 @@ function ModalEnsinarSistema(_ref_ens) {
       // o token atual costuma ser a assinatura da pessoa (rodap\u00e9 tipo "Atenciosamente, Empresa, Nome") - rejeita tamb\u00e9m
       var anteriorEhEmpresa = i>0 && /LTDA|EIRELI|IMP\.?\s*(E\s*)?EXP\b/i.test((textos[i-1]||"").trim());
       // FIX: forma de pagamento agora rejeitada em QUALQUER formato de texto, n\u00e3o s\u00f3 c\u00f3digo-h\u00edfen
-      var ehDesc=!anteriorEhRotuloPessoa&&!anteriorEhEmpresa&&!pareceFormaPagamento&&t.length>7&&(comecaComLetra||comecaComCodigoHifen)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t)&&!/^C[\u00F3o]d\.?\s*Barras/i.test(t);
+      var temTresMaisLetrasSeguidasEns = /[a-zA-Z\u00C0-\u00FF]{3,}/.test(t);
+      var temDuasMaisLetrasEQuantidadeDePalavrasEns = /[a-zA-Z\u00C0-\u00FF]{2,}/.test(t) && t.split(/\s+/).filter(function(w){return w.length>0;}).length>=3;
+      var ehDesc=!anteriorEhRotuloPessoa&&!anteriorEhEmpresa&&!pareceFormaPagamento&&t.length>7&&(comecaComLetra||comecaComCodigoHifen||comecaComCodigoEspaco)&&(temTresMaisLetrasSeguidasEns||temDuasMaisLetrasEQuantidadeDePalavrasEns)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t)&&!/^C[\u00F3o]d\.?\s*Barras/i.test(t);
       if (!ehDesc) continue;
+      // FIX: se logo depois desse candidato vier um código numérico puro seguido de OUTRA descrição
+      // válida, o candidato atual era só o nome da MARCA (ex: "TIGRE PINCEIS"), não uma descrição de
+      // produto real — a descrição de verdade vem depois do código.
+      if (i+2 < textos.length && /^\d+$/.test((textos[i+1]||"").trim())) {
+        var possivelProxDesc = (textos[i+2]||"").trim();
+        var proxComecaComLetraM = /^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(possivelProxDesc);
+        var proxTemLetrasM = /[a-zA-Z\u00C0-\u00FF]{2,}/.test(possivelProxDesc);
+        if (possivelProxDesc.length>7 && proxComecaComLetraM && proxTemLetrasM && /\s/.test(possivelProxDesc) && !ehCab(possivelProxDesc)) continue;
+      }
+      // FIX: quando a MARCA vem DIRETAMENTE seguida da descrição real (sem número entre elas, ex:
+      // "TIGRE / AMANCO" seguida de "CURVA 90 P/ ELETRODUTO..."), e o candidato atual é curto/simples
+      // o suficiente para ser uma marca (poucas palavras, sem dígitos), trata como marca também.
+      if (i+1 < textos.length && t.length<=20 && !/\d/.test(t) && t.split(/\s+/).length<=4) {
+        var possivelProxDesc2 = (textos[i+1]||"").trim();
+        var proxComecaComLetraM2 = /^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(possivelProxDesc2);
+        var proxTemLetrasM2 = /[a-zA-Z\u00C0-\u00FF]{2,}/.test(possivelProxDesc2);
+        if (possivelProxDesc2.length>7 && proxComecaComLetraM2 && proxTemLetrasM2 && /\s/.test(possivelProxDesc2) && !ehCab(possivelProxDesc2) && /\d/.test(possivelProxDesc2)) continue;
+      }
+      // FIX: quando a MARCA é seguida de [qtd][unidade][código][total] (vários tokens numéricos/curtos)
+      // antes de chegar na próxima descrição válida (ex: "OTTO BAUMGART" seguido de "2,000","LTA",
+      // "10267","471,90" antes de "ALVENARIT 18 LTS..."), busca numa janela maior (até 5 tokens).
+      if (t.length<=20 && !/\d/.test(t) && t.split(/\s+/).length<=3) {
+        for (var jMarca=i+1; jMarca<Math.min(i+6, textos.length); jMarca++) {
+          var possivelProxDesc3 = (textos[jMarca]||"").trim();
+          if (possivelProxDesc3.length>7 && /^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(possivelProxDesc3) && /[a-zA-Z\u00C0-\u00FF]{2,}/.test(possivelProxDesc3) && /\s/.test(possivelProxDesc3) && !ehCab(possivelProxDesc3)) {
+            break; // achou a próxima descrição real dentro da janela — o candidato atual é marca
+          }
+        }
+        if (jMarca<Math.min(i+6, textos.length) && (textos[jMarca]||"").trim().length>7) continue;
+      }
       // FIX: quando a descri\u00e7\u00e3o vem quebrada em 2 partes (comum nesse formato), concatena com o
       // pr\u00f3ximo token se ele parecer ser a continua\u00e7\u00e3o (n\u00e3o \u00e9 c\u00f3digo de barras, pre\u00e7o, cabe\u00e7alho, ou outro item)
       var descParaUsar = t;
@@ -7162,20 +7232,307 @@ function ModalEnsinarSistema(_ref_ens) {
       // FIX: busca o preço em AMBAS as direções (antes e depois) — alguns PDFs (ex.: gerados por certos
       // ERPs) colocam o valor ANTES da descrição na ordem interna do texto, não depois.
       var precoAchado = null;
+      var candidatosNum = [], candidatosTxt = [];
+      // FIX: função auxiliar simplificada para reconhecer se um token parece ser OUTRO item (limite
+      // de busca, evita vazar números do item vizinho para dentro do item atual)
+      var pareceOutroItemEns = function(tok){
+        var tk = (tok||"").trim();
+        if (tk.length<=7) return false;
+        if (/^C[\u00F3o]d\.?\s*Barras/i.test(tk)) return false; // FIX: "Cód. Barras: XXX" não é outro item
+        if (/^Obs\s*:?\s*$/i.test(tk)) return false; // FIX: "Obs:" sozinho não é outro item
+        var tkComecaComLetra=/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(tk);
+        var tkComecaComCodHifen=/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(tk);
+        var tkComecaComCodEspaco=/^\d+\s+[A-Za-z\u00C0-\u00DE]/.test(tk) && !UNIDADE_RE_PREFIXO_ENS.test((tk.split(/\s+/)[1]||""));
+        return (tkComecaComLetra||tkComecaComCodHifen||tkComecaComCodEspaco) && /[a-zA-Z\u00C0-\u00FF]{3,}/.test(tk) && /\s/.test(tk) && !ehCab(tk);
+      };
+      var limiteFrenteEns = textos.length, limiteTrasEns = -1;
+      for (var lfe=i+1; lfe<textos.length; lfe++) { if (pareceOutroItemEns(textos[lfe])) { limiteFrenteEns=lfe; break; } }
+      // FIX: quando a descrição já tem o código embutido nela (formato "CÓDIGO DESCRIÇÃO", ex:
+      // "31529 TORN LAV..."), os números desse item SEMPRE vêm depois dela, nunca antes — desabilita
+      // a busca "pra trás" completamente para esses casos, evitando vazar pro item anterior.
+      if (!comecaComCodigoEspaco && !comecaComCodigoHifen) {
+        for (var lte=i-1; lte>=0; lte--) {
+          var tokTrasEns = (textos[lte]||"").trim();
+          // FIX: se esse token parece ser uma MARCA (palavra curta, 1-2 palavras, sem número) e o
+          // token logo DEPOIS dela (mais perto da descrição) é um código adjacente à descrição, essa
+          // marca faz parte do MESMO item — pula ela ANTES de testar pareceOutroItemEns (que a
+          // classificaria erroneamente como "outro item", já que marcas com 2 palavras longas passam
+          // nos critérios gerais de "parece outro item").
+          var proxTokenDaMarcaEns = (textos[lte+1]||"").trim();
+          var ehMarcaAntesDeCodigoEns = lte < i-1 && /^\d{4,7}$/.test(proxTokenDaMarcaEns) &&
+            tokTrasEns.length>0 && tokTrasEns.length<=15 && /^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(tokTrasEns) && tokTrasEns.split(/\s+/).length<=2 && !/\d/.test(tokTrasEns);
+          if (ehMarcaAntesDeCodigoEns) continue;
+          // FIX: se esse token é a MARCA diretamente adjacente à descrição atual (ex: "TIGRE / AMANCO"
+          // logo antes de "CURVA 90 P/..."), sem código entre elas — também pula, não trata como
+          // "outro item". Critério: curta, sem dígito, poucas "palavras" (a barra "/" conta como
+          // separador válido de marca composta, ex: "TIGRE / AMANCO").
+          var ehMarcaAdjacenteEns = lte === i-1 && tokTrasEns.length>0 && tokTrasEns.length<=20 && /^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(tokTrasEns) && !/\d/.test(tokTrasEns) && tokTrasEns.replace(/\s*\/\s*/g," ").split(/\s+/).length<=3;
+          if (ehMarcaAdjacenteEns) continue;
+          if (pareceOutroItemEns(tokTrasEns)) { limiteTrasEns=lte; break; }
+          // FIX: só considera código solto como limite se ele estiver DIRETAMENTE adjacente à
+          // descrição E não tiver uma MARCA (palavra curta, 1-2 palavras, sem número) logo antes dele
+          // — em formatos com "número...marca-código-DESCRIÇÃO" (ex: Acre Parafusos), essa marca
+          // indica que o código faz parte do MESMO item, e os números reais ficam mais além, antes
+          // da marca. Sem essa checagem, a regra bloquearia a busca antes de alcançá-los.
+          if (lte === i-1 && /^\d{4,7}$/.test(tokTrasEns)) {
+            var tokAntesDoCodigoEns = (textos[lte-1]||"").trim();
+            var pareceMarcaEns = tokAntesDoCodigoEns.length>0 && tokAntesDoCodigoEns.length<=15 && /^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(tokAntesDoCodigoEns) && tokAntesDoCodigoEns.split(/\s+/).length<=2 && !/\d/.test(tokAntesDoCodigoEns);
+            if (pareceMarcaEns) continue;
+            limiteTrasEns=lte; break;
+          }
+        }
+      } else {
+        limiteTrasEns = i-1;
+      }
+      // FIX: testa AMBAS as direções separadamente (só "pra frente" e só "pra trás"), e usa a que
+      // formar uma trinca matemática válida com a MENOR distância total até a descrição — evita
+      // misturar direções, que pode vazar números de outro item em formatos ambíguos (ex: quando um
+      // código fica adjacente à descrição tanto no sentido "limite correto" quanto "início do próprio
+      // item"). Também evita sempre preferir "pra frente", já que em alguns formatos (ex: Acre
+      // Parafusos) os números reais ficam ANTES da descrição, não depois.
+      var testarDirecaoEns = function(inicio, fim, passo) {
+        var nums=[], txts=[], distTotal=0;
+        for (var jj=inicio; jj!==fim && jj>=0 && jj<textos.length && nums.length<8; jj+=passo) {
+          var tjj=(textos[jj]||"").trim();
+          if (PRECO.test(tjj)||PRECO4.test(tjj)) { nums.push(parseFloat(tjj.replace(/\./g,"").replace(",","."))); txts.push(tjj); distTotal += Math.abs(jj-i); }
+        }
+        var temTrinca=false;
+        for (var xd=0; xd<nums.length && !temTrinca; xd++) {
+          for (var yd=0; yd<nums.length && !temTrinca; yd++) {
+            if (xd===yd) continue;
+            for (var zd=0; zd<nums.length && !temTrinca; zd++) {
+              if (zd===xd||zd===yd) continue;
+              if (nums[xd]>=1 && nums[yd]>0 && Math.abs(nums[xd]*nums[yd]-nums[zd])/Math.max(nums[zd],1)<0.015) temTrinca=true;
+            }
+          }
+        }
+        return {nums:nums, txts:txts, temTrinca:temTrinca, distTotal:distTotal};
+      };
+      var resultFrenteEns = testarDirecaoEns(i+1, Math.min(i+7, limiteFrenteEns), 1);
+      var resultTrasEns = testarDirecaoEns(i-1, Math.max(i-7, limiteTrasEns), -1);
+      var usarFrenteEns = resultFrenteEns.nums.length>=3 && resultFrenteEns.temTrinca;
+      var usarTrasEns = resultTrasEns.nums.length>=3 && resultTrasEns.temTrinca;
+      // FIX: quando AMBAS direções têm trinca válida (ambíguo), usa o formato da descrição como
+      // desempate — se o código já vem embutido nela (ex: "31529 TORN LAV..."), os números tendem a
+      // vir DEPOIS; se o código vem solto e separado (ex: Acre Parafusos), os números reais tendem a
+      // vir ANTES (a busca "pra frente" nesses casos costuma vazar pro próximo item, que fica mais
+      // próximo por coincidência de estrutura).
+      if (usarFrenteEns && usarTrasEns) {
+        if (comecaComCodigoEspaco || comecaComCodigoHifen) {
+          candidatosNum = resultFrenteEns.nums; candidatosTxt = resultFrenteEns.txts;
+          precoAchado = resultFrenteEns.txts[0];
+        } else {
+          candidatosNum = resultTrasEns.nums; candidatosTxt = resultTrasEns.txts;
+          precoAchado = resultTrasEns.txts[0];
+        }
+      } else if (usarFrenteEns) {
+        candidatosNum = resultFrenteEns.nums; candidatosTxt = resultFrenteEns.txts;
+        precoAchado = resultFrenteEns.txts[0];
+      } else if (usarTrasEns) {
+        candidatosNum = resultTrasEns.nums; candidatosTxt = resultTrasEns.txts;
+        precoAchado = resultTrasEns.txts[0];
+      } else {
       for (var dist=1; dist<=6; dist++) {
         var jDepois=i+dist, jAntes=i-dist;
-        if (jDepois<textos.length) {
+        if (jDepois<limiteFrenteEns) {
           var tjD=(textos[jDepois]||"").trim();
-          if (PRECO.test(tjD)||PRECO4.test(tjD)) { precoAchado=tjD; break; }
+          if (PRECO.test(tjD)||PRECO4.test(tjD)) {
+            if (precoAchado===null) precoAchado=tjD;
+            candidatosTxt.push(tjD); candidatosNum.push(parseFloat(tjD.replace(/\./g,"").replace(",",".")));
+          }
         }
-        if (jAntes>=0) {
+        if (jAntes>limiteTrasEns) {
           var tjA=(textos[jAntes]||"").trim();
-          if (PRECO.test(tjA)||PRECO4.test(tjA)) { precoAchado=tjA; break; }
+          if (PRECO.test(tjA)||PRECO4.test(tjA)) {
+            if (precoAchado===null) precoAchado=tjA;
+            candidatosTxt.push(tjA); candidatosNum.push(parseFloat(tjA.replace(/\./g,"").replace(",",".")));
+          }
+        }
+      }
+      }
+      // FIX: quando há múltiplos números candidatos próximos (comum em formatos com qtd+total+preço
+      // juntos, ex: "código descrição" seguido de "12,00 943,44 78,62"), o primeiro encontrado pode
+      // ser a QUANTIDADE, não o preço. Testa se alguma combinação bate matematicamente (qtd×unit≈total)
+      // para escolher o preço correto — sem isso, mantém o comportamento antigo (primeiro encontrado).
+      if (candidatosNum.length>=3) {
+        var achouTrincaEns = false;
+        // FIX: tenta primeiro a ordem POSICIONAL típica desse formato (qtd, total, preço_unit, nessa
+        // ordem de aparição no texto) — mais confiável que testar todas as permutações genéricas,
+        // que podem escolher a combinação comutativa errada quando os números são "invertíveis".
+        for (var pi=0; pi<candidatosNum.length-2 && !achouTrincaEns; pi++) {
+          var qtdPos=candidatosNum[pi], totalPos=candidatosNum[pi+1], unitPos=candidatosNum[pi+2];
+          if (qtdPos>=1 && unitPos>0 && Math.abs(qtdPos*unitPos-totalPos)/Math.max(totalPos,1)<0.015) {
+            precoAchado = candidatosTxt[pi+2];
+            achouTrincaEns = true;
+          }
+        }
+        // Fallback: testa todas as permutações genéricas se a ordem posicional não bateu
+        if (!achouTrincaEns) {
+          for (var xp=0; xp<candidatosNum.length && !achouTrincaEns; xp++) {
+            for (var yp=0; yp<candidatosNum.length && !achouTrincaEns; yp++) {
+              if (xp===yp) continue;
+              for (var zp=0; zp<candidatosNum.length && !achouTrincaEns; zp++) {
+                if (zp===xp||zp===yp) continue;
+                var qtdP=candidatosNum[xp], unitP=candidatosNum[yp], totalP=candidatosNum[zp];
+                if (qtdP>=1 && unitP>0 && Math.abs(qtdP*unitP-totalP)/Math.max(totalP,1)<0.015) {
+                  precoAchado = candidatosTxt[yp];
+                  achouTrincaEns = true;
+                }
+              }
+            }
+          }
+        }
+        // FIX: se nem a validação matemática funcionou (ex: quando o "total" real não está entre os
+        // candidatos, como no formato Gerdau: qtd, peso, preço — sem uma trinca multiplicativa válida),
+        // usa o candidato de POSIÇÃO 2 (3º valor coletado) como fallback, já que o preço unitário
+        // tende a vir nessa posição na maioria dos formatos observados (mais confiável que o 1º valor,
+        // que costuma ser a quantidade).
+        if (!achouTrincaEns && candidatosNum.length>=3 && temAssinaturaGerdauEns) {
+          precoAchado = candidatosTxt[2];
         }
       }
       if (precoAchado) {
         var preco=parseFloat(precoAchado.replace(/\./g,"").replace(",","."));
         items.push({desc:descParaUsar.toUpperCase(), preco:preco});
+      }
+    }
+
+    // FIX: fallback para formato onde a descrição vem fragmentada PALAVRA POR PALAVRA entre um
+    // CÓDIGO (com ou sem ponto) e um marcador de UNIDADE (ex: "UN") — formato Multilit. A lógica
+    // principal não reconhece palavras soltas curtas como descrição válida. Ativa só se a lógica
+    // principal não achou nada.
+    if (items.length === 0) {
+      var CODIGO_MULTILIT = /^(\d{1,3}\.\d{3,}|\d{5,7})$/;
+      var UNIDADE_EXATA_ENS = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ)$/i;
+      var NUM_ENS = /^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2,5}|[\d]{4,},[\d]{2,5}|,[\d]{2,5}|\d+\.\d{1,5})$/;
+      for (var ci=0; ci<textos.length; ci++) {
+        var possCodigo = (textos[ci]||"").trim();
+        if (!CODIGO_MULTILIT.test(possCodigo)) continue;
+        var palavras = [];
+        var ui = ci+1;
+        while (ui < textos.length && ui < ci+13 && !UNIDADE_EXATA_ENS.test((textos[ui]||"").trim())) {
+          var palavra = (textos[ui]||"").trim();
+          var proxTokenM = (textos[ui+1]||"").trim();
+          if (palavra.length===0 || palavra==="R$" || (NUM_ENS.test(palavra) && proxTokenM==="R$")) { palavras = []; break; }
+          palavras.push(palavra);
+          ui++;
+        }
+        // Tentativa 2: código já vem seguido DIRETO da unidade — a descrição está ANTES do código
+        if (palavras.length===0 && UNIDADE_EXATA_ENS.test((textos[ci+1]||"").trim())) {
+          ui = ci+1;
+          var palavrasTras = [];
+          var ct = ci-1;
+          while (ct>=0 && ct>ci-13) {
+            var palavraTras = (textos[ct]||"").trim();
+            if (palavraTras.length===0 || NUM_ENS.test(palavraTras) || palavraTras==="R$" || CODIGO_MULTILIT.test(palavraTras) || UNIDADE_EXATA_ENS.test(palavraTras)) break;
+            palavrasTras.unshift(palavraTras);
+            ct--;
+          }
+          if (palavrasTras.length>0) palavras = palavrasTras;
+        }
+        if (palavras.length===0 || ui>=textos.length || !UNIDADE_EXATA_ENS.test((textos[ui]||"").trim())) continue;
+        // Depois da unidade: quantidade, "R$", preço unitário
+        var possQtdM = (textos[ui+1]||"").trim();
+        var possRSM = (textos[ui+2]||"").trim();
+        var possUnitM = (textos[ui+3]||"").trim();
+        if (NUM_ENS.test(possQtdM) && possRSM==="R$" && NUM_ENS.test(possUnitM)) {
+          var precoM = /^\d+\.\d{1,5}$/.test(possUnitM) ? parseFloat(possUnitM) : parseFloat(possUnitM.replace(/\./g,"").replace(",","."));
+          if (precoM>0) items.push({desc:palavras.join(" ").toUpperCase(), preco:precoM});
+        }
+      }
+    }
+
+    // FIX: fallback dedicado para o padrão "Pr Unit Brut" com estrutura [desconto][preço][MARCA]
+    // [qtd][UN][código][total] DESCRIÇÃO (ex: Paranorte) — os 7 elementos vêm ANTES da descrição,
+    // mas logo APÓS a descrição anterior. Busca posicionalmente pra trás a partir de cada descrição:
+    // total, código (número puro), UN (texto curto, pula), qtd, MARCA (texto, pula), preço.
+    // Corrige itens onde a lógica genérica não achou o preço certo (ex: preco<=0).
+    var pareceDescricaoValidaEns = function(txx){
+      var stt = (txx||"").trim();
+      var comLetraE = /^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(stt);
+      var comCodE = /^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(stt);
+      return stt.length>7 && (comLetraE||comCodE) && /[a-zA-Z\u00C0-\u00FF]{2,}/.test(stt) && /\s/.test(stt) && !ehCab(stt) && !/^\d+$/.test(stt) && !/^[\d\.\,\-\/\s]+$/.test(stt);
+    };
+    // FIX: detecção estrutural (não depende do texto do cabeçalho "Pr Unit Brut", que pode não se
+    // repetir em páginas seguintes do mesmo documento, ex: "Página 2 de 2"). Testa se o padrão
+    // posicional [total, código] (2 posições antes) bate para pelo menos 2 descrições diferentes.
+    var contagemPadraoParanorteEns = 0;
+    for (var cppi=0; cppi<textos.length; cppi++) {
+      var possDcp = (textos[cppi]||"").trim();
+      if (!pareceDescricaoValidaEns(possDcp)) continue;
+      var tokTotalCp = (textos[cppi-1]||"").trim();
+      var tokCodCp = (textos[cppi-2]||"").trim();
+      if ((PRECO.test(tokTotalCp)||PRECO4.test(tokTotalCp)) && /^\d{4,7}$/.test(tokCodCp)) contagemPadraoParanorteEns++;
+    }
+    var temAssinaturaParanorteEns = contagemPadraoParanorteEns >= 2;
+    if (temAssinaturaParanorteEns && items.length>0) {
+      var UNIDADES_CURTAS_ENS = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ|PAR|JG|FL|LTA)$/i;
+      var idxDescricoes = {};
+      for (var idi=0; idi<textos.length; idi++) {
+        var possD = (textos[idi]||"").trim();
+        if (pareceDescricaoValidaEns(possD) && !idxDescricoes[possD]) idxDescricoes[possD] = idi;
+      }
+      items = items.map(function(it){
+        var idxD = idxDescricoes[it.desc];
+        if (idxD===undefined) return it;
+        var pos = idxD-1;
+        var totalTok = (textos[pos]||"").trim();
+        if (!(PRECO.test(totalTok)||PRECO4.test(totalTok))) return it;
+        pos--;
+        var codigoTok = (textos[pos]||"").trim();
+        if (!/^\d{4,7}$/.test(codigoTok)) return it;
+        pos--;
+        if (UNIDADES_CURTAS_ENS.test((textos[pos]||"").trim())) pos--;
+        var qtdTok = (textos[pos]||"").trim();
+        if (!(PRECO.test(qtdTok)||PRECO4.test(qtdTok))) return it;
+        pos--;
+        if (pos>=0 && !(PRECO.test((textos[pos]||"").trim())||PRECO4.test((textos[pos]||"").trim()))) pos--;
+        var precoTok = (textos[pos]||"").trim();
+        if (!(PRECO.test(precoTok)||PRECO4.test(precoTok))) return it;
+        var qtdNum = parseFloat(qtdTok.replace(/\./g,"").replace(",","."));
+        var precoNum = parseFloat(precoTok.replace(/\./g,"").replace(",","."));
+        var totalNum = parseFloat(totalTok.replace(/\./g,"").replace(",","."));
+        if (qtdNum>=1 && precoNum>0 && Math.abs(qtdNum*precoNum-totalNum)/Math.max(totalNum,1)<0.015) {
+          return {desc:it.desc, preco:precoNum};
+        }
+        return it;
+      });
+    }
+
+    // FIX: fallback para formato onde os NÚMEROS de cada item (qtd, unitário) ficam numa seção
+    // separada das DESCRIÇÕES (ex: Holanda Holanda e Torres) — cada descrição tem seu próprio TOTAL
+    // logo depois dela (seguido de "R$"), mas o PREÇO UNITÁRIO real está em outra parte do documento.
+    // Usa o total para encontrar, entre grupos [qtd, unit, "R$"] espalhados, qual combinação bate
+    // matematicamente, e usa esse unit como preço (não o total).
+    if (items.length>0) {
+      var contagemPadraoRS = 0;
+      for (var cpi=0; cpi<textos.length-1; cpi++) {
+        if ((PRECO.test((textos[cpi]||"").trim())||PRECO4.test((textos[cpi]||"").trim())) && (textos[cpi+1]||"").trim()==="R$") contagemPadraoRS++;
+      }
+      var pareceSerTotalNaoUnitario = contagemPadraoRS >= 3;
+      if (pareceSerTotalNaoUnitario) {
+        var gruposNumericosEns = [];
+        for (var gie=0; gie<textos.length-2; gie++) {
+          var possQtdG = (textos[gie]||"").trim();
+          var possUnitG = (textos[gie+1]||"").trim();
+          var possRSG = (textos[gie+2]||"").trim();
+          if (/^\d+$/.test(possQtdG) && (PRECO.test(possUnitG)||PRECO4.test(possUnitG)) && possRSG==="R$") {
+            var qtdNumG = parseFloat(possQtdG);
+            var unitNumG = parseFloat(possUnitG.replace(/\./g,"").replace(",","."));
+            if (qtdNumG>=1 && unitNumG>0) gruposNumericosEns.push({qtd:qtdNumG, unit:unitNumG});
+          }
+        }
+        if (gruposNumericosEns.length>0) {
+          items = items.map(function(it){
+            var totalIt = it.preco;
+            var melhorG = null, melhorDif = 0.01;
+            gruposNumericosEns.forEach(function(g){
+              var dif = Math.abs(g.qtd*g.unit-totalIt)/Math.max(totalIt,1);
+              if (dif<melhorDif) { melhorDif=dif; melhorG=g; }
+            });
+            return melhorG ? {desc:it.desc, preco:melhorG.unit} : it;
+          });
+        }
       }
     }
     return items;
@@ -8111,6 +8468,19 @@ function ModalLerComIA(_ref_ia) {
     var wa=normalizar(a).split(" ").filter(function(w){return w.length>2;});
     var wb=normalizar(b).split(" ").filter(function(w){return w.length>2;});
     if(!wa.length||!wb.length)return 0;
+    // FIX: tokens com dígito (medidas, códigos, gramaturas — ex: "100MM", "CP2", "4KG") costumam
+    // ser o que diferencia produtos da MESMA família mas de especificação DIFERENTE (ex: "TUBO PVC
+    // 100MM" vs "TUBO PVC 50MM", "CIMENTO CP2" vs "CIMENTO CP4"). Se AMBAS as descrições têm algum
+    // token numérico que NÃO tem correspondente exato na outra, isso indica uma SUBSTITUIÇÃO de
+    // especificação (não apenas informação a mais) — bloqueia o casamento (score=0) mesmo que as
+    // demais palavras coincidam. Só bloqueia quando os DOIS lados têm token sem par (não quando um
+    // lado só tem uma medida A MAIS que o outro não menciona, o que ainda pode ser o mesmo item).
+    var numRe=/\d/;
+    var numsA=wa.filter(function(w){return numRe.test(w);});
+    var numsB=wb.filter(function(w){return numRe.test(w);});
+    var numsASemPar=numsA.filter(function(w){return numsB.indexOf(w)<0;});
+    var numsBSemPar=numsB.filter(function(w){return numsA.indexOf(w)<0;});
+    if(numsASemPar.length && numsBSemPar.length) return 0;
     var m=wa.filter(function(w){return wb.indexOf(w)>=0;}).length;
     return m/Math.max(wa.length,wb.length);
   };
@@ -8131,8 +8501,21 @@ function ModalLerComIA(_ref_ia) {
     return result;
   };
   var _sModoLer=useState(''),modoLer=_slicedToArray(_sModoLer,2)[0],setModoLer=_slicedToArray(_sModoLer,2)[1];
-  var parsearPDFTextoLerIA = function(textos) {
-    var NUM=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2,4}|[\d]{4,},[\d]{2,4})$/; // FIX: aceita também 4+ dígitos sem ponto de milhar (ex: "2300,00")
+  var parsearPDFTextoLerIA = function(textosOriginaisEntrada) {
+    // FIX: alguns fornecedores (ex: Mexichem) colam o prefixo "R$" junto com o número no MESMO token
+    // (ex: "R$ 86,75"), ao invés de "R$" e o número virem em tokens separados. Outros (ex: Gerdau)
+    // colam um SUFIXO de unidade/moeda no final (ex: "6,000 RL", "1.666,80 BRL/RL", "10.000,81 BRL").
+    // Normaliza ambos ANTES de qualquer lógica — assim toda a lógica existente (já testada e aprovada
+    // com outros fornecedores) funciona sem precisar de mudança.
+    var textos = textosOriginaisEntrada.map(function(tok){
+      var t = (tok||"");
+      var mPrefixo = t.match(/^R\$\s*([\d.,]+)$/);
+      if (mPrefixo) return mPrefixo[1];
+      var mSufixo = t.match(/^([\d.,]+)\s*(RL|KG|BRL\/RL|BRL|UN|PC|MT|M2|M3)$/);
+      if (mSufixo) return mSufixo[1];
+      return t;
+    });
+    var NUM=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2,5}|[\d]{4,},[\d]{2,5}|,[\d]{2,5})$/; // aceita também 4+ dígitos sem ponto de milhar (ex: "2300,00"), valores sem zero antes da vírgula (ex: ",87" = R$0,87), e até 5 casas decimais (ex: "26,00000")
     var ehCabLerIA=function(s){
       var st=s.trim();
       if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS\.?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO|MARCA|SEQ\.?|REF\.?)$/i.test(st)) return true;
@@ -8141,26 +8524,62 @@ function ModalLerComIA(_ref_ia) {
       if(/^(TOTAL|VALOR|VENDEDOR|CLIENTE|ENDERE[C\u00C7]O)[\s:]/i.test(st)) return true;
       if(/^(PESO (BRUTO|L[I\u00CD]QUIDO)|QTD\.? TOTAL|QUANTIDADE TOTAL)[\s:]/i.test(st)) return true;
       if(/^VL\.?\s*UNIT/i.test(st)) return true; // FIX: "VL. UNIT" como cabeçalho de coluna abreviado
+      if(/^Sub[\s-]?[Tt]otal\s*:/i.test(st)) return true; // FIX: "Subtotal:" com dois pontos, não bate na exclusão de palavra isolada
+      if(/^PRE[C\u00C7]O\s*FINAL$/i.test(st)) return true; // FIX: "Preço Final" como cabeçalho de coluna (formato Mexichem)
+      if(/^Prazo\s*de\s*Pagamento\s*:/i.test(st)) return true; // FIX: "Prazo de Pagamento:" não é produto (formato Gerdau)
+      if(/^\d+\s*\/\s*\d+\s*\/\s*\d+\s*dias/i.test(st) || /trademaster/i.test(st)) return true; // FIX: condição de pagamento tipo "30/60/90 dias" ou representante Trademaster, não é produto
+      if(/^N[U\u00DA]MERO\s*DE\s*ITENS\s*:/i.test(st)) return true; // FIX: "Número de Itens:" do rodapé, não é produto
+      if(/^Fone\s*Vendedor\s*:/i.test(st)) return true; // FIX: "Fone Vendedor:" do rodapé, não é produto
       if(/^CE-/i.test(st)) return true; // FIX: cabeçalho de seção (local de retirada), não é produto
       return false;
+    };
+    var UNIDADE_RE_PREFIXO = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ)$/i;
+    var pareceDescricaoValida = function(texto){
+      var tx = (texto||"").trim();
+      var txComecaComLetra=/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(tx);
+      var txComecaComCodigoHifen=/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(tx);
+      var txComecaComNumeroEspaco=/^\d+\s+[A-Za-z\u00C0-\u00DE]/.test(tx) && !UNIDADE_RE_PREFIXO.test((tx.split(/\s+/)[1]||""));
+      return tx.length>7&&(txComecaComLetra||txComecaComCodigoHifen||txComecaComNumeroEspaco)&&/[a-zA-Z\u00C0-\u00FF]{2,}/.test(tx)&&/\s/.test(tx)&&!ehCabLerIA(tx)&&!/^\d+$/.test(tx)&&!/^[\d\.\,\-\/\s]+$/.test(tx);
     };
     var items=[];
     for (var i=0;i<textos.length;i++) {
       var t=(textos[i]||"").trim();
       var comecaComLetra=/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(t);
       var comecaComCodigoHifen=/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(t); // FIX: aceita formato "CÓDIGO - TEXTO" (ex: Agroboi)
-      var ehDesc=t.length>7&&(comecaComLetra||comecaComCodigoHifen)&&/[a-zA-Z\u00C0-\u00FF]{3,}/.test(t)&&/\s/.test(t)&&!ehCabLerIA(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
+      // FIX: aceita também descrições que começam com número SEM hífen (ex: "3 INT SIMPLES C/PL MIL."
+      // - o "3" é parte do nome do produto, tipo "3 vias"). Protegido contra confundir com uma
+      // abreviação de unidade solta (ex: "5 UN"), exigindo que a segunda palavra não seja uma unidade.
+      var comecaComNumeroEspaco = /^\d+\s+[A-Za-z\u00C0-\u00DE]/.test(t) && !UNIDADE_RE_PREFIXO.test((t.split(/\s+/)[1]||""));
+      var ehDesc=t.length>7&&(comecaComLetra||comecaComCodigoHifen||comecaComNumeroEspaco)&&/[a-zA-Z\u00C0-\u00FF]{2,}/.test(t)&&/\s/.test(t)&&!ehCabLerIA(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
       if (!ehDesc) continue;
 
-      // FIX: quando a descrição vem no formato "CÓDIGO - TEXTO", ela pode vir quebrada em 2 tokens
-      // pelo PDF (ex: Agroboi). Concatena com o próximo token se ele parecer continuação, e ajusta
-      // o índice de busca de números para começar DEPOIS da descrição completa (não só do 1º token).
+      // FIX: se o token seguinte for um CÓDIGO puro (número sem vírgula) e o token DEPOIS DELE também
+      // for uma descrição válida, o candidato atual era só o nome da MARCA (ex: "TIGRE PINCEIS"),
+      // não uma descrição de produto real — a descrição de verdade vem depois do código. Pula.
+      if (i+2 < textos.length && /^\d+$/.test((textos[i+1]||"").trim()) && pareceDescricaoValida(textos[i+2])) continue;
+
+      // FIX: a descrição pode vir quebrada em 2 tokens pelo PDF, tanto no formato "CÓDIGO - TEXTO"
+      // (ex: Agroboi) quanto em descrições comuns muito longas que continuam na linha seguinte
+      // (ex: Costa: "GARFO DE PINTURA GAIOLA S/ ROSCA AÇO" + "23CM"). Concatena com o próximo token
+      // se ele parecer continuação (curto, sem número solto, sem ser outro item), e ajusta o índice
+      // de busca de números para começar DEPOIS da descrição completa (não só do 1º token).
       var descCompleta = t;
       var indiceBase = i;
-      if (comecaComCodigoHifen && i+1 < textos.length) {
+      if (i+1 < textos.length && !/^CE-/i.test(t)) {
         var proxTok = (textos[i+1]||"").trim();
-        var proxEhContinuacao = proxTok.length>2 && !/^C[\u00F3o]d\.?\s*Barras/i.test(proxTok) && !NUM.test(proxTok) && !ehCabLerIA(proxTok) && !/^\d+$/.test(proxTok) && /[A-Za-z\u00C0-\u00FF]/.test(proxTok) && !/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(proxTok);
+        var proxEhContinuacao = proxTok.length>2 && proxTok.length<=25 && !/^C[\u00F3o]d\.?\s*Barras/i.test(proxTok) && !NUM.test(proxTok) && !ehCabLerIA(proxTok) && !/^\d+$/.test(proxTok) && /[A-Za-z\u00C0-\u00FF]/.test(proxTok) && !/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(proxTok);
         if (proxEhContinuacao) { descCompleta = t + ' ' + proxTok; indiceBase = i+1; }
+      }
+
+      // FIX: se a descrição COMPLETA (já concatenada) for uma SUBSTRING de uma descrição já aceita
+      // na linha imediatamente anterior, é uma referência de produto repetindo parte do texto (ex:
+      // "PA FL PH AA PB" depois de "PA FL PH AA PB 4,2X19"), não uma nova descrição — pula. Mas só
+      // quando for MENOR e DIFERENTE da anterior (uma referência parcial), nunca quando for IDÊNTICA
+      // (que é um item duplicado legítimo, ex: o mesmo produto pedido 2 vezes no mesmo orçamento).
+      if (i>0 && items.length>0) {
+        var ultimaDescAceita = items[items.length-1].descricao;
+        var descCompletaMaiuscula = descCompleta.toUpperCase();
+        if (descCompletaMaiuscula !== ultimaDescAceita && descCompletaMaiuscula.length < ultimaDescAceita.length && ultimaDescAceita.indexOf(descCompletaMaiuscula) >= 0) continue;
       }
 
       // FIX: função auxiliar que verifica se um token parece ser o INÍCIO de outro item (para não
@@ -8168,13 +8587,28 @@ function ModalLerComIA(_ref_ia) {
       var pareceOutroItem = function(tok){
         var tk = (tok||"").trim();
         if (tk.length<=7) return false;
+        // FIX: nomes de marca compostos (ex: "UNIAO MUNDIAL", "OTTO BAUMGART") têm só 2 palavras e
+        // podem passar nos outros critérios por acidente — descrições de produto reais quase sempre
+        // têm 3+ palavras. Essa exigência evita confundir marca solta com início de outro item.
+        if (tk.split(/\s+/).length<3) return false;
         var tkComecaComLetra=/^[A-Z\u00C0-\u00D6\u00D8-\u00DE]/.test(tk);
         var tkComecaComCodigo=/^\d+\s*-\s*[A-Za-z\u00C0-\u00FF]/.test(tk);
-        return (tkComecaComLetra||tkComecaComCodigo) && /[a-zA-Z\u00C0-\u00FF]{3,}/.test(tk) && /\s/.test(tk) && !ehCabLerIA(tk);
+        var tkComecaComNumeroEspaco=/^\d+\s+[A-Za-z\u00C0-\u00DE]/.test(tk) && !UNIDADE_RE_PREFIXO.test((tk.split(/\s+/)[1]||""));
+        return (tkComecaComLetra||tkComecaComCodigo||tkComecaComNumeroEspaco) && /[a-zA-Z\u00C0-\u00FF]{3,}/.test(tk) && /\s/.test(tk) && !ehCabLerIA(tk);
       };
       // Limita a busca até o próximo/anterior token que pareça ser outro item (evita vazamento entre itens vizinhos)
       var limiteFrente = textos.length;
-      for (var lf=indiceBase+1; lf<textos.length; lf++) { if (pareceOutroItem(textos[lf])) { limiteFrente=lf; break; } }
+      var ehTerminadorDeSecao = function(tok){ return /^(Sub[\s-]?[Tt]otal\s*:|TOTAL\s*:)/i.test((tok||"").trim()); };
+      for (var lf=indiceBase+1; lf<textos.length; lf++) { if (pareceOutroItem(textos[lf]) || ehTerminadorDeSecao(textos[lf])) { limiteFrente=lf; break; } }
+      // FIX: em formatos onde os números vêm ANTES da descrição (ex: Rêmolo Jarude, Costa & Monteiro),
+      // um número inteiro puro (sem vírgula) logo depois da descrição atual é sempre um CÓDIGO de
+      // produto ou SEQUÊNCIA do próximo item (nunca um valor monetário real, que sempre tem vírgula
+      // nesse tipo de documento). Se encontrado, usa esse ponto como limite (mais restritivo),
+      // evitando pegar números do item seguinte.
+      for (var lfSeq=indiceBase+1; lfSeq<limiteFrente; lfSeq++) {
+        var tkSeq = (textos[lfSeq]||"").trim();
+        if (/^\d+$/.test(tkSeq)) { limiteFrente = Math.min(limiteFrente, lfSeq); break; }
+      }
       var limiteTras = -1;
       if (comecaComCodigoHifen) {
         // FIX: no formato "CÓDIGO - TEXTO" (Agroboi), os números do item vêm SEMPRE depois da descrição,
@@ -8182,7 +8616,16 @@ function ModalLerComIA(_ref_ia) {
         // (senão a busca pega os números do item anterior, que ficam mais próximos que os do item atual).
         limiteTras = i - 1;
       } else {
-        for (var lt=i-1; lt>=0; lt--) { if (pareceOutroItem(textos[lt])) { limiteTras=lt; break; } }
+        for (var lt=i-1; lt>=0; lt--) {
+          if (pareceOutroItem(textos[lt])) {
+            // FIX: se o "outro item" detectado está bem colado (1 posição antes) da descrição atual
+            // E não tem nenhum dígito, é muito provável que seja o nome da MARCA do produto (ex:
+            // "TIGRE / AMANCO"), não um item anterior de verdade — descrições de produto real quase
+            // sempre têm alguma medida/código numérico, marcas raramente têm dígitos.
+            if (lt === i-1 && !/\d/.test(textos[lt])) continue;
+            limiteTras=lt; break;
+          }
+        }
       }
 
       // FIX (nova estratégia): em vez de "adivinhar pela posição", coleta os números próximos (em ambas
@@ -8190,29 +8633,65 @@ function ModalLerComIA(_ref_ia) {
       // (quantidade, unitário, total) bate matematicamente (qtd × unit ≈ total).
       // Guarda também a POSIÇÃO de origem de cada número, para poder desambiguar qtd vs unit quando
       // ambas as combinações batem matematicamente (ex: 20×115=2300 e 115×20=2300 batem igual).
-      var numeros=[], posicoes=[];
-      for (var dist=1; dist<=9 && numeros.length<8; dist++) {
-        var jD=indiceBase+dist, jA=indiceBase-dist;
-        if (jD<limiteFrente) { var tjD=(textos[jD]||"").trim(); if(NUM.test(tjD)) { numeros.push(parseFloat(tjD.replace(/\./g,"").replace(",","."))); posicoes.push(jD); } }
-        if (jA>limiteTras) { var tjA=(textos[jA]||"").trim(); if(NUM.test(tjA)) { numeros.push(parseFloat(tjA.replace(/\./g,"").replace(",","."))); posicoes.push(jA); } }
+      // FIX: coleta também o texto ORIGINAL de cada número (não só o valor numérico), para poder
+      // detectar o formato de casas decimais (quantidade tem 3 casas: "1,000"; preço tem 2: "36,97")
+      // FIX: busca primeiro SÓ "pra frente" (o padrão mais comum: números vêm depois da descrição).
+      // Se isso já encontrar 3+ números válidos, usa SOMENTE esses — não mistura com "pra trás",
+      // porque isso vazaria números do item ANTERIOR (que ficam entre a descrição anterior e a atual).
+      // Só busca "pra trás" como complemento se a busca "pra frente" sozinha não for suficiente
+      // (formato onde os números vêm antes da descrição, ex: Rêmolo Jarude).
+      var numerosFrente=[], posicoesFrente=[], textosFrente=[];
+      for (var distF=1; distF<=9 && numerosFrente.length<8; distF++) {
+        var jDf=indiceBase+distF;
+        if (jDf<limiteFrente) { var tjDf=(textos[jDf]||"").trim(); if(NUM.test(tjDf)) { numerosFrente.push(parseFloat(tjDf.replace(/\./g,"").replace(",","."))); posicoesFrente.push(jDf); textosFrente.push(tjDf); } }
+      }
+      var numeros=[], posicoes=[], textosOriginais=[];
+      // FIX: não basta ter 3+ números "pra frente" — preciso confirmar que ALGUMA combinação deles
+      // realmente forma uma trinca válida (qtd×unit≈total). Sem essa checagem, um item no FINAL da
+      // lista pode capturar por engano o "Total Líquido" do orçamento inteiro como se fosse seu
+      // próprio total, e isso conta como um 3º número "válido" sem realmente ser do item.
+      var temTrincaValidaFrente = false;
+      for (var xt=0; xt<numerosFrente.length && !temTrincaValidaFrente; xt++) {
+        for (var yt=0; yt<numerosFrente.length && !temTrincaValidaFrente; yt++) {
+          if (xt===yt) continue;
+          for (var zt=0; zt<numerosFrente.length && !temTrincaValidaFrente; zt++) {
+            if (zt===xt||zt===yt) continue;
+            var qtdT=numerosFrente[xt], unitT=numerosFrente[yt], totalT=numerosFrente[zt];
+            if (qtdT>=1 && unitT>0 && Math.abs(qtdT*unitT-totalT)/Math.max(totalT,1)<0.015) temTrincaValidaFrente = true;
+          }
+        }
+      }
+      if (numerosFrente.length>=3 && temTrincaValidaFrente) {
+        numeros = numerosFrente; posicoes = posicoesFrente; textosOriginais = textosFrente;
+      } else {
+        for (var dist=1; dist<=9 && numeros.length<8; dist++) {
+          var jD=indiceBase+dist, jA=indiceBase-dist;
+          if (jD<limiteFrente) { var tjD=(textos[jD]||"").trim(); if(NUM.test(tjD)) { numeros.push(parseFloat(tjD.replace(/\./g,"").replace(",","."))); posicoes.push(jD); textosOriginais.push(tjD); } }
+          if (jA>limiteTras) { var tjA=(textos[jA]||"").trim(); if(NUM.test(tjA)) { numeros.push(parseFloat(tjA.replace(/\./g,"").replace(",","."))); posicoes.push(jA); textosOriginais.push(tjA); } }
+        }
       }
       if (numeros.length<3) continue;
 
       var UNIDADE_RE = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ)$/i;
-      var unitValidado=null, melhorDiferenca=Infinity, melhorBonus=-1;
+      var FORMATO_QTD_RE = /,\d{3}$|,\d{5}$/; // ex: "1,000", "15,000" (3 casas) ou "26,00000" (5 casas) — sempre quantidade nesses padrões
+      var unitValidado=null, qtdValidada=null, melhorDiferenca=Infinity, melhorBonus=-1, melhorPrioridade=-1;
       for (var xi=0; xi<numeros.length; xi++) {
         for (var yi=0; yi<numeros.length; yi++) {
           if (xi===yi) continue;
           for (var zi=0; zi<numeros.length; zi++) {
             if (zi===xi||zi===yi) continue;
             var qtd=numeros[xi], unit=numeros[yi], total=numeros[zi];
-            if (qtd>1) {
+            if (qtd>=1 && unit>0) {
               var diferenca=Math.abs(qtd*unit-total)/Math.max(total,1);
-              if (diferenca<0.01) {
+              if (diferenca<0.015) { // FIX: tolerância aumentada de 1% para 1,5% para cobrir arredondamento real de alguns documentos (ex: Acreferro)
+                // FIX: prioridade 2 (máxima) quando o candidato a quantidade TEM o formato de 3 casas
+                // decimais (pista mais confiável que existe); prioridade 1 quando qtd>1 (heurística
+                // antiga, evita ambiguidade); prioridade 0 (fallback) quando só bate com qtd=1 "seco".
+                var prioridade = FORMATO_QTD_RE.test(textosOriginais[xi]) ? 2 : (qtd>1 ? 1 : 0);
                 var proxTokenDaQtd = (textos[posicoes[xi]+1]||"").trim();
                 var bonus = UNIDADE_RE.test(proxTokenDaQtd) ? 1 : 0;
-                if (diferenca<melhorDiferenca || (diferenca===melhorDiferenca && bonus>melhorBonus)) {
-                  melhorDiferenca=diferenca; melhorBonus=bonus; unitValidado=unit;
+                if (prioridade>melhorPrioridade || (prioridade===melhorPrioridade && (diferenca<melhorDiferenca || (diferenca===melhorDiferenca && bonus>melhorBonus)))) {
+                  melhorDiferenca=diferenca; melhorBonus=bonus; melhorPrioridade=prioridade; unitValidado=unit; qtdValidada=qtd;
                 }
               }
             }
@@ -8220,8 +8699,247 @@ function ModalLerComIA(_ref_ia) {
         }
       }
       if (unitValidado!==null && unitValidado>0) {
-        items.push({descricao:descCompleta.toUpperCase(), preco:unitValidado});
+        items.push({descricao:descCompleta.toUpperCase(), preco:unitValidado, qtd:qtdValidada});
       }
+    }
+
+    // FIX: fallback para formato onde os NÚMEROS de cada item (qtd, unitário) ficam numa seção
+    // completamente separada das DESCRIÇÕES (ex: Holanda Holanda e Torres) — a ordem de extração
+    // do PDF não corresponde à ordem lógica da tabela. Só ativa se a lógica principal não encontrou
+    // nada. Estratégia: cada descrição tem seu próprio TOTAL logo depois dela (seguido de "R$"); usa
+    // esse total para encontrar, entre os grupos de números [qtd, unit, "R$"] espalhados no documento,
+    // qual combinação bate matematicamente (qtd × unit ≈ total). Isso correlaciona pelo VALOR, não
+    // pela posição, resolvendo a ordem embaralhada.
+    if (items.length === 0) {
+      var gruposNumericos = [];
+      for (var gi=0; gi<textos.length-2; gi++) {
+        var possQtd = (textos[gi]||"").trim();
+        var possUnit = (textos[gi+1]||"").trim();
+        var possRS = (textos[gi+2]||"").trim();
+        if (/^\d+$/.test(possQtd) && NUM.test(possUnit) && possRS === "R$") {
+          var qtdNum = parseFloat(possQtd);
+          var unitNum = parseFloat(possUnit.replace(/\./g,"").replace(",","."));
+          if (qtdNum>=1 && unitNum>0) gruposNumericos.push({qtd:qtdNum, unit:unitNum});
+        }
+      }
+      if (gruposNumericos.length>0) {
+        for (var di=0; di<textos.length-2; di++) {
+          var possDesc = (textos[di]||"").trim();
+          if (pareceDescricaoValida(possDesc)) {
+            var possTotal = (textos[di+1]||"").trim();
+            var possRS2 = (textos[di+2]||"").trim();
+            if (NUM.test(possTotal) && possRS2==="R$") {
+              var totalNum = parseFloat(possTotal.replace(/\./g,"").replace(",","."));
+              var melhorGrupo = null, melhorDif = 0.01;
+              gruposNumericos.forEach(function(g){
+                var dif = Math.abs(g.qtd*g.unit-totalNum)/Math.max(totalNum,1);
+                if (dif<melhorDif) { melhorDif=dif; melhorGrupo=g; }
+              });
+              if (melhorGrupo) items.push({descricao:possDesc.toUpperCase(), preco:melhorGrupo.unit, qtd:melhorGrupo.qtd});
+            }
+          }
+        }
+      }
+    }
+
+    // FIX: fallback para formato onde a descrição vem fragmentada PALAVRA POR PALAVRA entre um
+    // CÓDIGO (formato "11.795", com ponto) e um marcador de UNIDADE (ex: "UN"), ao invés de vir como
+    // frase inteira (ex: Multilit). Estratégia: detecta o código, junta todas as palavras soltas até
+    // encontrar a unidade, forma a descrição, e captura [quantidade] "R$" [preço unitário] logo depois.
+    if (items.length === 0) {
+      var CODIGO_COM_PONTO = /^(\d{1,3}\.\d{3,}|\d{5,7})$/; // aceita "11.795" (com ponto) ou "002050" (6 dígitos, sem ponto)
+      var UNIDADE_EXATA = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ)$/i;
+      // FIX: esse fornecedor às vezes usa PONTO como separador decimal por engano (ex: "4.23" em vez
+      // de "4,23"), inconsistência do próprio documento original. Aceita ambos os formatos aqui,
+      // detectando qual foi usado antes de converter (não afeta a lógica principal do sistema).
+      var NUM_OU_PONTO_DECIMAL = /^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2,5}|[\d]{4,},[\d]{2,5}|,[\d]{2,5}|\d+\.\d{1,5})$/;
+      var converterNumeroMultilit = function(txt){
+        if (/^\d+\.\d{1,5}$/.test(txt)) return parseFloat(txt); // formato "4.34" ou "150.000" já é decimal nativo
+        return parseFloat(txt.replace(/\./g,"").replace(",","."));
+      };
+      for (var ci=0; ci<textos.length; ci++) {
+        var possCodigo = (textos[ci]||"").trim();
+        if (!CODIGO_COM_PONTO.test(possCodigo)) continue;
+        var palavras = [];
+        var ui = ci+1;
+        // Tentativa 1: código seguido de palavras soltas, depois a unidade (ordem normal)
+        while (ui < textos.length && ui < ci+13 && !UNIDADE_EXATA.test((textos[ui]||"").trim())) {
+          var palavra = (textos[ui]||"").trim();
+          var proxToken = (textos[ui+1]||"").trim();
+          if (palavra.length===0 || palavra==="R$" || (NUM_OU_PONTO_DECIMAL.test(palavra) && proxToken==="R$")) { palavras = []; break; } // não é esse padrão
+          palavras.push(palavra);
+          ui++;
+        }
+        // Tentativa 2: código já vem seguido DIRETO da unidade — nesse caso, a descrição está
+        // ANTES do código (ordem invertida, ex: quando o item ocupa 2 linhas visuais no PDF original
+        // e a extração captura a descrição de cima antes do código+dados de baixo).
+        if (palavras.length===0 && UNIDADE_EXATA.test((textos[ci+1]||"").trim())) {
+          ui = ci+1;
+          var palavrasTras = [];
+          var ct = ci-1;
+          while (ct>=0 && ct>ci-13) {
+            var palavraTras = (textos[ct]||"").trim();
+            if (palavraTras.length===0 || NUM_OU_PONTO_DECIMAL.test(palavraTras) || palavraTras==="R$" || CODIGO_COM_PONTO.test(palavraTras) || UNIDADE_EXATA.test(palavraTras)) break;
+            palavrasTras.unshift(palavraTras);
+            ct--;
+          }
+          if (palavrasTras.length>0) palavras = palavrasTras;
+        }
+        if (palavras.length===0 || ui>=textos.length || !UNIDADE_EXATA.test((textos[ui]||"").trim())) continue;
+        // Depois da unidade: quantidade, "R$", preço unitário
+        var possQtdMultilit = (textos[ui+1]||"").trim();
+        var possRSMultilit = (textos[ui+2]||"").trim();
+        var possUnitMultilit = (textos[ui+3]||"").trim();
+        if (NUM_OU_PONTO_DECIMAL.test(possQtdMultilit) && possRSMultilit==="R$" && NUM_OU_PONTO_DECIMAL.test(possUnitMultilit)) {
+          var qtdM = converterNumeroMultilit(possQtdMultilit);
+          var unitM = converterNumeroMultilit(possUnitMultilit);
+          if (qtdM>=1 && unitM>0) {
+            items.push({descricao:palavras.join(" ").toUpperCase(), preco:unitM, qtd:qtdM});
+          }
+        }
+      }
+    }
+
+    // FIX: fallback para formato onde a QUANTIDADE é um número inteiro PURO, sem vírgula (ex:
+    // Mexichem: "230" ao invés de "230,00"), diferente de todos os outros formatos já tratados.
+    // Busca descrições válidas seguidas (numa janela pequena, pra frente) por um inteiro puro (qtd),
+    // um valor decimal (preço unit.) e outro valor decimal (total), validando que qtd×unit≈total.
+    if (items.length === 0) {
+      var posicoesTotalJaUsadas = {};
+      for (var mi=0; mi<textos.length; mi++) {
+        var possDescMex = (textos[mi]||"").trim();
+        if (!pareceDescricaoValida(possDescMex)) continue;
+        for (var distMex=1; distMex<=6; distMex++) {
+          var idxQtd = mi+distMex;
+          var tokQtd = (textos[idxQtd]||"").trim();
+          if (!/^\d+$/.test(tokQtd)) continue;
+          var qtdMex = parseFloat(tokQtd);
+          if (qtdMex<1) continue;
+          // procura, logo depois da qtd, um preço unit. e um total que batam matematicamente
+          var achou = false;
+          for (var offU=1; offU<=3 && !achou; offU++) {
+            var tokUnit = (textos[idxQtd+offU]||"").trim();
+            if (!NUM.test(tokUnit)) continue;
+            var unitMex = parseFloat(tokUnit.replace(/\./g,"").replace(",","."));
+            for (var offT=1; offT<=3 && !achou; offT++) {
+              var idxTotalMex = idxQtd+offU+offT;
+              if (posicoesTotalJaUsadas[idxTotalMex]) continue; // já usado por outra descrição candidata — é duplicata
+              var tokTotal = (textos[idxTotalMex]||"").trim();
+              if (!NUM.test(tokTotal)) continue;
+              var totalMex = parseFloat(tokTotal.replace(/\./g,"").replace(",","."));
+              var difMex = Math.abs(qtdMex*unitMex-totalMex)/Math.max(totalMex,1);
+              if (difMex<0.01 && unitMex>0) {
+                items.push({descricao:possDescMex.toUpperCase(), preco:unitMex, qtd:qtdMex});
+                posicoesTotalJaUsadas[idxTotalMex] = true;
+                achou = true;
+              }
+            }
+          }
+          if (achou) break;
+        }
+      }
+    }
+
+    // FIX: fallback para formato com MUITAS colunas numéricas antes da descrição (ex: Ferracre:
+    // código, unidade, qtd, peso, v.bruto, v.desconto, vlr.total, v.unitário, DESCRIÇÃO). A trinca
+    // matemática (qtd×unit≈bruto) confirma quais números são qtd/unit, mas o "Vlr.Total" real (já
+    // com desconto aplicado) não bate com qtd×unit — por isso calcula um PREÇO EFETIVO (total÷qtd),
+    // que é o valor unitário já considerando o desconto.
+    // Ativa quando a lógica principal não achou nada OU quando o documento tem a assinatura de
+    // cabeçalho específica desse formato ("V. Bruto" E "V. Desc." juntos, únicos desse fornecedor
+    // — não aparecem em nenhum outro formato já validado), o que indica com segurança que os preços
+    // brutos capturados pela lógica principal não são os valores reais com desconto.
+    var temAssinaturaFerracre = textos.some(function(tk){ return /V\.\s*Bruto/i.test(tk||""); }) && textos.some(function(tk){ return /V\.\s*Desc/i.test(tk||""); });
+    if (items.length === 0 || temAssinaturaFerracre) {
+      var itemsFerracre = [];
+      for (var fi=0; fi<textos.length; fi++) {
+        var possDescFer = (textos[fi]||"").trim();
+        if (!pareceDescricaoValida(possDescFer)) continue;
+        // Coleta números nas 10 posições anteriores (onde ficam qtd, peso, bruto, desc, total, unit)
+        var numsFer=[], posFer=[];
+        for (var distFer=1; distFer<=10; distFer++) {
+          var idxFer = fi-distFer;
+          if (idxFer<0) break;
+          var tokFer = (textos[idxFer]||"").trim();
+          if (pareceDescricaoValida(tokFer)) break; // chegou na descrição do item anterior
+          if (NUM.test(tokFer)) { numsFer.unshift(parseFloat(tokFer.replace(/\./g,"").replace(",","."))); posFer.unshift(idxFer); }
+        }
+        if (numsFer.length<4) continue;
+        // Procura a trinca qtd×unit≈bruto entre os números coletados
+        var achouFer = false;
+        for (var xf=0; xf<numsFer.length && !achouFer; xf++) {
+          for (var yf=0; yf<numsFer.length && !achouFer; yf++) {
+            if (xf===yf) continue;
+            var qtdF=numsFer[xf], unitF=numsFer[yf];
+            if (qtdF<1 || unitF<=0) continue;
+            var brutoCalc = qtdF*unitF;
+            for (var zf=0; zf<numsFer.length && !achouFer; zf++) {
+              if (zf===xf||zf===yf) continue;
+              var brutoF = numsFer[zf];
+              if (Math.abs(brutoCalc-brutoF)/Math.max(brutoF,1) >= 0.015) continue;
+              // Achou qtd/unit/bruto — agora procura o "total" (valor <= bruto, mais próximo do fim, antes da descrição)
+              for (var wf=numsFer.length-1; wf>=0; wf--) {
+                if (wf===xf||wf===yf||wf===zf) continue;
+                var totalF = numsFer[wf];
+                if (totalF>0 && totalF<=brutoF*1.001) {
+                  itemsFerracre.push({descricao:possDescFer.toUpperCase(), preco: totalF/qtdF, qtd: qtdF});
+                  achouFer = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      if (itemsFerracre.length>items.length) items = itemsFerracre;
+    }
+
+    // FIX: fallback para formato com números ANTES da descrição, em ordem fixa (ex: Ferrosul:
+    // Desc.Unit, Pr.Unit.Brut, Qtd, UN, Código, Total, DESCRIÇÃO). Similar ao Ferracre (bruto vs
+    // desconto), mas com os números na ordem INVERSA (antes, não depois da descrição). Ativa pela
+    // assinatura de cabeçalho específica "Pr Unit Brut" (única desse formato).
+    var temAssinaturaFerrosul = textos.some(function(tk){ return /Pr\s*Unit\s*Brut/i.test(tk||""); });
+    if (items.length === 0 || temAssinaturaFerrosul) {
+      var itemsFerrosul = [];
+      for (var fsi=0; fsi<textos.length; fsi++) {
+        var possDescFs = (textos[fsi]||"").trim();
+        if (!pareceDescricaoValida(possDescFs)) continue;
+        // Coleta números nas 8 posições anteriores
+        var numsFs=[];
+        for (var distFs=1; distFs<=8; distFs++) {
+          var idxFs = fsi-distFs;
+          if (idxFs<0) break;
+          var tokFs = (textos[idxFs]||"").trim();
+          if (pareceDescricaoValida(tokFs)) break;
+          if (NUM.test(tokFs)) numsFs.unshift(parseFloat(tokFs.replace(/\./g,"").replace(",",".")));
+        }
+        if (numsFs.length<4) continue;
+        var achouFs = false;
+        // Testa combinações onde (unitBrutoFs - descUnitFs) x qtdFs ≈ totalFs (fórmula do desconto real)
+        for (var xfs=0; xfs<numsFs.length && !achouFs; xfs++) {
+          for (var yfs=0; yfs<numsFs.length && !achouFs; yfs++) {
+            if (xfs===yfs) continue;
+            var qtdFs=numsFs[xfs], unitBrutoFs=numsFs[yfs];
+            if (qtdFs<1 || unitBrutoFs<=0) continue;
+            for (var kfs=0; kfs<numsFs.length && !achouFs; kfs++) {
+              if (kfs===xfs||kfs===yfs) continue;
+              var descUnitFs = numsFs[kfs];
+              if (descUnitFs<0 || descUnitFs>=unitBrutoFs) continue;
+              var precoEfetivoFs = unitBrutoFs - descUnitFs;
+              var totalCalcFs = qtdFs*precoEfetivoFs;
+              for (var wfs=0; wfs<numsFs.length && !achouFs; wfs++) {
+                if (wfs===xfs||wfs===yfs||wfs===kfs) continue;
+                var totalRealFs = numsFs[wfs];
+                if (Math.abs(totalCalcFs-totalRealFs)/Math.max(totalRealFs,1) < 0.015) {
+                  itemsFerrosul.push({descricao:possDescFs.toUpperCase(), preco: precoEfetivoFs, qtd: qtdFs});
+                  achouFs = true;
+                }
+              }
+            }
+          }
+        }
+      }
+      if (itemsFerrosul.length>items.length) items = itemsFerrosul;
     }
     return items;
   };
