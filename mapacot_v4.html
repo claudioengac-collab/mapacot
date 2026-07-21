@@ -1433,7 +1433,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   };
   var calcVL = function calcVL(fid) {
     var r = rodape[fid] || {};
-    return totalBruto(fid) - (parseMoney(r.desconto) || 0) + (parseMoney(r.impostos) || 0) + (parseMoney(r.frete) || 0);
+    return totalBruto(fid) - Math.max(0, parseMoney(r.desconto) || 0) + Math.max(0, parseMoney(r.impostos) || 0) + Math.max(0, parseMoney(r.frete) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
   };
   var bestFornId = function () {
     var minVal = null,
@@ -4338,7 +4338,7 @@ var _useState27 = useState(init),
   };
   var calcVL = function calcVL(fid) {
     var r = rodape[fid] || {};
-    return totalBruto(fid) - (parseMoney(r.desconto) || 0) + (parseMoney(r.impostos) || 0) + (parseMoney(r.frete) || 0);
+    return totalBruto(fid) - Math.max(0, parseMoney(r.desconto) || 0) + Math.max(0, parseMoney(r.impostos) || 0) + Math.max(0, parseMoney(r.frete) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
   };
   var bestFornId = function () {
     var minVal = null,
@@ -4357,7 +4357,7 @@ var _useState27 = useState(init),
     return acc + (r.vlTotal || 0);
   }, 0);
   var calcVLResumo = function calcVLResumo() {
-    return resumoTotal - (parseMoney(rodapeResumo.desconto) || 0) + (parseMoney(rodapeResumo.impostos) || 0) + (parseMoney(rodapeResumo.frete) || 0);
+    return resumoTotal - Math.max(0, parseMoney(rodapeResumo.desconto) || 0) + Math.max(0, parseMoney(rodapeResumo.impostos) || 0) + Math.max(0, parseMoney(rodapeResumo.frete) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
   };
   // FIX: usar fornecedoresVisiveis para que colunas ocultas desapareçam completamente
   var chunks = [];
@@ -7120,6 +7120,8 @@ function ModalEnsinarSistema(_ref_ens) {
       if(/^[A-Z\u00C0-\u0178\s]+\s-\s[A-Z]{2}(\s|$)/.test(st)) return true; // "CIDADE - UF"
       if(/^VL\.?\s*UNIT/i.test(st)) return true;
       if(/^Vendedor\(es\)/i.test(st)) return true;
+      if(/^MERCADORIA\s*-\s*N[\u00C3A]O\s*COMPROVA/i.test(st)) return true; // FIX: continuação de "...GARANTIA DE MERCADORIA - NÃO COMPROVA PAGAMENTO" (rodapé fixo dividido em 2 tokens)
+      if(/^PEDIDO\s*DE\s*VENDA$/i.test(st)) return true; // FIX: continuação de "DOCUMENTO AUXILIAR DE VENDA - PEDIDO DE VENDA" (cabeçalho fixo dividido em 2 tokens)
       if(/^CE-/i.test(st)) return true; // cabe\u00e7alho de se\u00e7\u00e3o (local de retirada), n\u00e3o \u00e9 produto
       if(/^(PR\.?\s*UNIT|PRE[C\u00C7]O\s*TOTAL|PRE[C\u00C7]O\s*UNIT)/i.test(st)) return true; // cabe\u00e7alho de coluna abreviado
       // FIX: mais padr\u00f5es de rodap\u00e9/cabe\u00e7alho encontrados em outros formatos (Gerdau, Ferracre, Ferrosul, Acreferro)
@@ -7186,7 +7188,9 @@ function ModalEnsinarSistema(_ref_ens) {
       // FIX: forma de pagamento agora rejeitada em QUALQUER formato de texto, n\u00e3o s\u00f3 c\u00f3digo-h\u00edfen
       var temTresMaisLetrasSeguidasEns = /[a-zA-Z\u00C0-\u00FF]{3,}/.test(t);
       var temDuasMaisLetrasEQuantidadeDePalavrasEns = /[a-zA-Z\u00C0-\u00FF]{2,}/.test(t) && t.split(/\s+/).filter(function(w){return w.length>0;}).length>=3;
-      var ehDesc=!anteriorEhRotuloPessoa&&!anteriorEhEmpresa&&!pareceFormaPagamento&&t.length>7&&(comecaComLetra||comecaComCodigoHifen||comecaComCodigoEspaco)&&(temTresMaisLetrasSeguidasEns||temDuasMaisLetrasEQuantidadeDePalavrasEns)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t)&&!/^C[\u00F3o]d\.?\s*Barras/i.test(t);
+      var proxEhSiglaUF = i+1<textos.length && /^-\s*[A-Z]{2}\s*$/.test((textos[i+1]||"").trim());
+      var ehSoOrcamentoNumero = /^OR[\u00c7C]AMENTO\s*N[\u00ba\u00b0o]?\.?\s*$/i.test(t);
+      var ehDesc=!anteriorEhRotuloPessoa&&!anteriorEhEmpresa&&!pareceFormaPagamento&&!proxEhSiglaUF&&!ehSoOrcamentoNumero&&t.length>7&&(comecaComLetra||comecaComCodigoHifen||comecaComCodigoEspaco)&&(temTresMaisLetrasSeguidasEns||temDuasMaisLetrasEQuantidadeDePalavrasEns)&&/\s/.test(t)&&!ehCab(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t)&&!/^C[\u00F3o]d\.?\s*Barras/i.test(t);
       if (!ehDesc) continue;
       // FIX: se logo depois desse candidato vier um código numérico puro seguido de OUTRA descrição
       // válida, o candidato atual era só o nome da MARCA (ex: "TIGRE PINCEIS"), não uma descrição de
@@ -8528,9 +8532,10 @@ function ModalLerComIA(_ref_ia) {
     var NUM=/^([\d]{1,3}(?:\.[\d]{3})*,[\d]{2,5}|[\d]{4,},[\d]{2,5}|,[\d]{2,5})$/; // aceita também 4+ dígitos sem ponto de milhar (ex: "2300,00"), valores sem zero antes da vírgula (ex: ",87" = R$0,87), e até 5 casas decimais (ex: "26,00000")
     var ehCabLerIA=function(s){
       var st=s.trim();
-      if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS\.?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO|MARCA|SEQ\.?|REF\.?)$/i.test(st)) return true;
+      if(/^(ITEM|C[O\u00D3]D\.?|AMAR|QTDE?\.?|QT\.?|UN\.?|UNID\.?|UNIT[A\u00C1]RIO|UNITARIO|TOTAL|DESCRI[C\u00C7][A\u00C3]O|DESCR\.?|VALOR|VLR\.?|PRE[C\u00C7]O|FRETE|IMPOSTO|SUB[\s-]?TOTAL|PESO|OBS[\.:]?|OBSERV|BANCO|CONTA|PIX|CNPJ|CPF|CEP|TELEFONE|FONE|E-?MAIL|CONTATO|ESTADO|CIDADE|ENDERE|BAIRRO|VENC|PRAZO|VALIDADE|CONDI|REPRESENT|VENDEDOR|CLIENTE|TIPO|FORMA|SITUA|NF|NOTA|DATA|PEDIDO|OR[C\u00C7]AMENTO|MARCA|SEQ\.?|REF\.?)$/i.test(st)) return true;
       if(/DESCRI[C\u00C7][A\u00C3]O DO PRODUTO|TOTAL (ACRESCIMO|DESCONTO|L[I\u00CD]QUIDO|GERAL|BRUTO)|VALOR (UNIT|TOTAL)|C[O\u00D3]DIGO PRODUTO/i.test(st)) return true;
       if(/^C[\u00F3o]d\.?\s*Barras/i.test(st)) return true; // FIX: rejeita "Cód. Barras: XXXXX" como não-descrição (formato Agroboi)
+      if(/^C[\u00F3o]d\.?\s*Ref/i.test(st)) return true; // FIX: rejeita "Cód. Ref: XXXXX" como não-descrição (formato Cimec DAV)
       if(/^(TOTAL|VALOR|VENDEDOR|CLIENTE|ENDERE[C\u00C7]O)[\s:]/i.test(st)) return true;
       if(/^(PESO (BRUTO|L[I\u00CD]QUIDO)|QTD\.? TOTAL|QUANTIDADE TOTAL)[\s:]/i.test(st)) return true;
       if(/^VL\.?\s*UNIT/i.test(st)) return true; // FIX: "VL. UNIT" como cabeçalho de coluna abreviado
@@ -8560,7 +8565,9 @@ function ModalLerComIA(_ref_ia) {
       // - o "3" é parte do nome do produto, tipo "3 vias"). Protegido contra confundir com uma
       // abreviação de unidade solta (ex: "5 UN"), exigindo que a segunda palavra não seja uma unidade.
       var comecaComNumeroEspaco = /^\d+\s+[A-Za-z\u00C0-\u00DE]/.test(t) && !UNIDADE_RE_PREFIXO.test((t.split(/\s+/)[1]||""));
-      var ehDesc=t.length>7&&(comecaComLetra||comecaComCodigoHifen||comecaComNumeroEspaco)&&/[a-zA-Z\u00C0-\u00FF]{2,}/.test(t)&&/\s/.test(t)&&!ehCabLerIA(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
+      var proxEhSiglaUFIa = i+1<textos.length && /^-\s*[A-Z]{2}\s*$/.test((textos[i+1]||"").trim());
+      var ehSoOrcamentoNumeroIa = /^OR[\u00c7C]AMENTO\s*N[\u00ba\u00b0o]?\.?\s*$/i.test(t);
+      var ehDesc=!proxEhSiglaUFIa&&!ehSoOrcamentoNumeroIa&&t.length>7&&(comecaComLetra||comecaComCodigoHifen||comecaComNumeroEspaco)&&/[a-zA-Z\u00C0-\u00FF]{2,}/.test(t)&&/\s/.test(t)&&!ehCabLerIA(t)&&!/^\d+$/.test(t)&&!/^[\d\.\,\-\/\s]+$/.test(t);
       if (!ehDesc) continue;
 
       // FIX: se o token seguinte for um CÓDIGO puro (número sem vírgula) e o token DEPOIS DELE também
@@ -8702,6 +8709,35 @@ function ModalLerComIA(_ref_ia) {
                 var bonus = UNIDADE_RE.test(proxTokenDaQtd) ? 1 : 0;
                 if (prioridade>melhorPrioridade || (prioridade===melhorPrioridade && (diferenca<melhorDiferenca || (diferenca===melhorDiferenca && bonus>melhorBonus)))) {
                   melhorDiferenca=diferenca; melhorBonus=bonus; melhorPrioridade=prioridade; unitValidado=unit; qtdValidada=qtd;
+                }
+              }
+            }
+          }
+        }
+      }
+      // FIX: quando nenhuma trinca simples bate (qtd x unit = total), tenta uma QUADRA com desconto:
+      // qtd x unit - desconto = total. Cobre documentos onde o total ja vem liquido de um desconto em
+      // R$ (nao percentual), o que faz a trinca simples ultrapassar a margem de erro (ex: Cimec DAV).
+      if (unitValidado===null && numeros.length>=4) {
+        var melhorDifQuadra = Infinity;
+        for (var xi2=0; xi2<numeros.length; xi2++) {
+          for (var yi2=0; yi2<numeros.length; yi2++) {
+            if (yi2===xi2) continue;
+            for (var zi2=0; zi2<numeros.length; zi2++) {
+              if (zi2===xi2||zi2===yi2) continue;
+              for (var wi2=0; wi2<numeros.length; wi2++) {
+                if (wi2===xi2||wi2===yi2||wi2===zi2) continue;
+                var qtd2=numeros[xi2], unit2=numeros[yi2], desconto2=numeros[zi2], total2=numeros[wi2];
+                if (qtd2>=1 && unit2>0 && total2>0 && desconto2>=0 && desconto2<(qtd2*unit2)) { // FIX: rejeita combinações onde o "desconto" seria maior que o valor bruto (fisicamente impossível)
+                  var difQuadra=Math.abs(qtd2*unit2-desconto2-total2)/Math.max(total2,1);
+                  if (difQuadra<0.015) {
+                    var proxTokenDaQtd2 = (textos[posicoes[xi2]+1]||"").trim();
+                    var bonusQuadra = UNIDADE_RE.test(proxTokenDaQtd2) ? 1 : 0;
+                    var scoreQuadra = difQuadra - (bonusQuadra*0.02);
+                    if (scoreQuadra<melhorDifQuadra) {
+                      melhorDifQuadra=scoreQuadra; unitValidado=unit2; qtdValidada=qtd2;
+                    }
+                  }
                 }
               }
             }
