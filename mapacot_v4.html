@@ -5639,6 +5639,7 @@ var _useState27 = useState(init),
     mapa: mapa, itens: itens,
     aprendizados: aprendizados,
     onClose: function(){ setShowLerIA(false); },
+    onAprendizadoSalvo: registrarAprendizado,
     onConfirm: function(ligs) {
       Object.keys(ligs).forEach(function(itemMapaId) {
         var lig=ligs[itemMapaId];
@@ -8445,7 +8446,7 @@ function ModalImportarExcelMapa(_ref_imp) {
 }
 
 function ModalLerComIA(_ref_ia) {
-  var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso;
+  var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso, onAprendizadoSalvo=_ref_ia.onAprendizadoSalvo||function(){};
   var aprendizados=_ref_ia.aprendizados||{};
   var CE=React.createElement;
   var _sStep=useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
@@ -8463,7 +8464,16 @@ function ModalLerComIA(_ref_ia) {
   var _sSB=useState(""),seletorBusca=_slicedToArray(_sSB,2)[0],setSeletorBusca=_slicedToArray(_sSB,2)[1];
   var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); return f?(f.descricao||""):""; };
   var forns=mapa.fornecedores||[];
-  var normalizar=function(s){return (s||"").toUpperCase().replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();};
+  // FIX: (1) a versão anterior removia letras acentuadas (Ç,Ã,Õ etc.) transformando-as em ESPAÇO,
+  // o que quebrava palavras portuguesas ao meio (ex: "AÇO" virava "A O", "TUBULAÇÃO" virava "TUBULA
+  // O") — perdendo a palavra inteira no casamento, já que fragmentos de 1 letra são descartados.
+  // Agora converte o acento para sua forma sem acento (Ç->C, Ã->A) via normalize('NFD'), preservando
+  // a palavra inteira. (2) usa String(s||"") em vez de (s||"") para nunca quebrar com erro fatal caso
+  // a descrição venha como número/objeto (ex: dado corrompido ou resposta malformada da IA).
+  var normalizar=function(s){
+    var t = String(s||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    return t.replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();
+  };
   var wordScore=function(a,b){
     var wa=normalizar(a).split(" ").filter(function(w){return w.length>2;});
     var wb=normalizar(b).split(" ").filter(function(w){return w.length>2;});
@@ -9027,6 +9037,14 @@ function ModalLerComIA(_ref_ia) {
       ligs[mapaItemId]={descPDF:oi.descricao,preco:oi.preco,fornId:fornId,orcIdx:idx};
     });
     if(!Object.keys(ligs).length){setErro("Nenhum item casado para salvar.");return;}
+    // FIX: alimenta a memória (aprendizados) — cada casamento confirmado aqui ensina que aquele
+    // texto do orçamento corresponde àquele insumo do mapa, igual já acontece no Casar Insumos.
+    // Assim, da próxima vez que o mesmo fornecedor/descrição aparecer, o casamento automático já
+    // funciona sem precisar repetir o trabalho manual.
+    Object.keys(ligs).forEach(function(mid){
+      var itemMapa = itens.find(function(i){ return i.id === mid; });
+      if(itemMapa && itemMapa.descricao) onAprendizadoSalvo(ligs[mid].descPDF, itemMapa.descricao);
+    });
     onConfirm(ligs);
   };
   var stOvl={position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(10,20,50,0.65)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"};
