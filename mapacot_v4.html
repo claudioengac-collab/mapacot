@@ -8136,17 +8136,19 @@ function ModalImportarExcelMapa(_ref_imp) {
     var alvo = normalizarTexto(textoImportado);
     if(!alvo) return { match:null, score:0 };
     var temDigito = function(w){ return /\d/.test(w); };
-    var todasAlvo = alvo.split(' ').filter(function(w){ return w.length > 2; });
+    var todasAlvo = alvo.split(' ').filter(function(w){ return w.length > 2 || /^\d+$/.test(w); }); // FIX: mantém números curtos (ex: ângulo 45/90)
     var palavrasAlvo = todasAlvo.filter(function(w){ return !temDigito(w); });
     var medidasAlvo = todasAlvo.filter(temDigito);
+    var categoriaAlvo = palavrasAlvo[0] || ''; // FIX: primeira palavra de nome = categoria da peça (LUVA, JOELHO, CURVA, TUBO...)
     var melhor = null, melhorScore = 0;
     catalogo.forEach(function(itemCadastro){
       var itemNorm = normalizarTexto(itemCadastro);
       if(!itemNorm) return;
       if(itemNorm === alvo){ melhor = itemCadastro; melhorScore = 1; return; }
-      var todasItem = itemNorm.split(' ').filter(function(w){ return w.length > 2; });
+      var todasItem = itemNorm.split(' ').filter(function(w){ return w.length > 2 || /^\d+$/.test(w); }); // FIX: mantém números curtos
       var palavrasItem = todasItem.filter(function(w){ return !temDigito(w); });
       var medidasItem = todasItem.filter(temDigito);
+      var categoriaItem = palavrasItem[0] || ''; // FIX: categoria do item do catálogo
       // FIX B: palavras de NOME (produto) valem o peso principal — medida sozinha nunca decide o match
       var scoreNome = 0;
       if(palavrasAlvo.length && palavrasItem.length){
@@ -8159,7 +8161,13 @@ function ModalImportarExcelMapa(_ref_imp) {
         if(interMedida > 0) bonusMedida = 0.15; // reforço pequeno, nunca decide sozinho
       }
       var score = Math.min(1, scoreNome + bonusMedida);
-      if(itemNorm.indexOf(alvo) >= 0 || alvo.indexOf(itemNorm) >= 0) score = Math.max(score, 0.8);
+      // FIX: a regra de substring (um texto contido no outro) só vale se a categoria bater também —
+      // senão "TUBO SOLDAVEL" casava com "ADAPTADOR TUBO SOLDAVEL..." só por conter a mesma frase,
+      // mesmo sendo peças diferentes (adaptador não é tubo).
+      if((itemNorm.indexOf(alvo) >= 0 || alvo.indexOf(itemNorm) >= 0) && categoriaAlvo === categoriaItem) score = Math.max(score, 0.8);
+      // FIX: categoria diferente (LUVA vs JOELHO, TUBO vs ADAPTADOR...) derruba o score — mesmo
+      // compartilhando muitas palavras de contexto, provavelmente são peças diferentes.
+      if(categoriaAlvo && categoriaItem && categoriaAlvo !== categoriaItem) score = score * 0.15;
       if(score > melhorScore){ melhorScore = score; melhor = itemCadastro; }
     });
     return { match: melhor, score: melhorScore };
@@ -8449,6 +8457,34 @@ function ModalImportarExcelMapa(_ref_imp) {
   );
 }
 
+// FIX: busca a cotação real do dólar para o custo estimado da IA ficar mais próximo do valor
+// real cobrado. Guarda em cache (só busca 1x por sessão da página) e tem prazo curto (5s) com
+// valor de reserva seguro (6,00) caso a busca falhe — nunca trava a tela por causa disso.
+var cacheCotacaoDolarIA = null;
+function buscarCotacaoDolarIA() {
+  if (cacheCotacaoDolarIA !== null) return Promise.resolve(cacheCotacaoDolarIA);
+  var COTACAO_RESERVA = 6.00;
+  var controladorCotacao = new AbortController();
+  var alarmeCotacao = setTimeout(function(){ controladorCotacao.abort(); }, 5000);
+  return fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", { signal: controladorCotacao.signal })
+    .then(function(r){
+      clearTimeout(alarmeCotacao);
+      if (!r.ok) throw new Error("cotação indisponível");
+      return r.json();
+    })
+    .then(function(data){
+      var valor = data && data.USDBRL && parseFloat(data.USDBRL.bid);
+      var cotacaoFinal = (valor && !isNaN(valor) && valor > 0) ? valor : COTACAO_RESERVA;
+      cacheCotacaoDolarIA = cotacaoFinal;
+      return cotacaoFinal;
+    })
+    .catch(function(){
+      clearTimeout(alarmeCotacao);
+      cacheCotacaoDolarIA = COTACAO_RESERVA; // FIX: guarda a reserva no cache também, evita tentar de novo repetidamente na mesma sessão
+      return COTACAO_RESERVA;
+    });
+}
+
 function ModalLerComIA(_ref_ia) {
   var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso, onAprendizadoSalvo=_ref_ia.onAprendizadoSalvo||function(){};
   var aprendizados=_ref_ia.aprendizados||{};
@@ -8479,9 +8515,19 @@ function ModalLerComIA(_ref_ia) {
     return t.replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();
   };
   var wordScore=function(a,b){
-    var wa=normalizar(a).split(" ").filter(function(w){return w.length>2;});
-    var wb=normalizar(b).split(" ").filter(function(w){return w.length>2;});
+    var wa=normalizar(a).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w);}); // FIX: mantém números curtos (ex: "45","90" de ângulo) que antes eram descartados por serem <=2 caracteres
+    var wb=normalizar(b).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w);});
     if(!wa.length||!wb.length)return 0;
+    // FIX: identifica a CATEGORIA do produto (LUVA, JOELHO, CURVA, TUBO, TÊ, CAP, ADAPTADOR...) —
+    // a primeira palavra que não é um código numérico isolado (pula "229272", "4010" no início).
+    // Essa palavra define O QUE a peça É, e pesa muito mais que atributos secundários (material,
+    // marca, medida). Sem isso, "LUVA 25MM SOLDAVEL MULTILIT" e "JOELHO 25MM SOLDAVEL MULTILIT"
+    // batiam quase igual (só a palavra central diferia), causando casamento errado.
+    var pegarCategoria=function(palavras){
+      for(var pi=0;pi<palavras.length;pi++){ if(!/^\d+$/.test(palavras[pi])) return palavras[pi]; }
+      return palavras[0]||"";
+    };
+    var categoriaA=pegarCategoria(wa), categoriaB=pegarCategoria(wb);
     // FIX: tokens com dígito (medidas, códigos, gramaturas — ex: "100MM", "CP2", "4KG") costumam
     // ser o que diferencia produtos da MESMA família mas de especificação DIFERENTE (ex: "TUBO PVC
     // 100MM" vs "TUBO PVC 50MM", "CIMENTO CP2" vs "CIMENTO CP4"). Se AMBAS as descrições têm algum
@@ -8496,11 +8542,14 @@ function ModalLerComIA(_ref_ia) {
     var numsBSemPar=numsB.filter(function(w){return numsA.indexOf(w)<0;});
     if(numsASemPar.length && numsBSemPar.length) return 0;
     var m=wa.filter(function(w){return wb.indexOf(w)>=0;}).length;
-    return m/Math.max(wa.length,wb.length);
+    var score=m/Math.max(wa.length,wb.length);
+    if(categoriaA!==categoriaB) score=score*0.15; // FIX: categoria diferente = provavelmente peça diferente, mesmo com o resto parecido
+    return score;
   };
   var fazerMatchs=function(orcItens){
     var result={};
     orcItens.forEach(function(oi,idx){
+      if(!oi) return; // FIX: protege contra item null/malformado (ex: resposta inesperada da IA)
       // FIX: consulta a mem\u00f3ria primeiro - se esse texto j\u00e1 foi ensinado, acha o item do mapa com essa descri\u00e7\u00e3o exata
       var chave = String(oi.descricao||'').trim().toUpperCase();
       var descConhecida = aprendizados[chave];
@@ -9035,12 +9084,23 @@ function ModalLerComIA(_ref_ia) {
     reader.onload=function(){
       var b64=reader.result.split(",")[1];
       setMsg("IA lendo o or\xE7amento...");
+      // FIX: timeout de 30s (mesmo padr\xE3o j\xE1 usado no casamento via IA do Excel) — sem isso, se a
+      // Edge Function travar, o usu\xE1rio ficava esperando indefinidamente sem chance de cancelar.
+      var controladorTempoIA=new AbortController();
+      var alarmeTempoIA=setTimeout(function(){controladorTempoIA.abort();},30000);
       fetch(SUPABASE_URL+"/functions/v1/parse-orcamento",{
         method:"POST",
         headers:Object.assign({},SB,{"Content-Type":"application/json"}),
-        body:JSON.stringify({pdf_base64:b64,filename:arquivo.name})
+        body:JSON.stringify({pdf_base64:b64,filename:arquivo.name}),
+        signal:controladorTempoIA.signal
       })
-      .then(function(r){return r.json();})
+      .then(function(r){
+        clearTimeout(alarmeTempoIA); // FIX: resposta chegou, desliga o cron\xF4metro
+        // FIX: fetch n\xE3o rejeita em erro HTTP (404,500...) sozinho — sem isso, r.json() tentava
+        // interpretar uma resposta de erro (\xE0s vezes HTML) como JSON, gerando mensagem confusa.
+        if(!r.ok) throw new Error("O servidor respondeu com erro ("+r.status+"). Tente novamente em instantes.");
+        return r.json();
+      })
       .then(function(data){
         if(data.error)throw new Error(data.error.message||"Erro na IA");
         var txt=(data.content||[]).filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
@@ -9048,18 +9108,28 @@ function ModalLerComIA(_ref_ia) {
         var parsed=JSON.parse(clean);
         var usage=data.usage||{};
         var inp=usage.input_tokens||0,out=usage.output_tokens||0;
-        var custoBRL=((inp*3+out*15)/1e6)*6;
-        setCusto({inp:inp,out:out,brl:custoBRL});
-        sbSaveIaUso({
-          fornecedor:parsed.fornecedor||"",arquivo:arquivo.name,
-          tokens_input:inp,tokens_output:out,custo_brl:custoBRL,
-          itens_lidos:(parsed.itens||[]).length,obra_id:mapa.obra||""
-        }).then(function(){if(onIaUso)onIaUso({custo:custoBRL});});
-        setResultado(parsed);
-        var ms=fazerMatchs(parsed.itens||[]);
-        setMatchs(ms);setStep(3);
+        // FIX: busca a cotação real do dólar (com reserva segura se falhar) antes de calcular o
+        // custo final, para o valor exibido ficar o mais próximo possível do que é cobrado de verdade.
+        return buscarCotacaoDolarIA().then(function(cotacaoUSD){
+          var custoBRL=((inp*3+out*15)/1e6)*cotacaoUSD;
+          setCusto({inp:inp,out:out,brl:custoBRL});
+          sbSaveIaUso({
+            fornecedor:parsed.fornecedor||"",arquivo:arquivo.name,
+            tokens_input:inp,tokens_output:out,custo_brl:custoBRL,
+            itens_lidos:(parsed.itens||[]).length,obra_id:mapa.obra||""
+          }).then(function(){if(onIaUso)onIaUso({custo:custoBRL});});
+          setResultado(parsed);
+          var ms=fazerMatchs(parsed.itens||[]);
+          setMatchs(ms);setStep(3);
+        });
       })
-      .catch(function(e){setErro("Erro: "+(e.message||"Verifique se a Edge Function est\xE1 ativa no Supabase."));setStep(1);});
+      .catch(function(e){
+        clearTimeout(alarmeTempoIA);
+        // FIX: erro de abort (timeout de 30s) tem mensagem t\xE9cnica gen\xE9rica ("The user aborted...");
+        // troca por uma mensagem que explica o que aconteceu de verdade.
+        var msgErro = (e && e.name === "AbortError") ? "A IA demorou demais para responder (mais de 30s). Tente novamente ou use a op\xE7\xE3o gr\xE1tis." : "Erro: "+(e.message||"Verifique se a Edge Function est\xE1 ativa no Supabase.");
+        setErro(msgErro);setStep(1);
+      });
     };
     reader.onerror=function(){setErro("Erro ao ler o arquivo.");setStep(1);};
     reader.readAsDataURL(arquivo);
