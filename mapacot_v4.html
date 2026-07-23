@@ -3898,7 +3898,18 @@ function ReportsModal(_ref12) {
         }
         gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes);
       }
-      if (tab === "orcamento") { if (!obra.trim()) { alert("INFORME A OBRA."); return; } gerarRelatorioOrcamento(mapasComCurrent, obra, orcamentos, associacoes); }
+      if (tab === "orcamento") {
+        if (!obra.trim()) { alert("INFORME A OBRA."); return; }
+        // FIX: qualquer erro dentro da geração do relatório agora aparece na tela, em vez de falhar
+        // em silêncio (o que fazia parecer que "nada acontece" quando clicava em GERAR PDF).
+        try {
+          var htmlRelOrc = gerarRelatorioOrcamento(mapasComCurrent, obra, orcamentos, associacoes);
+          if (!htmlRelOrc) { alert("Não foi possível montar o relatório para esta obra (resultado veio vazio)."); return; }
+          abrirPDF(htmlRelOrc);
+        } catch (erroRelOrc) {
+          alert("ERRO ao gerar o relatório de orçamento:\n" + (erroRelOrc && erroRelOrc.message ? erroRelOrc.message : String(erroRelOrc)));
+        }
+      }
         if (tab === "insumo") {
         if (!insumo.trim()) {
           alert("INFORME O INSUMO.");
