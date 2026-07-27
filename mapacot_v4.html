@@ -4562,7 +4562,14 @@ var _useState27 = useState(init),
       // diferença. Como ela nunca fica "vazia" (sempre tem a descrição do item dentro), não parece
       // uma caixa quebrada/sobrando — só uma coluna de descrição um pouco mais larga nas páginas
       // com menos colunas de orçamento/resumo.
-      var LARG_FORN_COL = 140;
+      //
+      // AJUSTE: nas páginas sem ORÇAMENTO/RESUMO (a partir da 2ª), o fornecedor ganha uma largura
+      // maior (220px em vez de 140px) — assim boa parte do espaço que sobra vai para os
+      // fornecedores (mais fáceis de ler/preencher) em vez de tudo cair na DESCRIÇÃO, que ficava
+      // enorme. A DESCRIÇÃO ainda absorve o que sobrar depois disso, para o alinhamento entre
+      // páginas continuar batendo certinho.
+      var LARG_FORN_PRIMEIRA_PAGINA = 140;
+      var LARG_FORN_DEMAIS_PAGINAS = 220;
       var LARG_BASE_SEM_DESC = 55 + 46 + 56 + 58 + 30;
       var LARG_ORC_EXTRA = 125 + 125;
       var LARG_RES_EXTRA = 95 + 95 + 115;
@@ -4575,9 +4582,11 @@ var _useState27 = useState(init),
         var temOrcCalc = temOrcamento && ehPrimeiroCalc && !hiddenCols.orcamento;
         var chunkCalcVisivel = chunkCalc.filter(function (f) { return !hiddenCols[f.id]; });
         var qtdFornCalc = chunkCalcVisivel.length === 0 ? 1 : chunkCalcVisivel.length;
-        var larguraCalc = LARG_BASE_SEM_DESC + LARG_DESC_BASE + (temOrcCalc ? LARG_ORC_EXTRA : 0) + (temResCalc ? LARG_RES_EXTRA : 0) + qtdFornCalc * LARG_FORN_COL;
+        var fornColCalc = ehPrimeiroCalc ? LARG_FORN_PRIMEIRA_PAGINA : LARG_FORN_DEMAIS_PAGINAS;
+        var larguraCalc = LARG_BASE_SEM_DESC + LARG_DESC_BASE + (temOrcCalc ? LARG_ORC_EXTRA : 0) + (temResCalc ? LARG_RES_EXTRA : 0) + qtdFornCalc * fornColCalc;
         if (larguraCalc > larguraMaximaTotal) larguraMaximaTotal = larguraCalc;
       }
+      var LARG_FORN_COL = isFirst ? LARG_FORN_PRIMEIRA_PAGINA : LARG_FORN_DEMAIS_PAGINAS;
       var qtdFornAtual = emptyChunk ? 1 : visibleChunk.length;
       var larguraDesteBlocoSemDesc = LARG_BASE_SEM_DESC
         + (showOrcamento ? LARG_ORC_EXTRA : 0)
@@ -4718,7 +4727,13 @@ var _useState27 = useState(init),
           alignItems: "center",
           gap: 4
         }
-      }, /*#__PURE__*/React.createElement(AutocompleteInput, {
+      },
+      // FIX 6 (definitivo): nome do fornecedor vem PRIMEIRO (fica em cima, visualmente), e os
+      // ícones de excluir/ocultar vêm DEPOIS (ficam embaixo) — exatamente como combinado
+      // originalmente. A tentativa anterior de colocar os ícones acima (para evitar que o
+      // dropdown de sugestões os cobrisse) foi uma decisão unilateral errada: o combinado sempre
+      // foi nome em cima, ícones embaixo, e é isso que fica agora.
+      /*#__PURE__*/React.createElement(AutocompleteInput, {
         value: f.nome,
         onChange: function onChange(v) {
           return updForn(f.id, "nome", v, true);
@@ -4749,7 +4764,8 @@ var _useState27 = useState(init),
         xStyle: {
           width: "100%"
         }
-      }), /*#__PURE__*/React.createElement("div", {
+      }),
+      /*#__PURE__*/React.createElement("div", {
         style: { display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }
       }, /*#__PURE__*/React.createElement("button", {
         onClick: function onClick() {
@@ -10816,7 +10832,9 @@ var SC = {
   tableScroll: {
     overflowX: "auto",
     border: "1px solid #c8ccd8",
-    borderTop: "none"
+    borderTop: "none",
+    display: "inline-block",
+    maxWidth: "100%"
   },
   table: {
     borderCollapse: "collapse",
