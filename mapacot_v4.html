@@ -4547,20 +4547,44 @@ var _useState27 = useState(init),
       // FIX 5 (revertido): tentei forçar TODOS os blocos a terem a MESMA largura total (usando uma
       // coluna extra sem conteúdo para "completar" a diferença nos blocos com menos colunas). Isso
       // resolvia a inconsistência de largura total entre blocos, mas criava um problema pior: um
-      // vão vazio enorme e visível depois do último fornecedor nos blocos sem ORÇAMENTO/RESUMO —
-      // relatado como "fica um pedaço enorme após o quarto fornecedor". Voltando à largura NATURAL
-      // de cada bloco (soma exata das suas próprias colunas, sem nada artificial): cada bloco ocupa
-      // só o espaço que precisa, sem vão vazio nenhum. COMPRA, ITEM, DESCRIÇÃO e FORNECEDOR
-      // continuam com o mesmo valor fixo em todos os blocos — só a largura TOTAL da tabela (que é
-      // consequência da soma) passa a variar naturalmente conforme cada bloco tem mais ou menos
-      // colunas, sem nenhum espaço vazio artificial sobrando em nenhum lugar.
+      // vão vazio enorme e visível depois do último fornecedor — relatado como "fica um pedaço
+      // enorme após o quarto fornecedor". Tentei então dar a largura NATURAL a cada bloco (sem
+      // nada artificial), mas isso trouxe um problema pior: como cada página passou a ter uma
+      // largura TOTAL diferente, a coluna de fornecedor da página 2 ficava visualmente alinhada
+      // embaixo da coluna RESUMO da página 1 (colunas de páginas diferentes não bateam mais entre
+      // si) — relatado como "a última coluna de fornecedor da segunda página está pegando embaixo
+      // da coluna resumo da primeira página".
+      //
+      // Correção final: a largura TOTAL de todas as páginas volta a ser igual (calculada como o
+      // maior valor entre todos os blocos do mapa) — isso resolve o alinhamento entre páginas. Mas,
+      // em vez de uma coluna vazia separada (fantasma) para completar a diferença nos blocos com
+      // menos colunas, é a própria coluna DESCRIÇÃO — que já tem conteúdo real — quem absorve essa
+      // diferença. Como ela nunca fica "vazia" (sempre tem a descrição do item dentro), não parece
+      // uma caixa quebrada/sobrando — só uma coluna de descrição um pouco mais larga nas páginas
+      // com menos colunas de orçamento/resumo.
       var LARG_FORN_COL = 140;
+      var LARG_BASE_SEM_DESC = 55 + 46 + 56 + 58 + 30;
+      var LARG_ORC_EXTRA = 125 + 125;
+      var LARG_RES_EXTRA = 95 + 95 + 115;
+      var LARG_DESC_BASE = 200;
+      var larguraMaximaTotal = 0;
+      for (var ciCalc = 0; ciCalc < chunks.length; ciCalc++) {
+        var chunkCalc = chunks[ciCalc];
+        var ehPrimeiroCalc = ciCalc === 0;
+        var temResCalc = ehPrimeiroCalc && !hiddenCols.resumo;
+        var temOrcCalc = temOrcamento && ehPrimeiroCalc && !hiddenCols.orcamento;
+        var chunkCalcVisivel = chunkCalc.filter(function (f) { return !hiddenCols[f.id]; });
+        var qtdFornCalc = chunkCalcVisivel.length === 0 ? 1 : chunkCalcVisivel.length;
+        var larguraCalc = LARG_BASE_SEM_DESC + LARG_DESC_BASE + (temOrcCalc ? LARG_ORC_EXTRA : 0) + (temResCalc ? LARG_RES_EXTRA : 0) + qtdFornCalc * LARG_FORN_COL;
+        if (larguraCalc > larguraMaximaTotal) larguraMaximaTotal = larguraCalc;
+      }
       var qtdFornAtual = emptyChunk ? 1 : visibleChunk.length;
-      var larguraDesteBloco = 55 + 46 + 56 + 58 + 200
-        + (showOrcamento ? 125 + 125 : 0)
-        + (showResumo ? 95 + 95 + 115 : 0)
-        + qtdFornAtual * LARG_FORN_COL
-        + 30;
+      var larguraDesteBlocoSemDesc = LARG_BASE_SEM_DESC
+        + (showOrcamento ? LARG_ORC_EXTRA : 0)
+        + (showResumo ? LARG_RES_EXTRA : 0)
+        + qtdFornAtual * LARG_FORN_COL;
+      var larguraDescCalculada = Math.max(LARG_DESC_BASE, larguraMaximaTotal - larguraDesteBlocoSemDesc);
+      var larguraDesteBloco = larguraDesteBlocoSemDesc + larguraDescCalculada;
       var colsFornecedor = emptyChunk
         ? [/*#__PURE__*/React.createElement("col", { key: "colForn_empty", style: { width: LARG_FORN_COL } })]
         : visibleChunk.map(function (f) {
@@ -4571,7 +4595,7 @@ var _useState27 = useState(init),
         /*#__PURE__*/React.createElement("col", { style: { width: 46 } }),
         /*#__PURE__*/React.createElement("col", { style: { width: 56 } }),
         /*#__PURE__*/React.createElement("col", { style: { width: 58 } }),
-        /*#__PURE__*/React.createElement("col", { style: { width: 200 } }),
+        /*#__PURE__*/React.createElement("col", { style: { width: larguraDescCalculada } }),
         showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc1", style: { width: 125 } }),
         showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc2", style: { width: 125 } }),
         showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes1", style: { width: 95 } }),
@@ -4694,28 +4718,7 @@ var _useState27 = useState(init),
           alignItems: "center",
           gap: 4
         }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: { display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }
-      }, /*#__PURE__*/React.createElement("button", {
-        onClick: function onClick() {
-          if (window.confirm("EXCLUIR FORNECEDOR \"" + f.nome + "\"?")) removeForn(f.id);
-        },
-        style: {
-          background: "rgba(255,80,80,0.25)",
-          border: "none",
-          borderRadius: 3,
-          padding: "3px 4px",
-          cursor: "pointer",
-          color: "#ffaaaa",
-          display: "flex",
-          flexShrink: 0
-        }
-      }, /*#__PURE__*/React.createElement(IcoClose, null)),
-      /*#__PURE__*/React.createElement("span", {
-        onClick: function(){ return toggleFornOculto(f.id); },
-        title: fornOcultos.has(f.id) ? "Mostrar fornecedor" : "Ocultar fornecedor",
-        style: { cursor:"pointer", fontSize:13, userSelect:"none", display:"inline-flex", alignItems:"center" }
-      }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41")), /*#__PURE__*/React.createElement(AutocompleteInput, {
+      }, /*#__PURE__*/React.createElement(AutocompleteInput, {
         value: f.nome,
         onChange: function onChange(v) {
           return updForn(f.id, "nome", v, true);
@@ -4746,7 +4749,28 @@ var _useState27 = useState(init),
         xStyle: {
           width: "100%"
         }
-      })));
+      }), /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: function onClick() {
+          if (window.confirm("EXCLUIR FORNECEDOR \"" + f.nome + "\"?")) removeForn(f.id);
+        },
+        style: {
+          background: "rgba(255,80,80,0.25)",
+          border: "none",
+          borderRadius: 3,
+          padding: "3px 4px",
+          cursor: "pointer",
+          color: "#ffaaaa",
+          display: "flex",
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement(IcoClose, null)),
+      /*#__PURE__*/React.createElement("span", {
+        onClick: function(){ return toggleFornOculto(f.id); },
+        title: fornOcultos.has(f.id) ? "Mostrar fornecedor" : "Ocultar fornecedor",
+        style: { cursor:"pointer", fontSize:13, userSelect:"none", display:"inline-flex", alignItems:"center" }
+      }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41"))));
     }), emptyChunk && /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thC), {}, {
         borderLeft: "2px solid rgba(255,255,255,0.2)",
