@@ -4528,23 +4528,26 @@ var _useState27 = useState(init),
       // que sobra, para a tabela continuar preenchendo 100% da tela como sempre preencheu, em vez
       // de ficar mais estreita e "flutuar" à esquerda quando o bloco tem menos colunas (bug visto
       // nas páginas sem RESUMO/ORÇAMENTO, onde sobrava um vão vazio à direita).
-      var LARG_FORN_COL = 173;
+      // FIX 3: ícones de excluir/ocultar do fornecedor movidos para debaixo do nome (em vez de do
+      // lado), permitindo reduzir a largura da coluna de fornecedor. O espaço ganho foi usado para
+      // alargar COMPRA, ITEM e ORÇAMENTO, que tinham ficado apertados demais com a largura travada.
+      var LARG_FORN_COL = 140;
       var colsFornecedor = emptyChunk
         ? [/*#__PURE__*/React.createElement("col", { key: "colForn_empty", style: { width: LARG_FORN_COL } })]
         : visibleChunk.map(function (f) {
             return /*#__PURE__*/React.createElement("col", { key: "colForn_" + f.id, style: { width: LARG_FORN_COL } });
           });
       var colgroupEl = /*#__PURE__*/React.createElement("colgroup", null,
-        /*#__PURE__*/React.createElement("col", { style: { width: 32 } }),
-        /*#__PURE__*/React.createElement("col", { style: { width: 38 } }),
+        /*#__PURE__*/React.createElement("col", { style: { width: 40 } }),
+        /*#__PURE__*/React.createElement("col", { style: { width: 46 } }),
         /*#__PURE__*/React.createElement("col", { style: { width: 56 } }),
         /*#__PURE__*/React.createElement("col", { style: { width: 58 } }),
         /*#__PURE__*/React.createElement("col", null),
-        showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc1", style: { width: 90 } }),
-        showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc2", style: { width: 90 } }),
-        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes1", style: { width: 90 } }),
-        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes2", style: { width: 90 } }),
-        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes3", style: { width: 110 } }),
+        showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc1", style: { width: 105 } }),
+        showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc2", style: { width: 105 } }),
+        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes1", style: { width: 95 } }),
+        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes2", style: { width: 95 } }),
+        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes3", style: { width: 115 } }),
         colsFornecedor,
         /*#__PURE__*/React.createElement("col", { style: { width: 30 } })
       );
@@ -4553,12 +4556,12 @@ var _useState27 = useState(init),
     }, colgroupEl, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       rowSpan: 3,
       style: _objectSpread(_objectSpread({}, thC), {}, {
-        width: 32, textAlign: "center", fontSize: 9, padding: "4px 2px"
+        width: 40, textAlign: "center", fontSize: 9, padding: "4px 2px"
       })
     }, "COMPRA"), /*#__PURE__*/React.createElement("th", {
       rowSpan: 3,
       style: _objectSpread(_objectSpread({}, thC), {}, {
-        width: 38,
+        width: 46,
         textAlign: "center"
       })
     }, "ITEM"), /*#__PURE__*/React.createElement("th", {
@@ -4653,14 +4656,14 @@ var _useState27 = useState(init),
         style: _objectSpread(_objectSpread({}, thC), {}, {
           padding: "4px 6px",
           borderLeft: "1px solid rgba(255,255,255,0.2)",
-          minWidth: 160,
           opacity: fornOcultos.has(f.id) ? 0.45 : 1
         })
       }, /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
-          gap: 3
+          gap: 4
         }
       }, /*#__PURE__*/React.createElement(AutocompleteInput, {
         value: f.nome,
@@ -4677,23 +4680,24 @@ var _useState27 = useState(init),
         strictMatch: true,
         placeholder: "NOME DO FORNECEDOR",
         inputStyle: {
-          flex: 1,
+          width: "100%",
+          boxSizing: "border-box",
+          textAlign: "center",
           border: "1px solid rgba(255,255,255,0.3)",
           borderRadius: 3,
           background: "rgba(255,255,255,0.15)",
-          padding: "3px 6px",
+          padding: "3px 4px",
           fontSize: 11,
           fontWeight: 700,
           color: "#fff",
-          outline: "none",
-          minWidth: 120,
-          maxWidth: 200
+          outline: "none"
         },
         xStyle: {
-          flex: 1,
-          minWidth: 120
+          width: "100%"
         }
-      }), /*#__PURE__*/React.createElement("button", {
+      }), /*#__PURE__*/React.createElement("div", {
+        style: { display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }
+      }, /*#__PURE__*/React.createElement("button", {
         onClick: function onClick() {
           if (window.confirm("EXCLUIR FORNECEDOR \"" + f.nome + "\"?")) removeForn(f.id);
         },
@@ -4711,8 +4715,8 @@ var _useState27 = useState(init),
       /*#__PURE__*/React.createElement("span", {
         onClick: function(){ return toggleFornOculto(f.id); },
         title: fornOcultos.has(f.id) ? "Mostrar fornecedor" : "Ocultar fornecedor",
-        style: { cursor:"pointer", fontSize:13, userSelect:"none", marginLeft:2, display:"inline-flex", alignItems:"center" }
-      }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41")));
+        style: { cursor:"pointer", fontSize:13, userSelect:"none", display:"inline-flex", alignItems:"center" }
+      }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41"))));
     }), emptyChunk && /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thC), {}, {
         borderLeft: "2px solid rgba(255,255,255,0.2)",
