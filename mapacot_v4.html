@@ -4524,13 +4524,11 @@ var _useState27 = useState(init),
       // cada fornecedor seja sempre a mesma, independente do bloco (com ou sem ORÇAMENTO/RESUMO),
       // de quantos fornecedores tem naquele bloco, ou de texto longo em qualquer célula (ex: uma
       // observação grande não deve mais esticar a coluna — só aumenta a altura da linha).
+      // FIX 2: a coluna DESCRIÇÃO fica SEM largura fixa no colgroup — ela absorve sozinha o espaço
+      // que sobra, para a tabela continuar preenchendo 100% da tela como sempre preencheu, em vez
+      // de ficar mais estreita e "flutuar" à esquerda quando o bloco tem menos colunas (bug visto
+      // nas páginas sem RESUMO/ORÇAMENTO, onde sobrava um vão vazio à direita).
       var LARG_FORN_COL = 173;
-      var qtdFornCols = emptyChunk ? 1 : visibleChunk.length;
-      var larguraTabela = 32 + 38 + 56 + 58 + 220
-        + (showOrcamento ? 90 + 90 : 0)
-        + (showResumo ? 90 + 90 + 110 : 0)
-        + qtdFornCols * LARG_FORN_COL
-        + 30;
       var colsFornecedor = emptyChunk
         ? [/*#__PURE__*/React.createElement("col", { key: "colForn_empty", style: { width: LARG_FORN_COL } })]
         : visibleChunk.map(function (f) {
@@ -4541,7 +4539,7 @@ var _useState27 = useState(init),
         /*#__PURE__*/React.createElement("col", { style: { width: 38 } }),
         /*#__PURE__*/React.createElement("col", { style: { width: 56 } }),
         /*#__PURE__*/React.createElement("col", { style: { width: 58 } }),
-        /*#__PURE__*/React.createElement("col", { style: { width: 220 } }),
+        /*#__PURE__*/React.createElement("col", null),
         showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc1", style: { width: 90 } }),
         showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc2", style: { width: 90 } }),
         showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes1", style: { width: 90 } }),
@@ -4551,7 +4549,7 @@ var _useState27 = useState(init),
         /*#__PURE__*/React.createElement("col", { style: { width: 30 } })
       );
       return /*#__PURE__*/React.createElement("table", {
-      style: _objectSpread(_objectSpread({}, SC.table), {}, { tableLayout: "fixed", width: larguraTabela, minWidth: larguraTabela })
+      style: _objectSpread(_objectSpread({}, SC.table), {}, { tableLayout: "fixed", width: "100%" })
     }, colgroupEl, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       rowSpan: 3,
       style: _objectSpread(_objectSpread({}, thC), {}, {
