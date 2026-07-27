@@ -4561,7 +4561,8 @@ var _useState27 = useState(init),
         var ehPrimeiroCalc = ciCalc === 0;
         var temResCalc = ehPrimeiroCalc && !hiddenCols.resumo;
         var temOrcCalc = temOrcamento && ehPrimeiroCalc && !hiddenCols.orcamento;
-        var qtdFornCalc = chunkCalc.length === 0 ? 1 : chunkCalc.length;
+        var chunkCalcVisivel = chunkCalc.filter(function (f) { return !hiddenCols[f.id]; });
+        var qtdFornCalc = chunkCalcVisivel.length === 0 ? 1 : chunkCalcVisivel.length;
         var larguraCalc = LARG_BASE_FIXA + (temOrcCalc ? LARG_ORC_EXTRA : 0) + (temResCalc ? LARG_RES_EXTRA : 0) + qtdFornCalc * LARG_FORN_COL;
         if (larguraCalc > larguraTabelaFixa) larguraTabelaFixa = larguraCalc;
       }
