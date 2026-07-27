@@ -4540,32 +4540,27 @@ var _useState27 = useState(init),
       // ícones abaixo, o dropdown ficaria sobrepondo eles sempre que alguém buscasse um fornecedor.
       // Testado e confirmado com Puppeteer que colocá-los acima elimina esse risco por completo.
       //
-      // FIX 4: TODAS as colunas (incluindo DESCRIÇÃO) agora têm largura FIXA e explícita — nenhuma
-      // fica "auto"/sem valor. Antes, DESCRIÇÃO absorvia sozinha todo o espaço sobrando: ficava
-      // enorme nos blocos sem ORÇAMENTO/RESUMO, e podia colapsar para ZERO px em zoom alto.
+      // FIX 4: TODAS as colunas (incluindo DESCRIÇÃO) têm largura FIXA e explícita — nenhuma fica
+      // "auto"/sem valor. Isso impede DESCRIÇÃO de colapsar a zero em zoom alto, e impede que ela
+      // (ou o FORNECEDOR) fiquem desproporcionalmente largos quando sobra espaço.
       //
-      // FIX 5: a largura da TABELA agora é um valor FIXO calculado (não mais "100%"). Com "100%",
-      // o bloco 1 (que tem colunas extras de ORÇAMENTO/RESUMO) podia ultrapassar sozinho o espaço
-      // da tela — precisando de rolagem — enquanto os blocos seguintes (sem essas colunas) cabiam
-      // certinho, ficando com um tamanho visualmente diferente do primeiro (bug relatado: "página 1
-      // de um tamanho, página 2 e 3 de tamanho diferente"). Agora a largura de TODOS os blocos é o
-      // MAIOR valor entre todos os blocos possíveis do mapa — nenhum fica maior que os outros nunca,
-      // e a última <col> sem conteúdo ("fantasma") absorve a diferença dentro desse valor fixo.
+      // FIX 5 (revertido): tentei forçar TODOS os blocos a terem a MESMA largura total (usando uma
+      // coluna extra sem conteúdo para "completar" a diferença nos blocos com menos colunas). Isso
+      // resolvia a inconsistência de largura total entre blocos, mas criava um problema pior: um
+      // vão vazio enorme e visível depois do último fornecedor nos blocos sem ORÇAMENTO/RESUMO —
+      // relatado como "fica um pedaço enorme após o quarto fornecedor". Voltando à largura NATURAL
+      // de cada bloco (soma exata das suas próprias colunas, sem nada artificial): cada bloco ocupa
+      // só o espaço que precisa, sem vão vazio nenhum. COMPRA, ITEM, DESCRIÇÃO e FORNECEDOR
+      // continuam com o mesmo valor fixo em todos os blocos — só a largura TOTAL da tabela (que é
+      // consequência da soma) passa a variar naturalmente conforme cada bloco tem mais ou menos
+      // colunas, sem nenhum espaço vazio artificial sobrando em nenhum lugar.
       var LARG_FORN_COL = 140;
-      var LARG_BASE_FIXA = 55 + 46 + 56 + 58 + 200 + 30;
-      var LARG_ORC_EXTRA = 125 + 125;
-      var LARG_RES_EXTRA = 95 + 95 + 115;
-      var larguraTabelaFixa = 0;
-      for (var ciCalc = 0; ciCalc < chunks.length; ciCalc++) {
-        var chunkCalc = chunks[ciCalc];
-        var ehPrimeiroCalc = ciCalc === 0;
-        var temResCalc = ehPrimeiroCalc && !hiddenCols.resumo;
-        var temOrcCalc = temOrcamento && ehPrimeiroCalc && !hiddenCols.orcamento;
-        var chunkCalcVisivel = chunkCalc.filter(function (f) { return !hiddenCols[f.id]; });
-        var qtdFornCalc = chunkCalcVisivel.length === 0 ? 1 : chunkCalcVisivel.length;
-        var larguraCalc = LARG_BASE_FIXA + (temOrcCalc ? LARG_ORC_EXTRA : 0) + (temResCalc ? LARG_RES_EXTRA : 0) + qtdFornCalc * LARG_FORN_COL;
-        if (larguraCalc > larguraTabelaFixa) larguraTabelaFixa = larguraCalc;
-      }
+      var qtdFornAtual = emptyChunk ? 1 : visibleChunk.length;
+      var larguraDesteBloco = 55 + 46 + 56 + 58 + 200
+        + (showOrcamento ? 125 + 125 : 0)
+        + (showResumo ? 95 + 95 + 115 : 0)
+        + qtdFornAtual * LARG_FORN_COL
+        + 30;
       var colsFornecedor = emptyChunk
         ? [/*#__PURE__*/React.createElement("col", { key: "colForn_empty", style: { width: LARG_FORN_COL } })]
         : visibleChunk.map(function (f) {
@@ -4583,11 +4578,10 @@ var _useState27 = useState(init),
         showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes2", style: { width: 95 } }),
         showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes3", style: { width: 115 } }),
         colsFornecedor,
-        /*#__PURE__*/React.createElement("col", { style: { width: 30 } }),
-        /*#__PURE__*/React.createElement("col", { key: "colFantasma" })
+        /*#__PURE__*/React.createElement("col", { style: { width: 30 } })
       );
       return /*#__PURE__*/React.createElement("table", {
-      style: _objectSpread(_objectSpread({}, SC.table), {}, { tableLayout: "fixed", width: larguraTabelaFixa, minWidth: larguraTabelaFixa })
+      style: _objectSpread(_objectSpread({}, SC.table), {}, { tableLayout: "fixed", width: larguraDesteBloco, minWidth: larguraDesteBloco })
     }, colgroupEl, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       rowSpan: 3,
       style: _objectSpread(_objectSpread({}, thC), {}, {
