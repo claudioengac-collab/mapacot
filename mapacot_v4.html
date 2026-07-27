@@ -4519,9 +4519,40 @@ var _useState27 = useState(init),
     }, /*#__PURE__*/React.createElement("div", {className:"scroll-mirror-inner"})),
     /*#__PURE__*/React.createElement("div", {
       style: SC.tableScroll
-    }, /*#__PURE__*/React.createElement("table", {
-      style: SC.table
-    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
+    }, /*#__PURE__*/(function() {
+      // FIX: colunas com largura travada (colgroup + table-layout:fixed) para que a largura de
+      // cada fornecedor seja sempre a mesma, independente do bloco (com ou sem ORÇAMENTO/RESUMO),
+      // de quantos fornecedores tem naquele bloco, ou de texto longo em qualquer célula (ex: uma
+      // observação grande não deve mais esticar a coluna — só aumenta a altura da linha).
+      var LARG_FORN_COL = 173;
+      var qtdFornCols = emptyChunk ? 1 : visibleChunk.length;
+      var larguraTabela = 32 + 38 + 56 + 58 + 220
+        + (showOrcamento ? 90 + 90 : 0)
+        + (showResumo ? 90 + 90 + 110 : 0)
+        + qtdFornCols * LARG_FORN_COL
+        + 30;
+      var colsFornecedor = emptyChunk
+        ? [/*#__PURE__*/React.createElement("col", { key: "colForn_empty", style: { width: LARG_FORN_COL } })]
+        : visibleChunk.map(function (f) {
+            return /*#__PURE__*/React.createElement("col", { key: "colForn_" + f.id, style: { width: LARG_FORN_COL } });
+          });
+      var colgroupEl = /*#__PURE__*/React.createElement("colgroup", null,
+        /*#__PURE__*/React.createElement("col", { style: { width: 32 } }),
+        /*#__PURE__*/React.createElement("col", { style: { width: 38 } }),
+        /*#__PURE__*/React.createElement("col", { style: { width: 56 } }),
+        /*#__PURE__*/React.createElement("col", { style: { width: 58 } }),
+        /*#__PURE__*/React.createElement("col", { style: { width: 220 } }),
+        showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc1", style: { width: 90 } }),
+        showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc2", style: { width: 90 } }),
+        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes1", style: { width: 90 } }),
+        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes2", style: { width: 90 } }),
+        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes3", style: { width: 110 } }),
+        colsFornecedor,
+        /*#__PURE__*/React.createElement("col", { style: { width: 30 } })
+      );
+      return /*#__PURE__*/React.createElement("table", {
+      style: _objectSpread(_objectSpread({}, SC.table), {}, { tableLayout: "fixed", width: larguraTabela, minWidth: larguraTabela })
+    }, colgroupEl, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", {
       rowSpan: 3,
       style: _objectSpread(_objectSpread({}, thC), {}, {
         width: 32, textAlign: "center", fontSize: 9, padding: "4px 2px"
@@ -5181,7 +5212,7 @@ var _useState27 = useState(init),
           background: "#f0f2f6"
         })
       }));
-    })))), isLast && function () {
+    }))); })()), isLast && function () {
       var totalQt = itens.reduce(function (acc, it) {
         var v = parseFloat(String(it.qt).replace(",", "."));
         return acc + (isNaN(v) ? 0 : v);
