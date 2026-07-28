@@ -350,12 +350,18 @@ input[type=password]{text-transform:none;}
 .scroll-mirror {
   overflow-x: auto;
   overflow-y: hidden;
-  height: 12px;
+  height: 20px;
   border: 1px solid #c8ccd8;
   border-bottom: none;
   background: #f0f2f5;
 }
 .scroll-mirror-inner { height: 1px; }
+/* FIX: barra de rolagem mais grossa e fácil de tocar/arrastar no tablet (antes ficava fina
+   demais, 12px, dificultando pegar com o dedo — aumentada para 20px, com a barra em si (o
+   "polegar" clicável) também mais grossa via CSS de scrollbar). */
+.scroll-mirror::-webkit-scrollbar { height: 16px; }
+.scroll-mirror::-webkit-scrollbar-thumb { background: #8a94ad; border-radius: 8px; }
+.scroll-mirror::-webkit-scrollbar-track { background: #e4e8f0; }
 </style>
 </head>
 <body>
