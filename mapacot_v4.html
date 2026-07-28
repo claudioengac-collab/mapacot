@@ -663,15 +663,32 @@ var zerarConsumido = function(dados) {
 var sbSaveOrcamento = function(obraId, dados) {
   var id = orcObraId(obraId);
   var body = JSON.stringify({ dados: dados, atualizado_em: new Date().toISOString() });
+  var criarViaPost = function() {
+    return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
+      method: "POST", headers: SB,
+      body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
+    });
+  };
   var doPatch = function() {
+    // FIX: o PostgREST retorna 200 OK (r.ok === true) mesmo quando o PATCH não encontra
+    // NENHUMA linha para atualizar (registro ainda não existe) — sem esse header e checagem,
+    // o código achava que tinha "dado certo" e nunca criava o registro pela primeira vez,
+    // perdendo o orçamento inteiro silenciosamente. Agora: pede para o PATCH devolver as
+    // linhas afetadas (return=representation) e confirma que pelo menos 1 linha voltou —
+    // só aí considera sucesso; senão, cria via POST.
     return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id), {
-      method: "PATCH", headers: SB, body: body
+      method: "PATCH",
+      headers: Object.assign({}, SB, { "Prefer": SB["Prefer"] + ",return=representation" }),
+      body: body
     }).then(function(r) {
-      if (!r.ok) return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
-        method: "POST", headers: SB,
-        body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
+      if (!r.ok) return criarViaPost();
+      return r.json().then(function(linhasAfetadas) {
+        if (!linhasAfetadas || linhasAfetadas.length === 0) return criarViaPost();
+        return r;
+      }).catch(function() {
+        // Resposta sem corpo interpretável — por segurança, garante que o registro existe
+        return criarViaPost();
       });
-      return r;
     });
   };
   return doPatch().catch(function() {
