@@ -582,7 +582,11 @@ var sbSaveCadastros = /*#__PURE__*/function () {
           main = {
             obras: c.obras || [],
             fornecedores: c.fornecedores || [],
-            unidades: c.unidades || []
+            unidades: c.unidades || [],
+            fornecedorObs: c.fornecedorObs || {} // FIX: observações livres por fornecedor — incluído
+            // explicitamente aqui porque esta função só salva os campos citados nesta lista; um
+            // campo novo que não apareça aqui seria descartado silenciosamente ao salvar (mesmo
+            // tipo de bug já corrigido antes no orçamento).
           };
           _context6.n = 1;
           return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
@@ -3082,6 +3086,7 @@ function CadastrosModal(_ref11) {
     onAdd = _ref11.onAdd,
     onRemove = _ref11.onRemove,
     onEdit = _ref11.onEdit,
+    onSetObs = _ref11.onSetObs || function(){},
     orcamentos = _ref11.orcamentos || {},
     onImportarOrcamento = _ref11.onImportarOrcamento || null,
     onLimparOrcamento = _ref11.onLimparOrcamento || null,
@@ -3091,6 +3096,9 @@ function CadastrosModal(_ref11) {
     _useState0 = _slicedToArray(_useState9, 2),
     tab = _useState0[0],
     setTab = _useState0[1];
+  // FIX: estado local para o campo livre de observação por fornecedor (até 5000 caracteres)
+  var _useStateObs = useState(null), obsAbertaPara = _slicedToArray(_useStateObs, 2)[0], setObsAbertaPara = _slicedToArray(_useStateObs, 2)[1];
+  var _useStateObsTxt = useState(""), obsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[0], setObsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[1];
   var _useState1 = useState(""),
     _useState10 = _slicedToArray(_useState1, 2),
     novo = _useState10[0],
@@ -3317,14 +3325,14 @@ function CadastrosModal(_ref11) {
       fontSize: 13
     }
   }, "NENHUM CADASTRO", busca ? " ENCONTRADO" : "") : lista.map(function (item, i) {
-    return /*#__PURE__*/React.createElement("div", {
-      key: i,
+    return /*#__PURE__*/React.createElement(React.Fragment, { key: i },
+    /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         alignItems: "center",
         gap: 8,
         padding: "7px 12px",
-        borderBottom: i < lista.length - 1 ? "1px solid #f0f2f6" : undefined,
+        borderBottom: (i < lista.length - 1 && obsAbertaPara !== item) ? "1px solid #f0f2f6" : undefined,
         background: editIdx === i ? "#f0f4ff" : i % 2 === 0 ? "#fff" : "#fafbfd"
       }
     }, editIdx === i ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
@@ -3428,7 +3436,45 @@ function CadastrosModal(_ref11) {
     tab === "obras" && orcamentos[item] && /*#__PURE__*/React.createElement("button", {
       onClick: function() { if (onGerenciarOrcamento) onGerenciarOrcamento(item); },
       style: { background: "#e8f0fe", border: "none", borderRadius: 5, padding: "4px 7px", color: "#1a56db", cursor: "pointer", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }
-    }, "\ud83d\udccb GER.")));
+    }, "\ud83d\udccb GER."),
+    tab === "fornecedores" && /*#__PURE__*/React.createElement("button", {
+      onClick: function() {
+        if (obsAbertaPara === item) { setObsAbertaPara(null); return; }
+        setObsAbertaPara(item);
+        setObsTextoEditando((cadastros.fornecedorObs || {})[normalize(item)] || "");
+      },
+      title: (cadastros.fornecedorObs || {})[normalize(item)] ? "TEM OBSERVA\xc7\xc3O — CLIQUE PARA VER/EDITAR" : "ADICIONAR OBSERVA\xc7\xc3O",
+      style: {
+        background: (cadastros.fornecedorObs || {})[normalize(item)] ? "#fff4d6" : "#f5f5f5",
+        border: "none", borderRadius: 5, padding: "4px 7px",
+        color: (cadastros.fornecedorObs || {})[normalize(item)] ? "#b87800" : "#999",
+        cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center"
+      }
+    }, "\ud83d\udcdd"))),
+    obsAbertaPara === item && /*#__PURE__*/React.createElement("div", {
+      style: { padding: "10px 14px 14px", background: "#fffbf0", borderBottom: i < lista.length - 1 ? "1px solid #f0f2f6" : undefined, display: "flex", flexDirection: "column", gap: 6 }
+    },
+      /*#__PURE__*/React.createElement("textarea", {
+        value: obsTextoEditando,
+        onChange: function(e){ setObsTextoEditando(e.target.value.slice(0, 5000)); },
+        maxLength: 5000,
+        placeholder: "OBSERVA\xc7\xd5ES LIVRES SOBRE ESTE FORNECEDOR (AT\xc9 5000 CARACTERES)...",
+        style: { width: "100%", minHeight: 90, resize: "vertical", border: "1px solid #e0d5b0", borderRadius: 6, padding: "8px 10px", fontSize: 12.5, fontFamily: "inherit", textTransform: "none", outline: "none" }
+      }),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+        /*#__PURE__*/React.createElement("span", { style: { fontSize: 10, color: "#aaa" } }, obsTextoEditando.length, " / 5000"),
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6 } },
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function(){ setObsAbertaPara(null); },
+            style: { background: "#f5f5f5", border: "none", borderRadius: 5, padding: "5px 12px", color: "#888", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+          }, "CANCELAR"),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function(){ onSetObs(item, obsTextoEditando); setObsAbertaPara(null); },
+            style: { background: "#e8f5e9", border: "none", borderRadius: 5, padding: "5px 12px", color: "#2e7d32", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+          }, "SALVAR OBSERVA\xc7\xc3O")
+        )
+      )
+    ));
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
@@ -3978,6 +4024,7 @@ function MapEditor(_ref15) {
     addCadastro = _ref15.addCadastro,
     removeCadastro = _ref15.removeCadastro,
     editCadastro = _ref15.editCadastro,
+    setObsFornecedor = _ref15.setObsFornecedor || function(){},
     orcamentos = _ref15.orcamentos || {},
     associacoes = _ref15.associacoes || [],
     onSaveOrcamento = _ref15.onSaveOrcamento || null,
@@ -4087,6 +4134,20 @@ var _useState27 = useState(init),
     return isNaN(d.getTime()) ? clock : d;
   })();
   var saveTimer = useRef();
+  // FIX: popup de observação do fornecedor — aparece ao escolher um fornecedor que tem
+  // observação salva, e só fecha quando o usuário clicar em qualquer outro lugar da tela.
+  var _useStateObsPopup = useState(null),
+    obsPopupFornecedor = _slicedToArray(_useStateObsPopup, 2)[0],
+    setObsPopupFornecedor = _slicedToArray(_useStateObsPopup, 2)[1];
+  // FIX: fecha o popup de observação assim que o usuário clicar em qualquer lugar da tela
+  // (o próprio popup também tem um X, mas o pedido era "só sumir ao clicar em outro campo").
+  useEffect(function () {
+    if (!obsPopupFornecedor) return;
+    var fechar = function () { setObsPopupFornecedor(null); };
+    // setTimeout(0) evita que o MESMO clique que abriu o popup (o commit do nome) já o feche
+    var t = setTimeout(function () { document.addEventListener("click", fechar); }, 0);
+    return function () { clearTimeout(t); document.removeEventListener("click", fechar); };
+  }, [obsPopupFornecedor]);
   var mapContainerRef = useRef();
   var tableRef = useRef();
   // Estados do modal de associação
@@ -4780,6 +4841,12 @@ var _useState27 = useState(init),
             return x.toUpperCase() === v.toUpperCase();
           });
           updForn(f.id, "nome", fn || "");
+          // FIX: se o fornecedor escolhido tiver observação salva, mostra num popup que só
+          // fecha quando o usuário clicar em outro lugar da tela.
+          if (fn) {
+            var obsSalva = (cadastros.fornecedorObs || {})[normalize(fn)];
+            if (obsSalva) setObsPopupFornecedor({ nome: fn, texto: obsSalva });
+          }
         },
         suggestions: cadastros.fornecedores || [],
         strictMatch: true,
@@ -5761,6 +5828,27 @@ var _useState27 = useState(init),
     orcamentoAtual: obraImpEd?(orcamentos[obraImpEd]||null):null,
     onSalvar: function(dados){ if(onSaveOrcamento) onSaveOrcamento(obraImpEd,zerarConsumido(dados)); setShowImpEd(false); }
   }),
+  obsPopupFornecedor && /*#__PURE__*/React.createElement("div", {
+    onClick: function(e){ e.stopPropagation(); }, // clique DENTRO do popup não deve fechá-lo
+    style: {
+      position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)",
+      zIndex: 9500, background: "#fff", border: "2px solid #f0a500", borderRadius: 10,
+      boxShadow: "0 8px 28px rgba(0,0,0,0.25)", maxWidth: 480, width: "90%",
+      padding: "14px 18px", maxHeight: "60vh", display: "flex", flexDirection: "column", gap: 8
+    }
+  },
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
+      /*#__PURE__*/React.createElement("div", { style: { fontWeight: 800, fontSize: 13, color: "#b87800" } },
+        "\ud83d\udcdd OBSERVA\xc7\xd5ES \u2014 ", obsPopupFornecedor.nome),
+      /*#__PURE__*/React.createElement("span", {
+        onClick: function(){ setObsPopupFornecedor(null); },
+        style: { cursor: "pointer", color: "#999", fontSize: 16, lineHeight: "16px" }
+      }, "\u2715")
+    ),
+    /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 12.5, color: "#333", whiteSpace: "pre-wrap", overflowY: "auto", textTransform: "none", lineHeight: 1.5 }
+    }, obsPopupFornecedor.texto)
+  ),
   showCadEditor && /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCadEditor,
     onClose: function onClose() { setShowCadEditor(false); },
@@ -5768,6 +5856,7 @@ var _useState27 = useState(init),
     onAdd: addCadastro,
     onRemove: removeCadastro || function(){},
     onEdit: editCadastro || function(){},
+    onSetObs: setObsFornecedor,
     mapas: mapas,
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
@@ -10093,7 +10182,10 @@ function App() {
                   obras: cad.obras || [],
                   insumos: [],
                   unidades: cad.unidades || DEFAULT_UNIDADES,
-                  fornecedores: cad.fornecedores || []
+                  fornecedores: cad.fornecedores || [],
+                  fornecedorObs: cad.fornecedorObs || {} // FIX: mesmo bug de sbSaveCadastros — o
+                  // carregamento também reconstruía o objeto só com campos citados aqui,
+                  // descartando fornecedorObs vindo do servidor
                 };
               });
               setCadastrosOk(true);
@@ -10214,6 +10306,13 @@ function App() {
       var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, (prev[tipo] || []).filter(function (x) {
         return normalize(x) !== normalize(valor);
       })));
+      // FIX: ao excluir um FORNECEDOR, remove também a observação salva dele — senão fica
+      // como dado órfão no banco, sem nenhum fornecedor visível para acessá-la.
+      if (tipo === 'fornecedores' && prev.fornecedorObs && prev.fornecedorObs[normalize(valor)]) {
+        var novoObs = _objectSpread({}, prev.fornecedorObs);
+        delete novoObs[normalize(valor)];
+        updated.fornecedorObs = novoObs;
+      }
       if (tipo === 'insumos') sbSaveInsumos(updated.insumos).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.'); });
       else sbSaveCadastros(updated).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.'); });
       return updated;
@@ -10229,11 +10328,36 @@ function App() {
         return normalize(x) === vOld ? vNew : x;
       });
       var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, _toConsumableArray(new Set(lista)).sort()));
+      // FIX: ao renomear um FORNECEDOR, migra a observação salva (se houver) do nome antigo
+      // para o novo — senão ela ficaria "presa" no nome antigo, inacessível.
+      if (tipo === 'fornecedores' && prev.fornecedorObs && prev.fornecedorObs[vOld]) {
+        var novoObs = _objectSpread({}, prev.fornecedorObs);
+        novoObs[vNew] = novoObs[vOld];
+        delete novoObs[vOld];
+        updated.fornecedorObs = novoObs;
+      }
       if (tipo === 'insumos') sbSaveInsumos(updated.insumos).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.'); });
       else sbSaveCadastros(updated).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.'); });
       return updated;
     });
   }, [mapas]);
+  // FIX: observação livre por fornecedor (até 5000 caracteres) — guardada à parte da lista de
+  // nomes já existente, sem alterar nada da estrutura atual. Usa o mesmo sbSaveCadastros (já
+  // ajustado acima para incluir este campo).
+  var setObsFornecedor = useCallback(function (nomeFornecedor, texto) {
+    var nome = normalize(nomeFornecedor);
+    if (!nome) return;
+    var textoLimitado = String(texto || '').slice(0, 5000);
+    setCadastros(function (prev) {
+      var obsAtual = prev.fornecedorObs || {};
+      var novoObs = _objectSpread({}, obsAtual);
+      if (textoLimitado.trim()) novoObs[nome] = textoLimitado;
+      else delete novoObs[nome]; // texto vazio remove a observação, não deixa lixo salvo
+      var updated = _objectSpread(_objectSpread({}, prev), {}, { fornecedorObs: novoObs });
+      sbSaveCadastros(updated).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar a observação. Verifique sua conexão.'); });
+      return updated;
+    });
+  }, []);
   var handleCreate = /*#__PURE__*/function () {
     var _ref20 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(m) {
       return _regenerator().w(function (_context9) {
@@ -10326,6 +10450,7 @@ function App() {
     addCadastro: addCadastro,
     removeCadastro: removeCadastro,
     editCadastro: editCadastro,
+    setObsFornecedor: setObsFornecedor,
     orcamentos: orcamentos,
     associacoes: associacoes,
     onSaveOrcamento: saveOrcamento,
@@ -10647,6 +10772,7 @@ function App() {
     onAdd: addCadastro,
     onRemove: removeCadastro,
     onEdit: editCadastro,
+    onSetObs: setObsFornecedor,
     mapas: mapas,
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraImportando(obra); setShowImportOrc(true); }, 200); },
