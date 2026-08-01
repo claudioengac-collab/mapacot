@@ -482,6 +482,8 @@ var sbSaveMapa = /*#__PURE__*/function () {
               dados: m,
               atualizado_em: new Date().toISOString()
             })
+          }).then(function(r) {
+            if (!r.ok) throw new Error('Erro ao salvar mapa (' + r.status + ')');
           });
         case 1:
           return _context2.a(2);
@@ -501,6 +503,8 @@ var sbDeleteMapa = /*#__PURE__*/function () {
           return fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(id), {
             method: "DELETE",
             headers: SB
+          }).then(function(r) {
+            if (!r.ok) throw new Error('Erro ao excluir mapa (' + r.status + ')');
           });
         case 1:
           return _context3.a(2);
@@ -625,6 +629,8 @@ var sbSaveInsumos = /*#__PURE__*/function () {
               },
               atualizado_em: new Date().toISOString()
             })
+          }).then(function(r) {
+            if (!r.ok) throw new Error('Erro ao salvar insumos (' + r.status + ')');
           });
         case 1:
           return _context7.a(2);
@@ -702,6 +708,8 @@ var sbSaveOrcamento = function(obraId, dados) {
 var sbDeleteOrcamento = function(obraId) {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + orcObraId(obraId), {
     method: "DELETE", headers: SB
+  }).then(function(r){
+    if (!r.ok) throw new Error('Erro ao excluir orçamento (' + r.status + ')');
   });
 };
 // ─── PEDIDOS DE COMPRA — SUPABASE ─────────────────────────────────────────────
@@ -789,7 +797,12 @@ var sbSalvarAprendizado = function(textoOriginal, insumoDescricao) {
   return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado", {
     method: "POST", headers: SB,
     body: JSON.stringify({ texto_original: texto, insumo_descricao: insumoDescricao, atualizado_em: new Date().toISOString() })
-  }).catch(function(){});
+  }).then(function(r){
+    // FIX: fetch só rejeita a Promise em falha de REDE — um erro do servidor (ex: 400/500)
+    // retorna r.ok=false sem rejeitar nada, então sem esta checagem o erro ficava
+    // completamente invisível (nem a função nem quem chama percebiam).
+    if (!r.ok) throw new Error('Erro ao salvar aprendizado (' + r.status + ')');
+  });
 };
 var sbBuscarAprendizados = function() {
   return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado?select=texto_original,insumo_descricao", { headers: SB })
@@ -1362,11 +1375,14 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   var acrVal=parsePOVal(fin.acrescimo),  acrMode=fin.acrescimo_mode||'%';
   var freteVal=parsePOVal(fin.frete),    freteMode=fin.frete_mode||'R$';
   var impVal=parsePOVal(fin.impostos),   impMode=fin.impostos_mode||'%';
-  var vlDesc  = descMode==='%'  ? subtotal*descVal/100  : descVal;
-  var vlAcr   = acrMode==='%'   ? subtotal*acrVal/100   : acrVal;
-  var baseImp = subtotal-vlDesc+vlAcr;
-  var vlFrete = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
-  var vlImp   = impMode==='%'   ? baseImp*impVal/100    : impVal;
+  // FIX: mesma proteção aplicada na tela — sem isso, um desconto negativo digitado por engano
+  // faria o PDF OFICIAL enviado ao fornecedor mostrar um valor total maior (ou negativo) do que
+  // deveria, já que a conta ficava invertida.
+  var vlDesc  = Math.max(0, descMode==='%'  ? subtotal*descVal/100  : descVal);
+  var vlAcr   = Math.max(0, acrMode==='%'   ? subtotal*acrVal/100   : acrVal);
+  var baseImp = Math.max(0, subtotal-vlDesc+vlAcr);
+  var vlFrete = Math.max(0, freteMode==='%' ? subtotal*freteVal/100 : freteVal);
+  var vlImp   = Math.max(0, impMode==='%'   ? baseImp*impVal/100    : impVal);
   function fR(v){ return 'R$ '+fmtBRL(v); }
   var finHTML = '';
   if(descVal||acrVal||freteVal||impVal){
@@ -1859,7 +1875,7 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
   var cabTopoHTML = "<div style=\"background:#2a5298;padding:10px 16px;border-radius:4px 4px 0 0;display:flex;align-items:center;justify-content:space-between;gap:12px;\">"
     + "<div>"
     + "<div style=\"color:#fff;font-size:13px;font-weight:800;letter-spacing:0.5px;\">RELAT\xD3RIO DE OR\xC7AMENTO POR OBRA</div>"
-    + "<div style=\"color:rgba(255,255,255,0.78);font-size:10px;margin-top:3px;\">" + obra + " &nbsp;|&nbsp; " + fmtDate(now) + "</div>"
+    + "<div style=\"color:rgba(255,255,255,0.78);font-size:10px;margin-top:3px;\">" + esc(obra) + " &nbsp;|&nbsp; " + fmtDate(now) + "</div>"
     + "</div>"
     + "<div style=\"display:flex;gap:8px;\">"
     + "<div style=\"background:rgba(255,255,255,0.15);border-radius:6px;padding:5px 12px;color:#fff;text-align:center;min-width:56px;\">"
@@ -1908,10 +1924,14 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
         : (x.vlCotado===null
           ? "<span class=\"tag\" style=\"background:#fff3cd;color:#856404;\">\u23f3 PENDENTE</span>"
           : "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u2713 OK</span>"));
+    // FIX: divisão por zero — se vlOrc ou consumido forem 0, a fórmula original gerava
+    // "Infinity%" na tela (era possível reproduzir isso de verdade, não só em teoria).
+    var baseCalculo = (x.vlOrc || 0) * (x.consumido || 0);
+    var pctResultado = baseCalculo > 0 ? (Math.abs(x.resultado / baseCalculo * 100) || 0) : 0;
     var resTag = x.resultado !== null
       ? (x.resultado>=0
-        ? "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u25cf LUCRO +"+(Math.abs(x.resultado/x.vlOrc/x.consumido*100)||0).toFixed(1)+"%</span><div style=\"font-size:9px;color:#186818;\">+ "+fmtMoney(x.resultado)+"</div>"
-        : "<span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">\u25cf PREJU\xcdZO \u2212"+(Math.abs(x.resultado/(x.vlOrc||1)/x.consumido*100)||0).toFixed(1)+"%</span><div style=\"font-size:9px;color:#aa1c1c;\">\u2212 "+fmtMoney(Math.abs(x.resultado))+"</div>")
+        ? "<span class=\"tag\" style=\"background:#d4edda;color:#155724;\">\u25cf LUCRO +"+pctResultado.toFixed(1)+"%</span><div style=\"font-size:9px;color:#186818;\">+ "+fmtMoney(x.resultado)+"</div>"
+        : "<span class=\"tag\" style=\"background:#f8d7da;color:#721c24;\">\u25cf PREJU\xcdZO \u2212"+pctResultado.toFixed(1)+"%</span><div style=\"font-size:9px;color:#aa1c1c;\">\u2212 "+fmtMoney(Math.abs(x.resultado))+"</div>")
       : "<span style=\"color:#aaa;font-size:9px;\">SEM COTA\xc7\xc3O</span>";
     var row = "<tr class=\""+cls+"\">"
       + "<td style=\"font-size:9px;color:#555;\">"+(oi.codigo||"\u2014")+"</td>"
@@ -2436,7 +2456,7 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
     + "<div style=\"background:#1a3a5c;padding:9px 14px;border-radius:4px 4px 0 0;margin-bottom:0;\">"
     + "<div style=\"font-size:13px;font-weight:bold;color:#fff;\">RELAT\xD3RIO POR INSUMO</div>"
     + "<div style=\"font-size:10px;color:rgba(255,255,255,0.8);margin-top:2px;\">BUSCA: &ldquo;"
-    + insumo.toUpperCase() + "&rdquo; \u2014 " + resultados.length + " OCORR\xCANCIA(S)</div>"
+    + esc(insumo.toUpperCase()) + "&rdquo; \u2014 " + resultados.length + " OCORR\xCANCIA(S)</div>"
     + "</div>"
     + "<table><thead><tr>"
     + "<th style=\"width:28px;\">MP<br>N\xBA</th>"
@@ -2534,7 +2554,21 @@ function AutocompleteInput(_ref9) {
     } else if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
       if (hi >= 0) select(filtered[hi]);else {
-        onCommit && onCommit(value);
+        // FIX: quando o dropdown está aberto mas o usuário não navegou com as setas (aperta
+        // Enter/Tab direto após digitar), o valor era aceito sem validar strictMatch — diferente
+        // do caminho de dropdown fechado, que já validava. O onBlur corrigia isso ~180ms depois,
+        // mas o onCommit já tinha rodado uma vez com o valor não validado nesse meio-tempo,
+        // podendo disparar efeitos colaterais indevidos (ex: popup de observação de fornecedor
+        // abrindo para um texto que não corresponde a nenhum fornecedor real).
+        if (strictMatch) {
+          var matchEnter = value && (suggestions || []).some(function (s) {
+            return s.toUpperCase() === value.toUpperCase();
+          });
+          _onChange(matchEnter ? value : "");
+          onCommit && onCommit(matchEnter ? value : "");
+        } else {
+          onCommit && onCommit(value);
+        }
         setOpen(false);
       }
     } else if (e.key === "Escape") {
@@ -2631,6 +2665,15 @@ function DetalheBtn(_ref_det) {
     detGuardReady = _slicedToArray(_useStateDGR, 2)[0],
     setDetGuardReady = _slicedToArray(_useStateDGR, 2)[1];
   var taRef = useRef();
+  // FIX: sem isto, o destaque laranja do "1º clique" (esperando confirmação) ficava preso na tela
+  // para sempre se o usuário clicasse em qualquer OUTRO lugar em vez de clicar de novo no campo —
+  // mesmo padrão já usado no popup de observação de fornecedor.
+  useEffect(function () {
+    if (!detGuardReady) return;
+    var fechar = function () { setDetGuardReady(false); };
+    var t = setTimeout(function () { document.addEventListener("click", fechar); }, 0);
+    return function () { clearTimeout(t); document.removeEventListener("click", fechar); };
+  }, [detGuardReady]);
   var openEdit = function openEdit() {
     if (value && !detGuardReady) {
       setDetGuardReady(true); // 1º clique: destaca campo com borda laranja
@@ -3487,18 +3530,28 @@ function CadastrosModal(_ref11) {
 
 // ─── Modal Importar Orçamento ─────────────────────────────────────────────────
 // --- Modal Gerenciar Orcamento ---
-var calcConsumidoGer = function(idx, assocs, mpas) {
+var calcConsumidoGer = function(idx, assocs, mpas, orcItens) {
+  // FIX (preventivo — esta função não é chamada em nenhum lugar do sistema hoje, mas
+  // corrigida por consistência): mesmo problema já encontrado e corrigido em
+  // calcOrcComConsumo — comparava só por índice (quebra ao reimportar orçamento) e usava
+  // qtCompra fixo em vez do menor valor entre qtCompra e a quantidade atual do item no mapa.
+  var itemAtual = (orcItens && orcItens[idx]) || null;
   var total = 0;
   for(var _i=0;_i<assocs.length;_i++){
     var _a=assocs[_i];
-    if(_a.orcItemIndex!==idx) continue;
+    var indexBate = _a.orcItemIndex === idx && (!itemAtual || _a.orcItemCodigo === itemAtual.codigo);
+    var codigoBateEmOutraPosicao = _a.orcItemIndex !== idx && itemAtual && _a.orcItemCodigo === itemAtual.codigo;
+    if (!indexBate && !codigoBateEmOutraPosicao) continue;
     var _m=null;
     for(var _j=0;_j<mpas.length;_j++){ if(mpas[_j].id===_a.mapaId){ _m=mpas[_j]; break; } }
     if(!_m) continue;
     var _it=null; var _its=_m.itens||[];
     for(var _k=0;_k<_its.length;_k++){ if(_its[_k].id===_a.itemMapaId){ _it=_its[_k]; break; } }
     if(!_it||!_it.comprado) continue;
-    total+=(parseFloat(String(_a.qtCompra).replace(",","."))||0)*(parseFloat(_a.fator)||1);
+    var _qS=parseFloat(String(_a.qtCompra).replace(",","."))||0;
+    var _qM=parseFloat(String(_it.qt).replace(",","."))||0;
+    var _qA=(_qS>0&&_qS<_qM)?_qS:(_qM||_qS);
+    total+=_qA*(parseFloat(_a.fator)||1);
   }
   return total;
 };
@@ -3688,7 +3741,15 @@ function FormItemOrcamento(_ref_form) {
     ),
     E("div", { style:{display:"flex",gap:10,justifyContent:"flex-end"} },
       E("button", { onClick:onCancelar, style:{background:"#e5e7eb",color:"#374151",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "CANCELAR"),
-      E("button", { onClick:function(){ if(!vD.trim()){ alert("DESCRICAO OBRIGATORIA!"); return; } onSalvar({codigo:vC,descricao:vD,unidade:vU,quantidade:vQ,valorUnitario:vV,observacao:vO}); }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "SALVAR")
+      E("button", { onClick:function(){
+        // FIX: UNIDADE e QT. PREVISTA já eram marcadas com "*" (obrigatório) na interface, mas só
+        // a Descrição era validada de verdade — permitia salvar um item de orçamento incompleto
+        // sem nenhum aviso, mesmo a tela sugerindo visualmente que esses campos eram obrigatórios.
+        if(!vD.trim()){ alert("DESCRICAO OBRIGATORIA!"); return; }
+        if(!vU.trim()){ alert("UNIDADE OBRIGATORIA!"); return; }
+        if(!vQ || Number(String(vQ).replace(",",".")) <= 0){ alert("QUANTIDADE PREVISTA DEVE SER MAIOR QUE ZERO!"); return; }
+        onSalvar({codigo:vC,descricao:vD,unidade:vU,quantidade:vQ,valorUnitario:vV,observacao:vO});
+      }, style:{background:"#1a56db",color:"#fff",border:"none",borderRadius:6,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:"pointer"} }, "SALVAR")
     )
   );
 }
@@ -3752,7 +3813,15 @@ function ModalImportarOrcamento(_ref_orc) {
     var antigos = (orcamentoAtual && orcamentoAtual.itens) || [];
     var itensFinais = preview.map(function(novo) {
       var ant = antigos.find(function(a){ return a.codigo === novo.codigo; });
-      return ant ? Object.assign({}, novo, { consumido: ant.consumido||0 }) : novo;
+      if (!ant) return novo;
+      // FIX (decisão confirmada com o Claudio): reimportar preservava o "consumido" por código,
+      // mas não preservava se o item tinha sido inativado manualmente antes — a planilha nova
+      // reativava esse item sem aviso. Inativar é uma ação deliberada; reimportar não deveria
+      // desfazer isso silenciosamente. Segue a mesma lógica (buscar por código) já usada acima
+      // para o consumido.
+      var camposPreservados = { consumido: ant.consumido||0 };
+      if (ant.ativo === false) camposPreservados.ativo = false;
+      return Object.assign({}, novo, camposPreservados);
     });
     onSalvar({ obra: obra, itens: itensFinais, importadoEm: new Date().toISOString() });
     setPreview([]); onClose();
@@ -4104,7 +4173,9 @@ var _useState27 = useState(init),
   var _useStateApr=useState({}),aprendizados=_slicedToArray(_useStateApr,2)[0],setAprendizados=_slicedToArray(_useStateApr,2)[1];
   useEffect(function(){ sbBuscarAprendizados().then(function(m){ setAprendizados(m); }); },[]);
   var registrarAprendizado = function(textoOriginal, insumoDescricao){
-    sbSalvarAprendizado(textoOriginal, insumoDescricao);
+    sbSalvarAprendizado(textoOriginal, insumoDescricao).catch(function(){
+      window.avisarErroSalvamento('Não foi possível salvar o aprendizado. Verifique sua conexão.');
+    });
     var chave = String(textoOriginal||'').trim().toUpperCase();
     setAprendizados(function(prev){ var n = Object.assign({}, prev); n[chave] = insumoDescricao; return n; });
   };
@@ -4539,6 +4610,12 @@ var _useState27 = useState(init),
      // CORRECAO: usa qtItem x fator (igual ao PDF)
      // CORRECAO 2: busca por CODIGO (igual ao PDF) — mais confiavel que indice
      // quando o orcamento e reimportado, o indice fica desatualizado mas o codigo nao
+     // FIX: faltava aqui o mesmo ajuste que o PDF (gerarRelatorioOrcamento) já fazia —
+     // usar o MENOR valor entre a quantidade de compra salva no momento da associação
+     // e a quantidade ATUAL do item no mapa (que pode ter mudado depois), e multiplicar
+     // pelo fator de conversão de unidade. Sem isso, editar a quantidade do item DEPOIS
+     // de associar ao orçamento fazia a tela mostrar um resultado bem diferente do PDF
+     // (a mesma raiz do bug histórico documentado de "lucro várias vezes maior").
      var vlOrcTotal = aes.reduce(function(ac,a){
        // Lookup robusto para todos os casos:
        // 1) index válido E código confere → usa index (distingue itens com mesmo código)
@@ -4551,9 +4628,10 @@ var _useState27 = useState(init),
        }
        if (!oi) oi = orcList.find(function(it){ return it.codigo===a.orcItemCodigo; });
        if (!oi) return ac;
-       // qtCompra já em unidades do orçamento — correto para fator 3M, 6M ou N associações
-       var qtC = parseFloat(String(a.qtCompra).replace(",",".")) || 0;
-       return ac + (parseFloat(oi.valorUnitario||oi.vl_unitario)||0) * qtC;
+       var qtSalva = parseFloat(String(a.qtCompra).replace(",",".")) || 0;
+       var fator = parseFloat(a.fator) || 1;
+       var qtAtual = (qtSalva > 0 && qtSalva < qtItem) ? qtSalva : (qtItem || qtSalva);
+       return ac + (parseFloat(oi.valorUnitario||oi.vl_unitario)||0) * qtAtual * fator;
      }, 0);
      if (vlOrcTotal <= 0) return null;
      var vlCotadoTotal = (res.vlUnit||0) * qtItem;
@@ -6001,11 +6079,13 @@ var _useState27 = useState(init),
           var acrVal   = parsePOVal(fin.acrescimo), acrMode   = fin.acrescimo_mode||'%';
           var freteVal = parsePOVal(fin.frete),     freteMode = fin.frete_mode||'R$';
           var impVal   = parsePOVal(fin.impostos),  impMode   = fin.impostos_mode||'%';
-          var vlDesc   = descMode==='%'  ? subtotal*descVal/100  : descVal;
-          var vlAcr    = acrMode==='%'   ? subtotal*acrVal/100   : acrVal;
-          var baseImp  = subtotal - vlDesc + vlAcr;
-          var vlFrete  = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
-          var vlImp    = impMode==='%'   ? baseImp*impVal/100    : impVal;
+          // FIX: mesma proteção das outras 2 instâncias — este é o cálculo que realmente vai para
+          // o banco como valor final do pedido, então é o ponto mais crítico dos três.
+          var vlDesc   = Math.max(0, descMode==='%'  ? subtotal*descVal/100  : descVal);
+          var vlAcr    = Math.max(0, acrMode==='%'   ? subtotal*acrVal/100   : acrVal);
+          var baseImp  = Math.max(0, subtotal - vlDesc + vlAcr);
+          var vlFrete  = Math.max(0, freteMode==='%' ? subtotal*freteVal/100 : freteVal);
+          var vlImp    = Math.max(0, impMode==='%'   ? baseImp*impVal/100    : impVal);
           var total    = baseImp + vlImp + vlFrete;
           var po = {
             id: uid(),
@@ -6139,9 +6219,12 @@ var _useState27 = useState(init),
       var aV=parsePOVal(fin.acrescimo), aM=fin.acrescimo_mode||'%';
       var fV=parsePOVal(fin.frete), fM=fin.frete_mode||'R$';
       var iV=parsePOVal(fin.impostos), iM=fin.impostos_mode||'%';
-      var vlD=dM==='%'?sub*dV/100:dV, vlA=aM==='%'?sub*aV/100:aV;
-      var base=sub-vlD+vlA;
-      var vlF=fM==='%'?sub*fV/100:fV, vlI=iM==='%'?base*iV/100:iV;
+      // FIX: mesma proteção já aplicada nas outras 3 instâncias deste cálculo (tela de criar, PDF
+      // oficial, salvamento ao criar) — esta é a 4ª instância, no fluxo de EDITAR um pedido já
+      // existente, que tinha escapado da correção anterior por ser um caminho de código separado.
+      var vlD=Math.max(0, dM==='%'?sub*dV/100:dV), vlA=Math.max(0, aM==='%'?sub*aV/100:aV);
+      var base=Math.max(0, sub-vlD+vlA);
+      var vlF=Math.max(0, fM==='%'?sub*fV/100:fV), vlI=Math.max(0, iM==='%'?base*iV/100:iV);
       var total=base+vlI+vlF;
       var campos = {
         itens: itensEditados,
@@ -6570,11 +6653,14 @@ function ModalPedidoStep2(_ref_po2) {
           var acrVal   = parseVal(fin.acrescimo); var acrMode   = fin.acrescimo_mode||'%';
           var freteVal = parseVal(fin.frete);     var freteMode = fin.frete_mode||'R$';
           var impVal   = parseVal(fin.impostos);  var impMode   = fin.impostos_mode||'%';
-          var vlDesc   = descMode==='%' ? subtotal*descVal/100 : descVal;
-          var vlAcr    = acrMode==='%'  ? subtotal*acrVal/100  : acrVal;
-          var baseImp  = subtotal - vlDesc + vlAcr;
-          var vlFrete  = freteMode==='%' ? subtotal*freteVal/100 : freteVal;
-          var vlImp    = impMode==='%'  ? baseImp*impVal/100   : impVal;
+          // FIX: mesmo problema já corrigido antes em calcVL (mapa) — um desconto/acréscimo/frete/
+          // imposto digitado com sinal negativo por engano invertia a conta (aumentava o total em
+          // vez de diminuir). Math.max(0,...) protege sem mudar o resultado de valores já corretos.
+          var vlDesc   = Math.max(0, descMode==='%' ? subtotal*descVal/100 : descVal);
+          var vlAcr    = Math.max(0, acrMode==='%'  ? subtotal*acrVal/100  : acrVal);
+          var baseImp  = Math.max(0, subtotal - vlDesc + vlAcr); // FIX: nunca deixa a base negativa
+          var vlFrete  = Math.max(0, freteMode==='%' ? subtotal*freteVal/100 : freteVal);
+          var vlImp    = Math.max(0, impMode==='%'  ? baseImp*impVal/100   : impVal);
           var totalFin = baseImp + vlImp + vlFrete;
           function parseVal(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; }
           function updateFin(field, val){
@@ -6978,7 +7064,15 @@ function TelaPedidos(_ref_tp) {
               if(relFiltros.obra.length && relFiltros.obra.indexOf(po.obra) < 0) return false;
               if(relFiltros.status.length && relFiltros.status.indexOf(po.status) < 0) return false;
               if(relFiltros.insumo.length){ var has=(po.itens||[]).some(function(it){ return relFiltros.insumo.indexOf(it.descricao) >= 0; }); if(!has) return false; }
-              if(relFiltros.de||relFiltros.ate){ var dt=new Date(po.data_emissao||po.criado_em); if(isNaN(dt.getTime())) return false; if(relFiltros.de && dt<new Date(relFiltros.de+'T00:00:00')) return false; if(relFiltros.ate && dt>new Date(relFiltros.ate+'T23:59:59')) return false; }
+              if(relFiltros.de||relFiltros.ate){
+                // FIX: mesmo bug de fuso horário já corrigido no filtro principal da tela — sem isso,
+                // uma data salva só como "AAAA-MM-DD" virava meia-noite UTC, que em fusos negativos
+                // (ex: Acre, UTC-5) aparecia como o DIA ANTERIOR, incluindo/excluindo pedidos errados
+                // do relatório filtrado por período.
+                var dataBrutaPO = po.data_emissao||po.criado_em||'';
+                var dt=new Date(dataBrutaPO.length===10 ? dataBrutaPO+'T12:00:00' : dataBrutaPO);
+                if(isNaN(dt.getTime())) return false; if(relFiltros.de && dt<new Date(relFiltros.de+'T00:00:00')) return false; if(relFiltros.ate && dt>new Date(relFiltros.ate+'T23:59:59')) return false;
+              }
               return true;
             });
             setShowRelModal(false);
@@ -8474,7 +8568,14 @@ function ModalImportarExcelMapa(_ref_imp) {
         fornecedor:"", arquivo:"importar-excel-mapa",
         tokens_input:inp, tokens_output:out, custo_brl:custoBRL,
         itens_lidos:linhasParaIA.length, obra_id:""
-      }).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar o mapa importado. Verifique sua conexão.'); });
+      }).catch(function(e){
+        // FIX: essa chamada só registra o custo/uso da IA para controle interno — uma falha aqui
+        // NÃO afeta a importação do mapa em si (que já aconteceu normalmente). A mensagem antiga
+        // ("não foi possível salvar o mapa importado") era enganosa e faria o usuário pensar, sem
+        // motivo, que precisava reimportar tudo de novo. Loga no console para debug, sem alarmar
+        // visualmente o usuário por algo que não afeta o resultado dele.
+        console.error('MAPACOT: falha ao registrar uso de IA (importar-excel-mapa):', e && e.message || e);
+      });
       var resultado = linhasComMemoria.map(function(l){
         if(l._daMemoria){
           return Object.assign({}, l, { descricaoFinal: l._descMemoria, status: "auto", scoreMatch: 1 });
@@ -8752,11 +8853,29 @@ function ModalLerComIA(_ref_ia) {
   // a descrição venha como número/objeto (ex: dado corrompido ou resposta malformada da IA).
   var normalizar=function(s){
     var t = String(s||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-    return t.replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();
+    t = t.replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();
+    // FIX: encontrado através de relato real do usuário — "orçamento de 15 itens, a IA só
+    // reconhece 2 a 5". Causa raiz: a proteção contra confundir medidas diferentes (ex: 100MM
+    // vs 50MM) era ATIVADA MESMO quando a medida era A MESMA, só escrita de forma diferente —
+    // muito comum comparando um cadastro manual do mapa com texto extraído de PDF de fornecedor.
+    // "GRAUS"/"GRAU" por extenso vira sufixo "G" colado (ex: "90 GRAUS" e "90G" ficam idênticos).
+    t = t.replace(/(\d+)\s+GRAUS?\b/g, '$1G');
+    // Número e unidade separados por espaço viram a forma colada, que é como cadastros manuais
+    // tipicamente escrevem (ex: "100 MM" e "100MM" ficam idênticos após normalizar). Sem isso,
+    // a mesma medida escrita com espaço (comum em texto extraído de PDF) e sem espaço (comum em
+    // cadastro manual) eram tratadas como números DIFERENTES pela lógica de bloqueio de "número
+    // sem par", rejeitando o match mesmo sendo exatamente a mesma peça.
+    t = t.replace(/(\d+)\s+(MM|CM|M2|M3|KG|ML|L|UN|PC|CJ|MT|M|A|V|W)\b/g, '$1$2');
+    return t;
   };
   var wordScore=function(a,b){
-    var wa=normalizar(a).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w);}); // FIX: mantém números curtos (ex: "45","90" de ângulo) que antes eram descartados por serem <=2 caracteres
-    var wb=normalizar(b).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w);});
+    var EXCECOES_PALAVRA_CURTA = {"TE":1}; // FIX: "TÊ" (peça de tubulação em T) tem só 2 letras e
+    // era descartado pelo filtro de tamanho mínimo — igual ao caso dos números curtos de ângulo já
+    // tratado abaixo, mas para nomes de peça. Lista pequena e específica, não abre o filtro geral
+    // (que continuaria deixando passar preposições como "DE"/"DO"/"DA" se apenas baixássemos o
+    // limite de tamanho para todas as palavras).
+    var wa=normalizar(a).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w) || EXCECOES_PALAVRA_CURTA[w];}); // FIX: mantém números curtos (ex: "45","90" de ângulo) que antes eram descartados por serem <=2 caracteres
+    var wb=normalizar(b).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w) || EXCECOES_PALAVRA_CURTA[w];});
     if(!wa.length||!wb.length)return 0;
     // FIX: identifica a CATEGORIA do produto (LUVA, JOELHO, CURVA, TUBO, TÊ, CAP, ADAPTADOR...) —
     // a primeira palavra que não é um código numérico isolado (pula "229272", "4010" no início).
@@ -10062,7 +10181,13 @@ var calcOrcComConsumo = function(orc, obra, assocs, mpas) {
     var _it=base[_i]; var _total=0;
     for(var _j=0;_j<assocs.length;_j++){
       var _a=assocs[_j];
-      if(_a.orcItemIndex!==_i) continue;
+      // FIX: mesmo padrão já usado em outras funções (ex: calcResMulti) — tenta o índice
+      // primeiro, mas só aceita se o código também bater; senão, procura pelo código em
+      // qualquer posição. Sem isso, depois de reimportar um orçamento (mudando a ordem dos
+      // itens), o "consumido" ficava atribuído ao item errado.
+      var indexBate = _a.orcItemIndex === _i && _a.orcItemCodigo === _it.codigo;
+      var codigoBateEmOutraPosicao = _a.orcItemIndex !== _i && _a.orcItemCodigo === _it.codigo;
+      if (!indexBate && !codigoBateEmOutraPosicao) continue;
       var _m=null;
       for(var _k=0;_k<mpas.length;_k++){ if(mpas[_k].id===_a.mapaId){ _m=mpas[_k]; break; } }
       if(!_m||_m.obra!==obra) continue;
@@ -10249,8 +10374,20 @@ function App() {
 
   var limparOrcamento = React.useCallback(function(obraId) {
     setOrcamentos(function(prev){ var n = Object.assign({}, prev); delete n[obraId]; return n; });
+    // FIX: sem isto, as associações feitas entre itens do mapa e itens deste orçamento ficavam
+    // órfãs no banco depois de remover o orçamento. Se a mesma obra recebesse um orçamento NOVO
+    // depois, essas associações antigas podiam se conectar por engano a itens completamente
+    // diferentes do orçamento novo (mesmo tipo de problema já corrigido em calcOrcComConsumo).
+    var idsMapasDaObra = mapas.filter(function(m){ return m.obra === obraId; }).map(function(m){ return m.id; });
+    if (idsMapasDaObra.length) {
+      setAssociacoes(function(prevAssoc){
+        var lista = prevAssoc.filter(function(a){ return idsMapasDaObra.indexOf(a.mapaId) < 0; });
+        sbSaveAssociacoes(lista).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar as associações. Verifique sua conexão.'); });
+        return lista;
+      });
+    }
     sbDeleteOrcamento(obraId).catch(function(){ window.avisarErroSalvamento('Não foi possível excluir o orçamento. Verifique sua conexão.'); });
-  }, []);
+  }, [mapas]);
 
   var criarAssociacao = React.useCallback(function(assoc) {
     setAssociacoes(function(prev) {
@@ -10424,6 +10561,7 @@ function App() {
             });
             sbSaveMapa(updated).catch(function (e) {
               console.error('MAPACOT: Falha ao salvar mapa no servidor:', e && e.message || e);
+              window.avisarErroSalvamento('Não foi possível salvar o mapa. Verifique sua conexão.');
             });
             setCurrent(updated);
           case 1:
