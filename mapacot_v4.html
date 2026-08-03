@@ -424,6 +424,57 @@ var SB = {
   "Content-Type": "application/json",
   "Prefer": "resolution=merge-duplicates"
 };
+// ═══ DIAGNÓSTICO EMBUTIDO ═══
+// Registra os eventos de salvamento/abertura/atualização desta sessão e permite consultar,
+// direto do app, qual versão de aplicativo fez o último salvamento de cada mapa no servidor.
+// Objetivo: quando algo der errado no uso real, um print desta tela mostra exatamente o que
+// aconteceu — sem depender de suposição.
+var APP_VERSAO_DIAG = "4.2 — 03/08/2026";
+window.__mapacotLog = window.__mapacotLog || [];
+function logEventoDiag(texto) {
+  try {
+    var hora = new Date().toLocaleTimeString("pt-BR");
+    window.__mapacotLog.push(hora + "  " + texto);
+    if (window.__mapacotLog.length > 80) window.__mapacotLog.shift();
+  } catch (e) {}
+}
+window.abrirDiagnosticoMapacot = function () {
+  var existente = document.getElementById("diagMapacotOverlay");
+  if (existente) existente.remove();
+  var ov = document.createElement("div");
+  ov.id = "diagMapacotOverlay";
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;";
+  var box = document.createElement("div");
+  box.style.cssText = "background:#fff;border-radius:12px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:16px;font-family:monospace;font-size:12px;color:#111;";
+  box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+    + '<b style="font-size:14px;">DIAGN\u00d3STICO MAPACOT</b>'
+    + '<button id="diagFechar" style="border:none;background:#eee;border-radius:6px;padding:6px 10px;cursor:pointer;font-weight:bold;">FECHAR</button></div>'
+    + '<div style="margin-bottom:8px;">Vers\u00e3o DESTE arquivo: <b style="color:#1d4ed8;">' + APP_VERSAO_DIAG + '</b></div>'
+    + '<button id="diagVerificar" style="border:none;background:#1d4ed8;color:#fff;border-radius:6px;padding:9px 12px;cursor:pointer;margin-bottom:10px;font-weight:bold;">VERIFICAR SERVIDOR (quem salvou cada mapa)</button>'
+    + '<div id="diagServidor" style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dde;border-radius:8px;padding:8px;margin-bottom:10px;min-height:20px;">\u2014</div>'
+    + '<div style="margin-bottom:4px;"><b>Eventos desta sess\u00e3o (mais recentes primeiro):</b></div>'
+    + '<div style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dde;border-radius:8px;padding:8px;">' + (window.__mapacotLog.length ? window.__mapacotLog.slice().reverse().join("\n") : "(nenhum evento ainda)") + '</div>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+  document.getElementById("diagFechar").onclick = function () { ov.remove(); };
+  document.getElementById("diagVerificar").onclick = function () {
+    var alvo = document.getElementById("diagServidor");
+    alvo.textContent = "Buscando no servidor...";
+    fetch(SUPABASE_URL + "/rest/v1/mapas?select=dados,atualizado_em&order=criado_em.desc", { headers: SB, cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)); })
+      .then(function (rows) {
+        if (!rows || !rows.length) { alvo.textContent = "Nenhum mapa no servidor."; return; }
+        alvo.textContent = rows.map(function (x) {
+          var d = x.dados || {};
+          var quem = d._appVersao ? ("app " + d._appVersao) : "\u26a0 VERS\u00c3O ANTIGA (sem marca\u00e7\u00e3o)";
+          return "MAPA " + (d.numero != null ? d.numero : "?") + "  \u2014  " + ((d.itens || []).length) + " itens"
+            + "\n  \u00faltimo salvamento: " + (x.atualizado_em || "?")
+            + "\n  salvo por: " + quem;
+        }).join("\n\n");
+      })
+      .catch(function (e) { alvo.textContent = "Falha ao consultar: " + (e && e.message); });
+  };
+};
 var sbGetMapasOnce = /*#__PURE__*/function () {
   var _ref = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee() {
     var r, d;
@@ -495,6 +546,7 @@ var sbSaveMapa = function sbSaveMapa(m) {
   var estado = estadoSalvamentoMapa[idMapa];
 
   estado.fila = estado.fila.catch(function(){}).then(function(){
+    logEventoDiag("SALVANDO mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " (" + ((dadosLimpos.itens || []).length) + " itens)");
     var versaoParaVerificar = estado.ultimaVersaoConhecida;
     var verificar = versaoParaVerificar
       ? fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(idMapa, "&select=atualizado_em"), { headers: SB, cache: "no-store" })
@@ -502,6 +554,7 @@ var sbSaveMapa = function sbSaveMapa(m) {
           .then(function(rows){
             var versaoAtualServidor = rows[0] && rows[0].atualizado_em;
             if (versaoAtualServidor && versaoAtualServidor !== versaoParaVerificar) {
+              logEventoDiag("\u26a0 CONFLITO ao salvar mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " \u2014 servidor tem vers\u00e3o mais nova (" + versaoAtualServidor + "); salvamento bloqueado para n\u00e3o sobrescrever");
               var err = new Error('Este mapa foi modificado em outra aba ou dispositivo. Recarregue a página antes de continuar, para não sobrescrever as mudanças mais recentes.');
               err.isVersionConflict = true;
               throw err;
@@ -520,7 +573,11 @@ var sbSaveMapa = function sbSaveMapa(m) {
           atualizado_em: novaVersao
         })
       }).then(function(r) {
-        if (!r.ok) throw new Error('Erro ao salvar mapa (' + r.status + ')');
+        if (!r.ok) {
+          logEventoDiag("\u2716 ERRO ao salvar mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " \u2014 HTTP " + r.status);
+          throw new Error('Erro ao salvar mapa (' + r.status + ')');
+        }
+        logEventoDiag("\u2714 SALVO mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " (" + ((dadosLimpos.itens || []).length) + " itens) \u2014 nova vers\u00e3o " + novaVersao);
         estado.ultimaVersaoConhecida = novaVersao; // propaga para a próxima save da fila usar
         return novaVersao;
       });
@@ -4457,7 +4514,8 @@ var _useState27 = useState(init),
           if (!linha || !linha.dados) return;
           if (versaoLocal && linha.atualizado_em === versaoLocal) return; // nada mudou
           // Outra aba/dispositivo salvou algo mais novo: recarrega silenciosamente.
-          if (pendenteRef.current) return; // re-checa: usuário pode ter editado durante o fetch
+          if (pendenteRef.current) { logEventoDiag("FOCO: servidor mais novo, mas h\u00e1 edi\u00e7\u00e3o local pendente \u2014 atualiza\u00e7\u00e3o adiada (dados locais preservados)"); return; } // re-checa: usuário pode ter editado durante o fetch
+          logEventoDiag("FOCO: servidor mais novo \u2014 mapa recarregado automaticamente (vers\u00e3o " + linha.atualizado_em + ", " + (((linha.dados||{}).itens||[]).length) + " itens)");
           var atualizado = Object.assign({}, linha.dados, { _versaoServidor: linha.atualizado_em });
           setMapa(atualizado);
           setSaved(true);
@@ -10279,7 +10337,16 @@ function Login(_ref18) {
       marginBottom: 22,
       letterSpacing: 0.5
     }
-  }, "VERS\xC3O 4.2 \u2014 03/08/2026"), /*#__PURE__*/React.createElement("input", {
+  }, "VERS\xC3O 4.2 \u2014 03/08/2026"), /*#__PURE__*/React.createElement("div", {
+    onClick: function () { window.abrirDiagnosticoMapacot(); },
+    style: {
+      fontSize: 10,
+      color: "#6b7280",
+      textDecoration: "underline",
+      cursor: "pointer",
+      marginBottom: 18
+    }
+  }, "DIAGN\xD3STICO"), /*#__PURE__*/React.createElement("input", {
     value: user,
     onChange: function onChange(e) {
       return setUser(e.target.value.toUpperCase());
@@ -10888,7 +10955,10 @@ function App() {
       color: "#7a9cc8",
       letterSpacing: 1
     }
-  }, "SISTEMA DE COTA\xC7\xC3O \xB7 V4.2 \u2014 03/08/2026"))), /*#__PURE__*/React.createElement("div", {
+  }, "SISTEMA DE COTA\xC7\xC3O \xB7 V4.2 \u2014 03/08/2026 \xB7 ", /*#__PURE__*/React.createElement("span", {
+    onClick: function () { window.abrirDiagnosticoMapacot(); },
+    style: { textDecoration: "underline", cursor: "pointer" }
+  }, "DIAGN\xD3STICO")))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
@@ -11110,6 +11180,7 @@ function App() {
             var maisRecente = (rows && rows[0] && rows[0].dados)
               ? Object.assign({}, rows[0].dados, { _versaoServidor: rows[0].atualizado_em })
               : mapaEmMemoria; // falha ao verificar: usa o que já tinha em memória, não bloqueia o usuário
+            logEventoDiag("ABRIU mapa " + (maisRecente.numero != null ? maisRecente.numero : "?") + " (" + ((maisRecente.itens || []).length) + " itens) \u2014 vers\u00e3o " + (maisRecente._versaoServidor || "?") + " \u2014 \u00faltimo salvamento feito por: " + (maisRecente._appVersao ? ("app " + maisRecente._appVersao) : "VERS\u00c3O ANTIGA"));
             setCurrent(maisRecente);
             setMapas(function(prev){ return prev.map(function(m){ return m.id === maisRecente.id ? maisRecente : m; }); });
           })
