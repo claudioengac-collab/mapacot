@@ -432,7 +432,7 @@ var sbGetMapasOnce = /*#__PURE__*/function () {
         case 0:
           _context.n = 1;
           return fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?select=dados,atualizado_em&order=criado_em.desc"), {
-            headers: SB
+            headers: SB, cache: "no-store"
           });
         case 1:
           r = _context.v;
@@ -494,7 +494,7 @@ var sbSaveMapa = function sbSaveMapa(m) {
   estado.fila = estado.fila.catch(function(){}).then(function(){
     var versaoParaVerificar = estado.ultimaVersaoConhecida;
     var verificar = versaoParaVerificar
-      ? fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(idMapa, "&select=atualizado_em"), { headers: SB })
+      ? fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(idMapa, "&select=atualizado_em"), { headers: SB, cache: "no-store" })
           .then(function(r){ return r.ok ? r.json() : []; })
           .then(function(rows){
             var versaoAtualServidor = rows[0] && rows[0].atualizado_em;
@@ -556,7 +556,7 @@ var sbGetCadastros = /*#__PURE__*/function () {
         case 0:
           _context4.n = 1;
           return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados,atualizado_em"), {
-            headers: SB
+            headers: SB, cache: "no-store"
           });
         case 1:
           r = _context4.v;
@@ -589,7 +589,7 @@ var sbGetInsumos = /*#__PURE__*/function () {
         case 0:
           _context5.n = 1;
           return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.insumos&select=dados,atualizado_em"), {
-            headers: SB
+            headers: SB, cache: "no-store"
           });
         case 1:
           r = _context5.v;
@@ -671,7 +671,7 @@ var orcObraId = function(nomeObra) {
 // silenciosamente.
 var verificarVersaoAntesDeSalvar = function(idRegistro, versaoConhecida) {
   if (!versaoConhecida) return Promise.resolve(); // sem versão conhecida (registro novo) — nada a checar
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(idRegistro) + "&select=atualizado_em", { headers: SB })
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(idRegistro) + "&select=atualizado_em", { headers: SB, cache: "no-store" })
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){
       var versaoAtualServidor = rows[0] && rows[0].atualizado_em;
@@ -755,7 +755,7 @@ var sbDeleteOrcamento = function(obraId) {
 };
 // ─── PEDIDOS DE COMPRA — SUPABASE ─────────────────────────────────────────────
 var sbGetPedidos = function() {
-  return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=*&order=numero.desc&limit=1000', { headers: SB })
+  return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=*&order=numero.desc&limit=1000', { headers: SB, cache: 'no-store' })
     .then(function(r){
       if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar os pedidos. Verifique sua conexão.'); return []; }
       return r.json();
@@ -786,7 +786,7 @@ var sbUpdatePedido = function(id, fields) {
   });
 };
 var sbGetNextNumeroPO = function() {
-  return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=numero&order=numero.desc&limit=1', { headers: SB })
+  return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=numero&order=numero.desc&limit=1', { headers: SB, cache: 'no-store' })
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(d){
       var ultimo = (d && d.length && d[0].numero) ? d[0].numero : 0;
@@ -801,7 +801,7 @@ var sbGetNextNumeroPO = function() {
 
 var sbCarregarOrcamento = function(obraId) {
   var id = orcObraId(obraId);
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=dados,atualizado_em", { headers: SB })
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=dados,atualizado_em", { headers: SB, cache: "no-store" })
     .then(function(r){
       if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar o orçamento. Verifique sua conexão.'); return []; }
       return r.json();
@@ -826,7 +826,7 @@ var sbSaveAssociacoes = function(lista, versaoConhecida) {
   });
 };
 var sbCarregarAssociacoes = function() {
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.assocv2&select=dados", { headers: SB })
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.assocv2&select=dados", { headers: SB, cache: "no-store" })
     .then(function(r){
       if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar as associações. Verifique sua conexão.'); return []; }
       return r.json();
@@ -854,7 +854,7 @@ var sbSalvarAprendizado = function(textoOriginal, insumoDescricao) {
   });
 };
 var sbBuscarAprendizados = function() {
-  return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado?select=texto_original,insumo_descricao", { headers: SB })
+  return fetch(SUPABASE_URL + "/rest/v1/insumo_aprendizado?select=texto_original,insumo_descricao", { headers: SB, cache: "no-store" })
     .then(function(r){
       if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar a memória de aprendizados. Verifique sua conexão.'); return []; }
       return r.json();
@@ -875,7 +875,7 @@ var sbExcluirAprendizado = function(textoOriginal) {
 };
 var sbGetIaUsoDia = function() {
   var hoje = new Date().toISOString().slice(0,10);
-  return fetch(SUPABASE_URL + "/rest/v1/ia_uso?select=custo_brl,itens_lidos&created_at=gte." + hoje + "T00:00:00", { headers: SB })
+  return fetch(SUPABASE_URL + "/rest/v1/ia_uso?select=custo_brl,itens_lidos&created_at=gte." + hoje + "T00:00:00", { headers: SB, cache: "no-store" })
     .then(function(r){
       if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar o uso diário da IA. Verifique sua conexão.'); return []; }
       return r.json();
@@ -10623,7 +10623,7 @@ function App() {
     var mapaEl = document.querySelector('[data-mapa-id="'+id+'"]');
     if(mapaEl) mapaEl.style.opacity = '0.5';
 
-    fetch(SUPABASE_URL + '/rest/v1/pedidos?select=numero,status&mapa_id=eq.' + id + '&status=neq.cancelado', { headers: SB })
+    fetch(SUPABASE_URL + '/rest/v1/pedidos?select=numero,status&mapa_id=eq.' + id + '&status=neq.cancelado', { headers: SB, cache: 'no-store' })
       .then(function(r){
         // BUG5 FIX: Supabase pode retornar status OK mas JSON inválido
         if(!r.ok) throw new Error('HTTP ' + r.status);
@@ -10960,7 +10960,7 @@ function App() {
         // "mapa" na primeira montagem e IGNORA atualizações posteriores dela. Por isso não dá
         // para mostrar a versão antiga primeiro e "trocar" depois; é preciso esperar a
         // verificação terminar antes de montar o MapEditor pela primeira vez.
-        fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(mapaEmMemoria.id, "&select=dados,atualizado_em"), { headers: SB })
+        fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(mapaEmMemoria.id, "&select=dados,atualizado_em"), { headers: SB, cache: "no-store" })
           .then(function(r){ return r.ok ? r.json() : null; })
           .then(function(rows){
             var maisRecente = (rows && rows[0] && rows[0].dados)
