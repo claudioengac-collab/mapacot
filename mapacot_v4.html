@@ -4254,6 +4254,12 @@ var _useState27 = useState(init),
     return isNaN(d.getTime()) ? clock : d;
   })();
   var saveTimer = useRef();
+  // FIX: ref que sempre aponta para o valor MAIS RECENTE de "mapa" — necessária porque a
+  // variável "mapa" capturada dentro de um onClick (closure) fica presa no valor de QUANDO o
+  // clique aconteceu; se atrasarmos a ação com setTimeout (para esperar um campo confirmar),
+  // usar a variável direta ainda pegaria o valor ANTIGO. A ref sempre reflete o estado atual.
+  var mapaRef = useRef(mapa);
+  useEffect(function(){ mapaRef.current = mapa; }, [mapa]);
   // FIX: popup de observação do fornecedor — aparece ao escolher um fornecedor que tem
   // observação salva, e só fecha quando o usuário clicar em qualquer outro lugar da tela.
   var _useStateObsPopup = useState(null),
@@ -4356,10 +4362,6 @@ var _useState27 = useState(init),
       }));
     });
     setSaved(false);
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(function () {
-      return setSaved(true);
-    }, 900);
   }, []);
   var updateUI = function updateUI(fn) {
     setMapa(function (prev) {
@@ -4369,9 +4371,28 @@ var _useState27 = useState(init),
       }));
     });
   };
+  // FIX: reescrita completa do mecanismo de salvamento (debounce real), motivada por relatos
+  // reais de dados perdidos que persistiam mesmo após várias correções pontuais. ANTES: cada
+  // edição disparava uma requisição de salvamento quase imediata, exigindo uma fila complexa de
+  // versionamento no servidor para lidar com múltiplas chamadas simultâneas — essa complexidade
+  // se mostrou frágil. AGORA: só existe UM salvamento pendente por vez; uma nova edição CANCELA
+  // e SUBSTITUI o anterior (debounce de verdade, só salva depois de uma pausa real na digitação);
+  // e ao sair do mapa, um "flush" explícito FORÇA o salvamento imediato e AGUARDA ele completar
+  // antes de navegar, sempre usando o valor mais recente (via mapaRef, não a variável capturada).
+  var dispararSalvamento = function() {
+    return onSave(mapaRef.current).then(function(){ setSaved(true); }).catch(function(){ setSaved(true); });
+  };
   useEffect(function () {
-    if (!saved) onSave(mapa);
-  }, [saved, mapa]);
+    if (saved) return;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(dispararSalvamento, 900);
+    return function(){ clearTimeout(saveTimer.current); };
+  }, [mapa, saved]);
+  var flushSalvar = function() {
+    clearTimeout(saveTimer.current);
+    if (saved) return Promise.resolve();
+    return dispararSalvamento();
+  };
   var addItem = function addItem() {
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
@@ -5611,7 +5632,21 @@ var _useState27 = useState(init),
     style: SC.appBar,
     className: "rsp-appbar"
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: function(){ onBack(mapa); },
+    onClick: function(){
+      // FIX: em telas de toque, tocar em "voltar" enquanto um campo ainda está em edição pode
+      // processar o clique antes do campo confirmar seu valor — uma corrida entre "sair" e
+      // "confirmar" mais comum em touch do que em clique de mouse. Forçamos o blur do campo
+      // (para ele tentar confirmar) e usamos flushSalvar() para GARANTIR que o salvamento real
+      // aconteça e seja CONCLUÍDO (aguardando a promise, não só esperando um tempo fixo) antes
+      // de navegar para fora do mapa — usando sempre mapaRef.current (o valor mais recente).
+      var elementoAtivo = document.activeElement;
+      if (elementoAtivo && typeof elementoAtivo.blur === 'function') {
+        elementoAtivo.blur();
+      }
+      setTimeout(function(){
+        flushSalvar().then(function(){ onBack(mapaRef.current); }).catch(function(){ onBack(mapaRef.current); });
+      }, 200); // pequena espera para o blur (e o commit assíncrono de campos com sugestões) completar antes do flush
+    },
     style: SC.backBtn
   }, /*#__PURE__*/React.createElement(IcoBack, null), " MAPAS"), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -10651,41 +10686,34 @@ function App() {
         alert('\u26A0\uFE0F N\u00e3o foi poss\u00edvel verificar os pedidos vinculados.\n\nVerifique sua conex\u00e3o e tente novamente.\n\nA exclus\u00e3o foi cancelada por seguran\u00e7a.');
       });
   };
-  var handleSave = /*#__PURE__*/function () {
-    var _ref22 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee1(updated) {
-      return _regenerator().w(function (_context1) {
-        while (1) switch (_context1.n) {
-          case 0:
-            setMapas(function (prev) {
-              return prev.map(function (m) {
-                return m.id === updated.id ? updated : m;
-              });
-            });
-            sbSaveMapa(updated).then(function(novaVersao){
-              // FIX: propaga a nova versão salva de volta ao estado local — sem isso, a proteção
-              // contra múltiplas abas ficaria "presa" comparando sempre com a versão original do
-              // carregamento, rejeitando salvamentos legítimos subsequentes da mesma aba.
-              var comVersao = Object.assign({}, updated, { _versaoServidor: novaVersao });
-              setMapas(function (prev) { return prev.map(function (m) { return m.id === updated.id ? comVersao : m; }); });
-              setCurrent(function(c){ return (c && c.id === updated.id) ? comVersao : c; });
-            }).catch(function (e) {
-              console.error('MAPACOT: Falha ao salvar mapa no servidor:', e && e.message || e);
-              if (e && e.isVersionConflict) {
-                window.avisarConflitoVersaoUmaVez('mapa-' + updated.id, e.message);
-              } else {
-                window.avisarErroSalvamento('Não foi possível salvar o mapa. Verifique sua conexão.');
-              }
-            });
-            setCurrent(updated);
-          case 1:
-            return _context1.a(2);
-        }
-      }, _callee1);
-    }));
-    return function handleSave(_x7) {
-      return _ref22.apply(this, arguments);
-    };
-  }();
+  var handleSave = function handleSave(updated) {
+    setMapas(function (prev) {
+      return prev.map(function (m) {
+        return m.id === updated.id ? updated : m;
+      });
+    });
+    setCurrent(updated);
+    // FIX: agora RETORNA a Promise do salvamento (em vez de só disparar e esquecer) — necessário
+    // para o mecanismo de "flush" ao sair do mapa poder ESPERAR o salvamento de verdade completar
+    // antes de navegar para fora, garantindo que os dados mais recentes não se percam.
+    return sbSaveMapa(updated).then(function(novaVersao){
+      // FIX: propaga a nova versão salva de volta ao estado local — sem isso, a proteção
+      // contra múltiplas abas ficaria "presa" comparando sempre com a versão original do
+      // carregamento, rejeitando salvamentos legítimos subsequentes da mesma aba.
+      var comVersao = Object.assign({}, updated, { _versaoServidor: novaVersao });
+      setMapas(function (prev) { return prev.map(function (m) { return m.id === updated.id ? comVersao : m; }); });
+      setCurrent(function(c){ return (c && c.id === updated.id) ? comVersao : c; });
+      return comVersao;
+    }).catch(function (e) {
+      console.error('MAPACOT: Falha ao salvar mapa no servidor:', e && e.message || e);
+      if (e && e.isVersionConflict) {
+        window.avisarConflitoVersaoUmaVez('mapa-' + updated.id, e.message);
+      } else {
+        window.avisarErroSalvamento('Não foi possível salvar o mapa. Verifique sua conexão.');
+      }
+      throw e; // propaga o erro para quem chamou saber que falhou
+    });
+  };
   var filtered = mapas.filter(function (m) {
     var passaSearch = ((m.nome||"") + (m.obra||"") + (m.responsavel||"")).toLowerCase().includes(search.toLowerCase());
     var passaInsumo = !searchInsumo.trim() || (m.itens || []).some(function (i) {
