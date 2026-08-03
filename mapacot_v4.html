@@ -2580,9 +2580,15 @@ function AutocompleteInput(_ref9) {
     if (!open || !filtered.length) {
       if (e.key === "Enter" || e.key === "Tab") {
         if (strictMatch) {
-          var _match = value && (suggestions || []).some(function (s) {
+          // FIX: causa raiz real de descrições/unidades salvas vazias mesmo com o texto certo
+          // digitado — se a lista de cadastros válidos (suggestions) ainda está vazia nesse
+          // momento (ainda carregando do servidor, ex: conexão mais lenta), rejeitar o valor
+          // digitado como se fosse inválido causa perda de dados reais. Enquanto a lista ainda
+          // não carregou, aceita o valor digitado sem rejeitar.
+          var _aindaCarregando = !suggestions || suggestions.length === 0;
+          var _match = _aindaCarregando || (value && suggestions.some(function (s) {
             return s.toUpperCase() === value.toUpperCase();
-          });
+          }));
           _onChange(_match ? value : "");
           onCommit && onCommit(_match ? value : "");
         } else {
@@ -2610,9 +2616,12 @@ function AutocompleteInput(_ref9) {
         // podendo disparar efeitos colaterais indevidos (ex: popup de observação de fornecedor
         // abrindo para um texto que não corresponde a nenhum fornecedor real).
         if (strictMatch) {
-          var matchEnter = value && (suggestions || []).some(function (s) {
+          // FIX: mesma proteção contra cadastros ainda carregando - ver comentário completo
+          // no primeiro ponto de validação strictMatch, acima.
+          var _aindaCarregandoEnter = !suggestions || suggestions.length === 0;
+          var matchEnter = _aindaCarregandoEnter || (value && suggestions.some(function (s) {
             return s.toUpperCase() === value.toUpperCase();
-          });
+          }));
           _onChange(matchEnter ? value : "");
           onCommit && onCommit(matchEnter ? value : "");
         } else {
@@ -2648,9 +2657,12 @@ function AutocompleteInput(_ref9) {
         setOpen(false);
         setHi(-1);
         if (strictMatch) {
-          var match = _blurVal && (suggestions || []).some(function (s) {
+          // FIX: mesma proteção contra cadastros ainda carregando - ver comentário completo
+          // no primeiro ponto de validação strictMatch, em handleKey.
+          var _aindaCarregandoBlur = !suggestions || suggestions.length === 0;
+          var match = _aindaCarregandoBlur || (_blurVal && suggestions.some(function (s) {
             return s.toUpperCase() === _blurVal.toUpperCase();
-          });
+          }));
           _onChange(match ? _blurVal : "");
           if (onCommit) onCommit(match ? _blurVal : "");
         }
@@ -4259,6 +4271,10 @@ var _useState27 = useState(init),
   // clique aconteceu; se atrasarmos a ação com setTimeout (para esperar um campo confirmar),
   // usar a variável direta ainda pegaria o valor ANTIGO. A ref sempre reflete o estado atual.
   var mapaRef = useRef(mapa);
+  // FIX: rastreia, de forma síncrona (sem depender de re-render), se há uma edição feita mas
+  // ainda não enviada para salvar — necessária para flushSalvar decidir corretamente mesmo
+  // quando chamada imediatamente após uma edição, antes do React atualizar o state "saved".
+  var pendenteRef = useRef(false);
   useEffect(function(){ mapaRef.current = mapa; }, [mapa]);
   // FIX: popup de observação do fornecedor — aparece ao escolher um fornecedor que tem
   // observação salva, e só fecha quando o usuário clicar em qualquer outro lugar da tela.
@@ -4361,6 +4377,8 @@ var _useState27 = useState(init),
         atualizadoEm: new Date().toISOString()
       }));
     });
+    pendenteRef.current = true; // FIX: marca IMEDIATAMENTE (síncrono) que há uma edição não
+    // salva ainda — ver explicação completa abaixo, junto de flushSalvar.
     setSaved(false);
   }, []);
   var updateUI = function updateUI(fn) {
@@ -4379,7 +4397,16 @@ var _useState27 = useState(init),
   // e SUBSTITUI o anterior (debounce de verdade, só salva depois de uma pausa real na digitação);
   // e ao sair do mapa, um "flush" explícito FORÇA o salvamento imediato e AGUARDA ele completar
   // antes de navegar, sempre usando o valor mais recente (via mapaRef, não a variável capturada).
+  //
+  // FIX ADICIONAL (encontrado numa releitura cuidadosa, sem esperar por outro relato): usar a
+  // variável "saved" (state do React) para decidir se há algo pendente era uma falha real —
+  // "saved" só reflete o valor mais recente DEPOIS que o React termina de re-renderizar. Se o
+  // usuário editar um campo e clicar em "voltar" muito rapidamente (antes desse re-render
+  // acontecer), flushSalvar podia enxergar o "saved" ANTIGO (ainda true, de antes da edição) e
+  // concluir — errado — que não havia nada para salvar. pendenteRef resolve isso: é atualizada
+  // de forma síncrona e imediata dentro de update(), sem depender do ciclo de render do React.
   var dispararSalvamento = function() {
+    pendenteRef.current = false;
     return onSave(mapaRef.current).then(function(){ setSaved(true); }).catch(function(){ setSaved(true); });
   };
   useEffect(function () {
@@ -4390,7 +4417,7 @@ var _useState27 = useState(init),
   }, [mapa, saved]);
   var flushSalvar = function() {
     clearTimeout(saveTimer.current);
-    if (saved) return Promise.resolve();
+    if (!pendenteRef.current) return Promise.resolve();
     return dispararSalvamento();
   };
   var addItem = function addItem() {
@@ -4985,9 +5012,14 @@ var _useState27 = useState(init),
           return updForn(f.id, "nome", v, true);
         },
         onCommit: function onCommit(v) {
-          var fn = v && (cadastros.fornecedores || []).find(function (x) {
+          // FIX: segunda camada de validação (redundante com a de dentro do AutocompleteInput)
+          // que causava o mesmo problema real de dados perdidos — se a lista de fornecedores
+          // cadastrados ainda não carregou (array vazio), aceita o valor digitado em vez de
+          // rejeitar como se fosse inválido.
+          var _fornAindaCarregando = !(cadastros.fornecedores || []).length;
+          var fn = _fornAindaCarregando ? v : (v && cadastros.fornecedores.find(function (x) {
             return x.toUpperCase() === v.toUpperCase();
-          });
+          }));
           updForn(f.id, "nome", fn || "");
           // FIX: se o fornecedor escolhido tiver observação salva, mostra num popup que só
           // fecha quando o usuário clicar em outro lugar da tela.
@@ -5195,9 +5227,12 @@ var _useState27 = useState(init),
         : /*#__PURE__*/React.createElement(EC, {
         value: item.unid,
         onChange: function onChange(v) {
-          var u = (cadastros.unidades || []).find(function (x) {
+          // FIX: mesma proteção contra cadastros ainda carregando - ver comentário completo
+          // junto ao campo Fornecedor, acima.
+          var _unidAindaCarregando = !(cadastros.unidades || []).length;
+          var u = _unidAindaCarregando ? v : (cadastros.unidades.find(function (x) {
             return x.toUpperCase() === v.toUpperCase();
-          });
+          }));
           updItem(item.id, "unid", u || "");
         },
         strictMatch: true,
@@ -5217,9 +5252,13 @@ var _useState27 = useState(init),
         : /*#__PURE__*/React.createElement(EC, {
         value: item.descricao,
         onChange: function onChange(v) {
-          var d = (cadastros.insumos || []).find(function (x) {
+          // FIX: mesma proteção contra cadastros ainda carregando - ver comentário completo
+          // junto ao campo Fornecedor, acima. Esta é a causa raiz real confirmada do problema
+          // de descrições salvas vazias mesmo com o texto certo digitado.
+          var _descAindaCarregando = !(cadastros.insumos || []).length;
+          var d = _descAindaCarregando ? v : (cadastros.insumos.find(function (x) {
             return x.toUpperCase() === v.toUpperCase();
-          });
+          }));
           updItem(item.id, "descricao", d || "");
         },
         onBlur: function() {},
