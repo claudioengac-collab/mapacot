@@ -546,7 +546,10 @@ var sbSaveMapa = function sbSaveMapa(m) {
   var estado = estadoSalvamentoMapa[idMapa];
 
   estado.fila = estado.fila.catch(function(){}).then(function(){
-    logEventoDiag("SALVANDO mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " (" + ((dadosLimpos.itens || []).length) + " itens)");
+    var __resumoItens = (dadosLimpos.itens || []).slice(-2).map(function (i) {
+      return "#" + i.num + "[qt=" + (i.qt || "") + " un=" + (i.unid || "") + " ds=" + String(i.descricao || "").slice(0, 12) + "]";
+    }).join(" ");
+    logEventoDiag("SALVANDO mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " (" + ((dadosLimpos.itens || []).length) + " itens) " + __resumoItens);
     var versaoParaVerificar = estado.ultimaVersaoConhecida;
     var verificar = versaoParaVerificar
       ? fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(idMapa, "&select=atualizado_em"), { headers: SB, cache: "no-store" })
@@ -4535,6 +4538,7 @@ var _useState27 = useState(init),
     };
   }, [saved]);
   var addItem = function addItem() {
+    try { logEventoDiag("ADD item " + (((mapaRef.current && mapaRef.current.itens) || []).length + 1)); } catch (e) {}
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
         itens: [].concat(_toConsumableArray(m.itens), [emptyItem(m.itens.length + 1)])
@@ -4561,6 +4565,13 @@ var _useState27 = useState(init),
     });
   };
   var updItem = function updItem(id, f, v) {
+    // DIAGNÓSTICO: registra cada edição de campo que ENTRA no estado. Se uma digitação não
+    // aparecer aqui, ela nunca chegou ao estado (problema no commit do campo); se aparecer
+    // aqui mas não no servidor, o problema está no salvamento/sobrescrita.
+    try {
+      var itemDiag = (mapaRef.current && mapaRef.current.itens || []).find(function (x) { return x.id === id; });
+      logEventoDiag("EDIT item " + (itemDiag ? itemDiag.num : "?") + " " + f + " = \"" + (v === null || v === undefined ? "" : String(v)) + "\"");
+    } catch (e) {}
     update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
         itens: m.itens.map(function (i) {
