@@ -485,6 +485,9 @@ var sbSaveMapa = function sbSaveMapa(m) {
   var idMapa = m.id;
   var dadosLimpos = Object.assign({}, m);
   delete dadosLimpos._versaoServidor; // nunca persiste este campo de controle dentro dos dados do mapa
+  // Diagnóstico: registra qual versão do app fez este salvamento. Se dados sumirem/regredirem,
+  // este campo revela se um arquivo antigo (sem as correções) salvou por cima.
+  dadosLimpos._appVersao = "4.2-2026-08-03";
 
   if (!estadoSalvamentoMapa[idMapa]) {
     estadoSalvamentoMapa[idMapa] = { fila: Promise.resolve(), ultimaVersaoConhecida: m._versaoServidor };
@@ -4425,6 +4428,54 @@ var _useState27 = useState(init),
     if (!pendenteRef.current) return Promise.resolve();
     return dispararSalvamento();
   };
+  // FIX (multi-abas, causa real do "editei e não salvou / voltou ao valor anterior"): quando o
+  // usuário mantém o MESMO mapa aberto em duas abas e alterna entre elas, a aba que ficou em
+  // segundo plano continua com dados VELHOS. Antes, qualquer edição feita nela era bloqueada
+  // pela proteção de conflito (para não sobrescrever o servidor) — correto, mas o trabalho do
+  // usuário era descartado após o aviso, parecendo que "não salvou nada". Agora: sempre que a
+  // aba volta a ficar visível/em foco, se NÃO há edição local pendente, buscamos a versão do
+  // servidor; se houver algo mais novo (salvo pela outra aba), recarregamos os dados
+  // automaticamente. Assim o usuário sempre edita em cima da versão mais recente e o
+  // salvamento seguinte funciona normalmente, sem conflito e sem perda.
+  var verificandoVersaoRef = useRef(false);
+  useEffect(function () {
+    var aoGanharFoco = function () {
+      if (document.visibilityState && document.visibilityState !== "visible") return;
+      if (verificandoVersaoRef.current) return;         // já tem uma verificação em andamento
+      if (pendenteRef.current) return;                   // há edição local ainda não enviada
+      if (saveTimer.current) { /* timer de debounce pode estar ativo */ }
+      if (!saved) return;                                // salvamento em andamento/pendente
+      var idMapa = mapaRef.current && mapaRef.current.id;
+      if (!idMapa) return;
+      verificandoVersaoRef.current = true;
+      var estadoSv = (typeof estadoSalvamentoMapa !== "undefined" && estadoSalvamentoMapa[idMapa]) || null;
+      var versaoLocal = (estadoSv && estadoSv.ultimaVersaoConhecida) || mapaRef.current._versaoServidor || null;
+      fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(idMapa, "&select=dados,atualizado_em"), { headers: SB, cache: "no-store" })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(rows){
+          var linha = rows && rows[0];
+          if (!linha || !linha.dados) return;
+          if (versaoLocal && linha.atualizado_em === versaoLocal) return; // nada mudou
+          // Outra aba/dispositivo salvou algo mais novo: recarrega silenciosamente.
+          if (pendenteRef.current) return; // re-checa: usuário pode ter editado durante o fetch
+          var atualizado = Object.assign({}, linha.dados, { _versaoServidor: linha.atualizado_em });
+          setMapa(atualizado);
+          setSaved(true);
+          if (estadoSv) estadoSv.ultimaVersaoConhecida = linha.atualizado_em;
+          else if (typeof estadoSalvamentoMapa !== "undefined") {
+            estadoSalvamentoMapa[idMapa] = { fila: Promise.resolve(), ultimaVersaoConhecida: linha.atualizado_em };
+          }
+        })
+        .catch(function(){ /* falha de rede: mantém o que está na tela, sem bloquear */ })
+        .then(function(){ verificandoVersaoRef.current = false; });
+    };
+    document.addEventListener("visibilitychange", aoGanharFoco);
+    window.addEventListener("focus", aoGanharFoco);
+    return function () {
+      document.removeEventListener("visibilitychange", aoGanharFoco);
+      window.removeEventListener("focus", aoGanharFoco);
+    };
+  }, [saved]);
   var addItem = function addItem() {
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
@@ -10212,10 +10263,23 @@ function Login(_ref18) {
     style: {
       fontSize: 12,
       color: "#888",
-      marginBottom: 28,
+      marginBottom: 6,
       letterSpacing: 0.5
     }
-  }, "SISTEMA DE COTA\xC7\xC3O"), /*#__PURE__*/React.createElement("input", {
+  }, "SISTEMA DE COTA\xC7\xC3O"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      fontWeight: 700,
+      color: "#1d4ed8",
+      background: "#eff6ff",
+      border: "1px solid #bfdbfe",
+      borderRadius: 6,
+      padding: "3px 10px",
+      display: "inline-block",
+      marginBottom: 22,
+      letterSpacing: 0.5
+    }
+  }, "VERS\xC3O 4.2 \u2014 03/08/2026"), /*#__PURE__*/React.createElement("input", {
     value: user,
     onChange: function onChange(e) {
       return setUser(e.target.value.toUpperCase());
@@ -10824,7 +10888,7 @@ function App() {
       color: "#7a9cc8",
       letterSpacing: 1
     }
-  }, "SISTEMA DE COTA\xC7\xC3O"))), /*#__PURE__*/React.createElement("div", {
+  }, "SISTEMA DE COTA\xC7\xC3O \xB7 V4.2 \u2014 03/08/2026"))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8
