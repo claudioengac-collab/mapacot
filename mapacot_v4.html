@@ -10950,7 +10950,27 @@ function App() {
     return /*#__PURE__*/React.createElement(MapCard, {
       key: m.id,
       mapa: m,
-      onOpen: setCurrent,
+      onOpen: function(mapaEmMemoria) {
+        // FIX: relatado e reproduzido pelo Claudio — abrir um mapa usava só a cópia já
+        // carregada em memória nesta aba, que podia estar desatualizada se o mesmo mapa tivesse
+        // sido editado em outro lugar (outra aba, outro dispositivo) depois que esta lista
+        // carregou. Isso fazia o mapa abrir mostrando MENOS itens/dados do que realmente
+        // existiam no servidor.
+        // IMPORTANTE: MapEditor usa useState(init) internamente — ele só considera a prop
+        // "mapa" na primeira montagem e IGNORA atualizações posteriores dela. Por isso não dá
+        // para mostrar a versão antiga primeiro e "trocar" depois; é preciso esperar a
+        // verificação terminar antes de montar o MapEditor pela primeira vez.
+        fetch("".concat(SUPABASE_URL, "/rest/v1/mapas?id=eq.").concat(mapaEmMemoria.id, "&select=dados,atualizado_em"), { headers: SB })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(rows){
+            var maisRecente = (rows && rows[0] && rows[0].dados)
+              ? Object.assign({}, rows[0].dados, { _versaoServidor: rows[0].atualizado_em })
+              : mapaEmMemoria; // falha ao verificar: usa o que já tinha em memória, não bloqueia o usuário
+            setCurrent(maisRecente);
+            setMapas(function(prev){ return prev.map(function(m){ return m.id === maisRecente.id ? maisRecente : m; }); });
+          })
+          .catch(function(){ setCurrent(mapaEmMemoria); }); // falha de rede: abre com o que já tinha, não bloqueia
+      },
       onDelete: handleDelete,
       onDuplicate: function(mapaOrigem) {
         var nextNum = mapas.length > 0 ? Math.max.apply(null, mapas.map(function(x){ return x.numero || 0; })) + 1 : 1;
