@@ -10427,7 +10427,7 @@ function App() {
         .then(function(novaVersao){ versaoCadastrosRef.current = novaVersao; }) // FIX: atualiza via
         // ref (não state) para não disparar este mesmo useEffect de novo — evita loop
         .catch(function(e){
-          if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+          if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
           else window.avisarErroSalvamento('Não foi possível salvar os cadastros. Verifique sua conexão.');
         });
     }
@@ -10498,13 +10498,13 @@ function App() {
         versaoInsumosRef.current = novaVersao;
       }).catch(function (e) {
         console.error('MAPACOT: Erro ao salvar insumos:', e);
-        if (e && e.isVersionConflict) alert(e.message);
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
       });
       else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
         versaoCadastrosRef.current = novaVersao;
       }).catch(function (e) {
         console.error('MAPACOT: Erro ao salvar cadastros:', e);
-        if (e && e.isVersionConflict) alert(e.message);
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
         else alert('\u26A0\uFE0F N\u00e3o foi poss\u00edvel salvar o cadastro no servidor.\nVerifique sua conex\u00e3o e tente novamente.');
       });
       return updated;
@@ -10526,13 +10526,13 @@ function App() {
       if (tipo === 'insumos') sbSaveInsumos(updated.insumos, versaoInsumosRef.current).then(function(novaVersao){
         versaoInsumosRef.current = novaVersao;
       }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.');
       });
       else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
         versaoCadastrosRef.current = novaVersao;
       }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.');
       });
       return updated;
@@ -10559,13 +10559,13 @@ function App() {
       if (tipo === 'insumos') sbSaveInsumos(updated.insumos, versaoInsumosRef.current).then(function(novaVersao){
         versaoInsumosRef.current = novaVersao;
       }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.');
       });
       else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
         versaoCadastrosRef.current = novaVersao;
       }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.');
       });
       return updated;
@@ -10587,7 +10587,7 @@ function App() {
       sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
         versaoCadastrosRef.current = novaVersao;
       }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar a observação. Verifique sua conexão.');
       });
       return updated;
@@ -10671,7 +10671,7 @@ function App() {
             }).catch(function (e) {
               console.error('MAPACOT: Falha ao salvar mapa no servidor:', e && e.message || e);
               if (e && e.isVersionConflict) {
-                window.avisarErroSalvamento(e.message);
+                window.avisarConflitoVersaoUmaVez('mapa-' + updated.id, e.message);
               } else {
                 window.avisarErroSalvamento('Não foi possível salvar o mapa. Verifique sua conexão.');
               }
@@ -10695,7 +10695,7 @@ function App() {
   });
   if (current) return /*#__PURE__*/React.createElement(MapEditor, {
     mapa: current,
-    onBack: function onBack(mapaAtual) { if(mapaAtual) { setMapas(function(prev){ return prev.map(function(m){ return m.id===mapaAtual.id ? mapaAtual : m; }); }); sbSaveMapa(mapaAtual).catch(function(e){ if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message); else window.avisarErroSalvamento('Não foi possível salvar o mapa. Verifique sua conexão.'); }); } setCurrent(null); },
+    onBack: function onBack(mapaAtual) { if(mapaAtual) { setMapas(function(prev){ return prev.map(function(m){ return m.id===mapaAtual.id ? mapaAtual : m; }); }); sbSaveMapa(mapaAtual).catch(function(e){ if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('mapa-' + mapaAtual.id, e.message); else window.avisarErroSalvamento('Não foi possível salvar o mapa. Verifique sua conexão.'); }); } setCurrent(null); },
     onSave: handleSave,
     cadastros: cadastros,
     addCadastro: addCadastro,
@@ -11294,6 +11294,17 @@ var SC = {
 // Qualquer parte do sistema pode chamar window.avisarErroSalvamento(mensagem).
 window.avisarErroSalvamento = function(mensagem) {
   window.dispatchEvent(new CustomEvent('mapacot-erro-salvamento', { detail: mensagem }));
+};
+
+// FIX: quando há um conflito de versão real (outra aba/dispositivo editou o mesmo dado), o
+// usuário pode continuar tentando editar sem recarregar — sem esta proteção, CADA nova
+// tentativa mostraria o mesmo aviso de novo, o que fica repetitivo e confuso. Agora o aviso
+// aparece só uma vez por item em conflito nesta aba; reseta ao recarregar a página.
+var conflitosJaAvisados = {};
+window.avisarConflitoVersaoUmaVez = function(chave, mensagem) {
+  if (conflitosJaAvisados[chave]) return;
+  conflitosJaAvisados[chave] = true;
+  window.avisarErroSalvamento(mensagem);
 };
 
 function ToastErroSalvamento() {
