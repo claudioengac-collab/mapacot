@@ -2653,20 +2653,25 @@ function AutocompleteInput(_ref9) {
     },
     onBlur: function onBlur() {
       var _blurVal = value;
-      return setTimeout(function () {
-        setOpen(false);
-        setHi(-1);
-        if (strictMatch) {
-          // FIX: mesma proteção contra cadastros ainda carregando - ver comentário completo
-          // no primeiro ponto de validação strictMatch, em handleKey.
-          var _aindaCarregandoBlur = !suggestions || suggestions.length === 0;
-          var match = _aindaCarregandoBlur || (_blurVal && suggestions.some(function (s) {
-            return s.toUpperCase() === _blurVal.toUpperCase();
-          }));
-          _onChange(match ? _blurVal : "");
-          if (onCommit) onCommit(match ? _blurVal : "");
-        }
-      }, 180);
+      // FIX: causa raiz real de dados perdidos ao preencher campos rapidamente (confirmado com
+      // testes). Este onBlur tinha um delay de 180ms antes de confirmar o valor — pensado para
+      // dar tempo de um clique numa sugestão do dropdown ser registrado antes do blur "fechar"
+      // tudo. Mas essa proteção já existe de outra forma: cada opção do dropdown usa
+      // preventDefault() no onMouseDown (ver função "select" logo abaixo), o que IMPEDE o blur
+      // de disparar nesse caso — o delay aqui era redundante. Só que, quando o usuário passava
+      // para o próximo campo em menos de 180ms (comum ao preencher vários itens seguidos), o
+      // commit deste campo ainda estava pendente e podia se perder na transição. Confirmando o
+      // valor imediatamente (sem esperar) resolve isso sem quebrar a seleção por clique.
+      setOpen(false);
+      setHi(-1);
+      if (strictMatch) {
+        var _aindaCarregandoBlur = !suggestions || suggestions.length === 0;
+        var match = _aindaCarregandoBlur || (_blurVal && suggestions.some(function (s) {
+          return s.toUpperCase() === _blurVal.toUpperCase();
+        }));
+        _onChange(match ? _blurVal : "");
+        if (onCommit) onCommit(match ? _blurVal : "");
+      }
     },
     onKeyDown: handleKey,
     placeholder: placeholder,
