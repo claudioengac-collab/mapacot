@@ -10723,7 +10723,15 @@ function App() {
   });
   if (current) return /*#__PURE__*/React.createElement(MapEditor, {
     mapa: current,
-    onBack: function onBack(mapaAtual) { if(mapaAtual) { setMapas(function(prev){ return prev.map(function(m){ return m.id===mapaAtual.id ? mapaAtual : m; }); }); sbSaveMapa(mapaAtual).catch(function(e){ if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('mapa-' + mapaAtual.id, e.message); else window.avisarErroSalvamento('Não foi possível salvar o mapa. Verifique sua conexão.'); }); } setCurrent(null); },
+    onBack: function onBack(mapaAtual) {
+      // FIX: removida a chamada duplicada de sbSaveMapa aqui — o MapEditor agora GARANTE (via
+      // flushSalvar) que o mapa já foi salvo com sucesso ANTES de chamar onBack. Salvar de novo
+      // aqui era redundante e podia gerar confusão (duas requisições de rede para a mesma ação).
+      if (mapaAtual) {
+        setMapas(function(prev){ return prev.map(function(m){ return m.id===mapaAtual.id ? mapaAtual : m; }); });
+      }
+      setCurrent(null);
+    },
     onSave: handleSave,
     cadastros: cadastros,
     addCadastro: addCadastro,
