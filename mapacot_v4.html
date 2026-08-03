@@ -538,7 +538,7 @@ var sbGetCadastros = /*#__PURE__*/function () {
       while (1) switch (_context4.n) {
         case 0:
           _context4.n = 1;
-          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados"), {
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados,atualizado_em"), {
             headers: SB
           });
         case 1:
@@ -553,7 +553,9 @@ var sbGetCadastros = /*#__PURE__*/function () {
           return r.json();
         case 3:
           d = _context4.v;
-          return _context4.a(2, ((_d$ = d[0]) === null || _d$ === void 0 ? void 0 : _d$.dados) || null);
+          if (!d[0]) return _context4.a(2, null);
+          // FIX: anexa a versão do servidor, mesma proteção contra múltiplas abas já aplicada em mapas
+          return _context4.a(2, Object.assign({}, d[0].dados, { _versaoServidor: d[0].atualizado_em }));
       }
     }, _callee4);
   }));
@@ -592,42 +594,32 @@ var sbGetInsumos = /*#__PURE__*/function () {
     return _ref5.apply(this, arguments);
   };
 }();
-var sbSaveCadastros = /*#__PURE__*/function () {
-  var _ref6 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee6(c) {
-    var main;
-    return _regenerator().w(function (_context6) {
-      while (1) switch (_context6.n) {
-        case 0:
-          main = {
-            obras: c.obras || [],
-            fornecedores: c.fornecedores || [],
-            unidades: c.unidades || [],
-            fornecedorObs: c.fornecedorObs || {} // FIX: observações livres por fornecedor — incluído
-            // explicitamente aqui porque esta função só salva os campos citados nesta lista; um
-            // campo novo que não apareça aqui seria descartado silenciosamente ao salvar (mesmo
-            // tipo de bug já corrigido antes no orçamento).
-          };
-          _context6.n = 1;
-          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
-            method: "POST",
-            headers: SB,
-            body: JSON.stringify({
-              id: "global",
-              dados: main,
-              atualizado_em: new Date().toISOString()
-            })
-          }).then(function(r){
-            if(!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar cadastros ('+r.status+'): '+t); });
-          });
-        case 1:
-          return _context6.a(2);
-      }
-    }, _callee6);
-  }));
-  return function sbSaveCadastros(_x3) {
-    return _ref6.apply(this, arguments);
+var sbSaveCadastros = function sbSaveCadastros(c) {
+  var main = {
+    obras: c.obras || [],
+    fornecedores: c.fornecedores || [],
+    unidades: c.unidades || [],
+    fornecedorObs: c.fornecedorObs || {} // FIX: observações livres por fornecedor — incluído
+    // explicitamente aqui porque esta função só salva os campos citados nesta lista; um
+    // campo novo que não apareça aqui seria descartado silenciosamente ao salvar (mesmo
+    // tipo de bug já corrigido antes no orçamento).
   };
-}();
+  return verificarVersaoAntesDeSalvar("global", c._versaoServidor).then(function(){
+    var novaVersao = new Date().toISOString();
+    return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
+      method: "POST",
+      headers: SB,
+      body: JSON.stringify({
+        id: "global",
+        dados: main,
+        atualizado_em: novaVersao
+      })
+    }).then(function(r){
+      if(!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar cadastros ('+r.status+'): '+t); });
+      return novaVersao;
+    });
+  });
+}
 var sbSaveInsumos = /*#__PURE__*/function () {
   var _ref7 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee7(insumos) {
     return _regenerator().w(function (_context7) {
@@ -662,6 +654,24 @@ var orcObraId = function(nomeObra) {
   // ID seguro: só letras e números, máx 40 chars
   return 'orc' + String(nomeObra || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 40);
 };
+// FIX: mesma proteção contra múltiplas abas já aplicada em sbSaveMapa (bug real relatado e
+// reproduzido) — reutilizável aqui para os outros registros únicos/globais da tabela cadastros
+// (orçamento, cadastros gerais, associações), que têm o MESMO risco: se duas abas carregarem o
+// mesmo registro e uma delas salvar por cima com uma versão antiga, a outra perde o trabalho
+// silenciosamente.
+var verificarVersaoAntesDeSalvar = function(idRegistro, versaoConhecida) {
+  if (!versaoConhecida) return Promise.resolve(); // sem versão conhecida (registro novo) — nada a checar
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(idRegistro) + "&select=atualizado_em", { headers: SB })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      var versaoAtualServidor = rows[0] && rows[0].atualizado_em;
+      if (versaoAtualServidor && versaoAtualServidor !== versaoConhecida) {
+        var err = new Error('Estes dados foram modificados em outra aba ou dispositivo. Recarregue a página antes de continuar, para não sobrescrever as mudanças mais recentes.');
+        err.isVersionConflict = true;
+        throw err;
+      }
+    });
+};
 var orcSaldoDisponivel = function(item, associacoes, obraOrcItens) {
   var previsto = parseFloat(item.quantidade)||0;
   if (associacoes && obraOrcItens) {
@@ -685,13 +695,16 @@ var zerarConsumido = function(dados) {
   if (dados.itens) return Object.assign({}, dados, { itens: novosItens });
   return novosItens;
 };
-var sbSaveOrcamento = function(obraId, dados) {
+var sbSaveOrcamento = function(obraId, dados, versaoConhecida) {
   var id = orcObraId(obraId);
-  var body = JSON.stringify({ dados: dados, atualizado_em: new Date().toISOString() });
+  // FIX: nunca persiste o campo de controle de versão dentro dos dados reais do orçamento
+  var dadosLimpos = Object.assign({}, dados);
+  delete dadosLimpos._versaoServidor;
+  var body = JSON.stringify({ dados: dadosLimpos, atualizado_em: new Date().toISOString() });
   var criarViaPost = function() {
     return fetch(SUPABASE_URL + "/rest/v1/cadastros", {
       method: "POST", headers: SB,
-      body: JSON.stringify({ id: id, dados: dados, atualizado_em: new Date().toISOString() })
+      body: JSON.stringify({ id: id, dados: dadosLimpos, atualizado_em: new Date().toISOString() })
     });
   };
   var doPatch = function() {
@@ -716,8 +729,11 @@ var sbSaveOrcamento = function(obraId, dados) {
       });
     });
   };
-  return doPatch().catch(function() {
-    return new Promise(function(res){ setTimeout(res,1500); }).then(doPatch);
+  var novaVersao = JSON.parse(body).atualizado_em;
+  return verificarVersaoAntesDeSalvar(id, versaoConhecida).then(function(){
+    return doPatch().catch(function() {
+      return new Promise(function(res){ setTimeout(res,1500); }).then(doPatch);
+    }).then(function(){ return novaVersao; });
   });
 };
 var sbDeleteOrcamento = function(obraId) {
@@ -775,21 +791,29 @@ var sbGetNextNumeroPO = function() {
 
 var sbCarregarOrcamento = function(obraId) {
   var id = orcObraId(obraId);
-  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=dados", { headers: SB })
+  return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq." + encodeURIComponent(id) + "&select=dados,atualizado_em", { headers: SB })
     .then(function(r){
       if (!r.ok) { window.avisarErroSalvamento('Não foi possível carregar o orçamento. Verifique sua conexão.'); return []; }
       return r.json();
     })
-    .then(function(rows){ return (rows && rows[0] && rows[0].dados) ? rows[0].dados : null; })
+    .then(function(rows){
+      if (!rows || !rows[0] || !rows[0].dados) return null;
+      // FIX: anexa a versão do servidor, mesma proteção contra múltiplas abas já aplicada em mapas
+      return Object.assign({}, rows[0].dados, { _versaoServidor: rows[0].atualizado_em });
+    })
     .catch(function(){ window.avisarErroSalvamento('Não foi possível carregar o orçamento. Verifique sua conexão.'); return null; });
 };
-var sbSaveAssociacoes = function(lista) {
-  var payload = JSON.stringify({ id: "assocv2", dados: { lista: lista }, atualizado_em: new Date().toISOString() });
+var sbSaveAssociacoes = function(lista, versaoConhecida) {
+  var novaVersao = new Date().toISOString();
+  var payload = JSON.stringify({ id: "assocv2", dados: { lista: lista }, atualizado_em: novaVersao });
   var doSave = function() {
     return fetch(SUPABASE_URL + "/rest/v1/cadastros", { method: "POST", headers: SB, body: payload })
       .then(function(r){ if (!r.ok) throw new Error("save failed "+r.status); return r; });
   };
-  return doSave().catch(function(){ return new Promise(function(res){ setTimeout(res,1000); }).then(doSave); });
+  return verificarVersaoAntesDeSalvar("assocv2", versaoConhecida).then(function(){
+    return doSave().catch(function(){ return new Promise(function(res){ setTimeout(res,1000); }).then(doSave); })
+      .then(function(){ return novaVersao; });
+  });
 };
 var sbCarregarAssociacoes = function() {
   return fetch(SUPABASE_URL + "/rest/v1/cadastros?id=eq.assocv2&select=dados", { headers: SB })
@@ -10233,6 +10257,11 @@ function App() {
     _useState54 = _slicedToArray(_useState53, 2),
     cadastros = _useState54[0],
     setCadastros = _useState54[1];
+  // FIX: versão conhecida dos cadastros, guardada num ref (não um state) DE PROPÓSITO — usar
+  // state aqui disparia o useEffect de auto-save de cadastros a cada atualização de versão,
+  // criando um ciclo (salva → atualiza versão → dispara salvar de novo → ...). Um ref atualiza
+  // sem re-render nem disparar efeitos, evitando esse problema.
+  var versaoCadastrosRef = useRef(null);
   var _useState55 = useState(true),
     _useState56 = _slicedToArray(_useState55, 2),
     loading = _useState56[0],
@@ -10328,6 +10357,7 @@ function App() {
                   // descartando fornecedorObs vindo do servidor
                 };
               });
+              versaoCadastrosRef.current = cad._versaoServidor; // FIX: guarda a versão no ref (ver declaração)
               setCadastrosOk(true);
             }
             _context8.n = 6;
@@ -10378,7 +10408,15 @@ function App() {
 
   // Persist cadastros
   useEffect(function () {
-    if (!loading && cadastrosOk) sbSaveCadastros(cadastros).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar os cadastros. Verifique sua conexão.'); });
+    if (!loading && cadastrosOk) {
+      sbSaveCadastros(Object.assign({}, cadastros, { _versaoServidor: versaoCadastrosRef.current }))
+        .then(function(novaVersao){ versaoCadastrosRef.current = novaVersao; }) // FIX: atualiza via
+        // ref (não state) para não disparar este mesmo useEffect de novo — evita loop
+        .catch(function(e){
+          if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+          else window.avisarErroSalvamento('Não foi possível salvar os cadastros. Verifique sua conexão.');
+        });
+    }
   }, [cadastros, loading, cadastrosOk]);
 
   // ── Funções de orçamento ──────────────────────────────────────────────────
@@ -10445,9 +10483,12 @@ function App() {
       if (tipo === "insumos") sbSaveInsumos(updated.insumos).catch(function (e) {
         console.error('MAPACOT: Erro ao salvar insumos:', e);
       });
-      else sbSaveCadastros(updated).catch(function (e) {
+      else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
+        versaoCadastrosRef.current = novaVersao;
+      }).catch(function (e) {
         console.error('MAPACOT: Erro ao salvar cadastros:', e);
-        alert('\u26A0\uFE0F N\u00e3o foi poss\u00edvel salvar o cadastro no servidor.\nVerifique sua conex\u00e3o e tente novamente.');
+        if (e && e.isVersionConflict) alert(e.message);
+        else alert('\u26A0\uFE0F N\u00e3o foi poss\u00edvel salvar o cadastro no servidor.\nVerifique sua conex\u00e3o e tente novamente.');
       });
       return updated;
     });
@@ -10466,7 +10507,12 @@ function App() {
         updated.fornecedorObs = novoObs;
       }
       if (tipo === 'insumos') sbSaveInsumos(updated.insumos).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.'); });
-      else sbSaveCadastros(updated).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.'); });
+      else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
+        versaoCadastrosRef.current = novaVersao;
+      }).catch(function(e){
+        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.');
+      });
       return updated;
     });
   }, [mapas]);
@@ -10489,7 +10535,12 @@ function App() {
         updated.fornecedorObs = novoObs;
       }
       if (tipo === 'insumos') sbSaveInsumos(updated.insumos).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.'); });
-      else sbSaveCadastros(updated).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.'); });
+      else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
+        versaoCadastrosRef.current = novaVersao;
+      }).catch(function(e){
+        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.');
+      });
       return updated;
     });
   }, [mapas]);
@@ -10506,7 +10557,12 @@ function App() {
       if (textoLimitado.trim()) novoObs[nome] = textoLimitado;
       else delete novoObs[nome]; // texto vazio remove a observação, não deixa lixo salvo
       var updated = _objectSpread(_objectSpread({}, prev), {}, { fornecedorObs: novoObs });
-      sbSaveCadastros(updated).catch(function(){ window.avisarErroSalvamento('Não foi possível salvar a observação. Verifique sua conexão.'); });
+      sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
+        versaoCadastrosRef.current = novaVersao;
+      }).catch(function(e){
+        if (e && e.isVersionConflict) window.avisarErroSalvamento(e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar a observação. Verifique sua conexão.');
+      });
       return updated;
     });
   }, []);
