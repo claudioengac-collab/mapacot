@@ -531,6 +531,18 @@ var sbGetMapas = function sbGetMapas() {
 // seguintes. Este objeto rastreia, por mapa, uma fila (para nunca verificar/salvar em paralelo)
 // e a versão mais recente conhecida DENTRO dessa fila (não a versão desatualizada que o
 // componente React ainda tinha no momento da chamada).
+// FIX (CAUSA RAIZ do falso conflito encontrado no log real de 03/08): o app grava a versão
+// como "2026-08-03T23:58:50.768Z" (toISOString) e o Supabase devolve o MESMO instante como
+// "2026-08-03T23:58:50.768+00:00". Comparar os TEXTOS fazia o sistema achar que "outra aba"
+// tinha salvo — quando era a própria gravação dele — e bloqueava TODOS os salvamentos
+// seguintes da sessão (as edições entravam na tela mas nunca chegavam ao servidor).
+// Esta função compara o INSTANTE, aceitando qualquer formato válido dos dois lados.
+function mesmaVersaoTs(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  var ta = Date.parse(a), tb = Date.parse(b);
+  return isFinite(ta) && isFinite(tb) && ta === tb;
+}
 var estadoSalvamentoMapa = {};
 var sbSaveMapa = function sbSaveMapa(m) {
   var idMapa = m.id;
@@ -556,7 +568,7 @@ var sbSaveMapa = function sbSaveMapa(m) {
           .then(function(r){ return r.ok ? r.json() : []; })
           .then(function(rows){
             var versaoAtualServidor = rows[0] && rows[0].atualizado_em;
-            if (versaoAtualServidor && versaoAtualServidor !== versaoParaVerificar) {
+            if (versaoAtualServidor && !mesmaVersaoTs(versaoAtualServidor, versaoParaVerificar)) {
               logEventoDiag("\u26a0 CONFLITO ao salvar mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " \u2014 servidor tem vers\u00e3o mais nova (" + versaoAtualServidor + "); salvamento bloqueado para n\u00e3o sobrescrever");
               var err = new Error('Este mapa foi modificado em outra aba ou dispositivo. Recarregue a página antes de continuar, para não sobrescrever as mudanças mais recentes.');
               err.isVersionConflict = true;
@@ -4515,7 +4527,7 @@ var _useState27 = useState(init),
         .then(function(rows){
           var linha = rows && rows[0];
           if (!linha || !linha.dados) return;
-          if (versaoLocal && linha.atualizado_em === versaoLocal) return; // nada mudou
+          if (versaoLocal && mesmaVersaoTs(linha.atualizado_em, versaoLocal)) return; // nada mudou
           // Outra aba/dispositivo salvou algo mais novo: recarrega silenciosamente.
           if (pendenteRef.current) { logEventoDiag("FOCO: servidor mais novo, mas h\u00e1 edi\u00e7\u00e3o local pendente \u2014 atualiza\u00e7\u00e3o adiada (dados locais preservados)"); return; } // re-checa: usuário pode ter editado durante o fetch
           logEventoDiag("FOCO: servidor mais novo \u2014 mapa recarregado automaticamente (vers\u00e3o " + linha.atualizado_em + ", " + (((linha.dados||{}).itens||[]).length) + " itens)");
