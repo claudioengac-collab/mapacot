@@ -477,6 +477,52 @@ function sbConsultarLogDiagnostico(dataDe, dataAte) {
     .then(function (r) { return r.ok ? r.json() : []; })
     .catch(function () { return []; });
 }
+// FIX (V5 — pedido do Claudio): gera um PDF do histórico consultado — seja de um período
+// específico ou de "ver tudo" (tudo que ainda está guardado, dentro da janela de 7 dias).
+// Segue o mesmo padrão visual dos demais relatórios do sistema (buildInsumosHTML).
+function buildHistoricoPDF(linhas, filtroDe, filtroAte) {
+  function esc(s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  var agora = new Date();
+  var dt = agora.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  var hr = agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  var periodoTexto = (filtroDe || filtroAte)
+    ? ("PER\u00cdODO: " + (filtroDe ? new Date(filtroDe + "T00:00:00").toLocaleDateString("pt-BR") : "in\u00edcio") + " a " + (filtroAte ? new Date(filtroAte + "T00:00:00").toLocaleDateString("pt-BR") : "hoje"))
+    : "TODOS OS EVENTOS GUARDADOS (\u00faltimos " + JANELA_HISTORICO_DIAS + " dias)";
+  var css = "<style>*{font-family:Arial,sans-serif;font-size:11px;}"
+    + "body{margin:20px;} h2{font-size:13px;color:#1d3c6e;margin:0 0 4px;}"
+    + ".sub{font-size:10px;color:#666;margin-bottom:12px;}"
+    + "table{width:100%;border-collapse:collapse;}"
+    + "th{background:#1d3c6e;color:#fff;padding:5px 8px;text-align:left;}"
+    + "td{padding:5px 8px;border-bottom:0.5px solid #ddd;vertical-align:top;word-break:break-word;}"
+    + "tr:nth-child(even) td{background:#f5f7fb;}"
+    + ".footer{margin-top:10px;font-size:9px;color:#999;text-align:right;}"
+    + "</style>";
+  var rows = linhas.map(function (l, idx) {
+    var quando = new Date(l.criado_em).toLocaleString("pt-BR");
+    return "<tr>"
+      + "<td style=\"width:34px;text-align:center;\">" + (idx + 1) + "</td>"
+      + "<td style=\"width:120px;white-space:nowrap;\">" + esc(quando) + "</td>"
+      + "<td style=\"width:70px;text-align:center;\">" + (l.mapa_numero != null ? esc(String(l.mapa_numero)) : "\u2014") + "</td>"
+      + "<td style=\"width:70px;\">" + esc(l.usuario || "\u2014") + "</td>"
+      + "<td>" + esc(l.mensagem || "") + "</td>"
+      + "</tr>";
+  }).join("");
+  return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">" + css + "</head><body>"
+    + "<h2>HIST\u00d3RICO DE EVENTOS \u2014 DIAGN\u00d3STICO MAPACOT</h2>"
+    + "<div class=\"sub\">" + esc(periodoTexto) + " &nbsp;|&nbsp; GERADO EM " + dt + " \u2013 " + hr + " &nbsp;|&nbsp; " + APP_VERSAO_DIAG + "</div>"
+    + "<table>"
+    + "<thead><tr>"
+    + "<th style=\"width:34px;text-align:center;\">#</th>"
+    + "<th style=\"width:120px;\">DATA / HORA</th>"
+    + "<th style=\"width:70px;text-align:center;\">MAPA</th>"
+    + "<th style=\"width:70px;\">USU\u00c1RIO</th>"
+    + "<th>EVENTO</th>"
+    + "</tr></thead>"
+    + "<tbody>" + rows + "</tbody>"
+    + "</table>"
+    + "<div class=\"footer\">Total de eventos: " + linhas.length + " &nbsp;|&nbsp; MAPACOT V5</div>"
+    + "</body></html>";
+}
 function logEventoDiag(texto) {
   try {
     var hora = new Date().toLocaleTimeString("pt-BR");
@@ -505,6 +551,8 @@ window.abrirDiagnosticoMapacot = function () {
     + '<span>De:</span><input type="date" id="diagDataDe" style="padding:5px;border:1px solid #ccc;border-radius:5px;">'
     + '<span>At\u00e9:</span><input type="date" id="diagDataAte" style="padding:5px;border:1px solid #ccc;border-radius:5px;">'
     + '<button id="diagConsultarHist" style="border:none;background:#1d4ed8;color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:bold;">CONSULTAR</button>'
+    + '<button id="diagVerTudo" style="border:none;background:#374151;color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:bold;">VER TUDO</button>'
+    + '<button id="diagGerarPDF" style="border:none;background:#c0392b;color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:bold;">\uD83D\uDCC4 GERAR PDF</button>'
     + '</div>'
     + '<div id="diagHistorico" style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dde;border-radius:8px;padding:8px;margin-bottom:10px;min-height:20px;max-height:260px;overflow:auto;">\u2014</div>'
     + '</div>'
@@ -536,12 +584,35 @@ window.abrirDiagnosticoMapacot = function () {
     var ate = document.getElementById("diagDataAte").value;
     alvoHist.textContent = "Consultando...";
     sbConsultarLogDiagnostico(de, ate).then(function (linhas) {
+      window.__mapacotHistUltimo = linhas || [];
+      window.__mapacotHistUltimoFiltro = { de: de, ate: ate };
       if (!linhas || !linhas.length) { alvoHist.textContent = "Nenhum evento encontrado neste per\u00edodo."; return; }
       alvoHist.textContent = linhas.map(function (l) {
         var quando = new Date(l.criado_em).toLocaleString("pt-BR");
         return quando + "  " + l.mensagem;
       }).join("\n");
     });
+  };
+  document.getElementById("diagVerTudo").onclick = function () {
+    var alvoHist = document.getElementById("diagHistorico");
+    document.getElementById("diagDataDe").value = "";
+    document.getElementById("diagDataAte").value = "";
+    alvoHist.textContent = "Consultando tudo (\u00faltimos " + JANELA_HISTORICO_DIAS + " dias, que \u00e9 o que fica guardado)...";
+    sbConsultarLogDiagnostico(null, null).then(function (linhas) {
+      window.__mapacotHistUltimo = linhas || [];
+      window.__mapacotHistUltimoFiltro = { de: null, ate: null };
+      if (!linhas || !linhas.length) { alvoHist.textContent = "Nenhum evento guardado ainda."; return; }
+      alvoHist.textContent = linhas.map(function (l) {
+        var quando = new Date(l.criado_em).toLocaleString("pt-BR");
+        return quando + "  " + l.mensagem;
+      }).join("\n");
+    });
+  };
+  document.getElementById("diagGerarPDF").onclick = function () {
+    var linhas = window.__mapacotHistUltimo || [];
+    if (!linhas.length) { alert("Consulte o hist\u00f3rico (CONSULTAR ou VER TUDO) antes de gerar o PDF."); return; }
+    var filtro = window.__mapacotHistUltimoFiltro || {};
+    abrirPDF(buildHistoricoPDF(linhas, filtro.de, filtro.ate));
   };
 };
 var sbGetMapasOnce = /*#__PURE__*/function () {
