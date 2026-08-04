@@ -429,7 +429,7 @@ var SB = {
 // direto do app, qual versão de aplicativo fez o último salvamento de cada mapa no servidor.
 // Objetivo: quando algo der errado no uso real, um print desta tela mostra exatamente o que
 // aconteceu — sem depender de suposição.
-var APP_VERSAO_DIAG = "4.2 — 03/08/2026";
+var APP_VERSAO_DIAG = "4.2.1 — CORREÇÃO 03/08 23H";
 window.__mapacotLog = window.__mapacotLog || [];
 function logEventoDiag(texto) {
   try {
@@ -550,7 +550,7 @@ var sbSaveMapa = function sbSaveMapa(m) {
   delete dadosLimpos._versaoServidor; // nunca persiste este campo de controle dentro dos dados do mapa
   // Diagnóstico: registra qual versão do app fez este salvamento. Se dados sumirem/regredirem,
   // este campo revela se um arquivo antigo (sem as correções) salvou por cima.
-  dadosLimpos._appVersao = "4.2-2026-08-03";
+  dadosLimpos._appVersao = "4.2.1-tsfix";
 
   if (!estadoSalvamentoMapa[idMapa]) {
     estadoSalvamentoMapa[idMapa] = { fila: Promise.resolve(), ultimaVersaoConhecida: m._versaoServidor };
@@ -578,7 +578,7 @@ var sbSaveMapa = function sbSaveMapa(m) {
       : Promise.resolve();
 
     return verificar.then(function(){
-      var novaVersao = new Date().toISOString();
+      var novaVersao = new Date().toISOString().replace("Z", "+00:00");
       return fetch("".concat(SUPABASE_URL, "/rest/v1/mapas"), {
         method: "POST",
         headers: SB,
@@ -699,7 +699,7 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
     // tipo de bug já corrigido antes no orçamento).
   };
   return verificarVersaoAntesDeSalvar("global", c._versaoServidor).then(function(){
-    var novaVersao = new Date().toISOString();
+    var novaVersao = new Date().toISOString().replace("Z", "+00:00");
     return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
       method: "POST",
       headers: SB,
@@ -716,7 +716,7 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
 }
 var sbSaveInsumos = function sbSaveInsumos(insumos, versaoConhecida) {
   return verificarVersaoAntesDeSalvar("insumos", versaoConhecida).then(function(){
-    var novaVersao = new Date().toISOString();
+    var novaVersao = new Date().toISOString().replace("Z", "+00:00");
     return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
       method: "POST",
       headers: SB,
@@ -889,7 +889,7 @@ var sbCarregarOrcamento = function(obraId) {
     .catch(function(){ window.avisarErroSalvamento('Não foi possível carregar o orçamento. Verifique sua conexão.'); return null; });
 };
 var sbSaveAssociacoes = function(lista, versaoConhecida) {
-  var novaVersao = new Date().toISOString();
+  var novaVersao = new Date().toISOString().replace("Z", "+00:00");
   var payload = JSON.stringify({ id: "assocv2", dados: { lista: lista }, atualizado_em: novaVersao });
   var doSave = function() {
     return fetch(SUPABASE_URL + "/rest/v1/cadastros", { method: "POST", headers: SB, body: payload })
@@ -10360,7 +10360,7 @@ function Login(_ref18) {
       marginBottom: 22,
       letterSpacing: 0.5
     }
-  }, "VERS\xC3O 4.2 \u2014 03/08/2026"), /*#__PURE__*/React.createElement("div", {
+  }, "VERS\xC3O 4.2.1 \u2014 CORRE\xC7\xC3O 03/08 23H"), /*#__PURE__*/React.createElement("div", {
     onClick: function () { window.abrirDiagnosticoMapacot(); },
     style: {
       fontSize: 10,
@@ -10978,7 +10978,7 @@ function App() {
       color: "#7a9cc8",
       letterSpacing: 1
     }
-  }, "SISTEMA DE COTA\xC7\xC3O \xB7 V4.2 \u2014 03/08/2026 \xB7 ", /*#__PURE__*/React.createElement("span", {
+  }, "SISTEMA DE COTA\xC7\xC3O \xB7 V4.2.1 \u2014 CORRE\xC7\xC3O 03/08 23H \xB7 ", /*#__PURE__*/React.createElement("span", {
     onClick: function () { window.abrirDiagnosticoMapacot(); },
     style: { textDecoration: "underline", cursor: "pointer" }
   }, "DIAGN\xD3STICO")))), /*#__PURE__*/React.createElement("div", {
