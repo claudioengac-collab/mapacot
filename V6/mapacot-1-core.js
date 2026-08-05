@@ -36,7 +36,7 @@ var SB = {
 // direto do app, qual versão de aplicativo fez o último salvamento de cada mapa no servidor.
 // Objetivo: quando algo der errado no uso real, um print desta tela mostra exatamente o que
 // aconteceu — sem depender de suposição.
-var APP_VERSAO_DIAG = "5.0 — HISTÓRICO 7 DIAS";
+var APP_VERSAO_DIAG = "6.0 — HISTÓRICO 7 DIAS";
 window.__mapacotLog = window.__mapacotLog || [];
 // FIX (V5): além do log em memória (que se perde ao fechar a aba), agora cada evento também é
 // gravado numa tabela própria do Supabase ("logs_diagnostico"), com data/hora, para poder ser
@@ -127,7 +127,7 @@ function buildHistoricoPDF(linhas, filtroDe, filtroAte) {
     + "</tr></thead>"
     + "<tbody>" + rows + "</tbody>"
     + "</table>"
-    + "<div class=\"footer\">Total de eventos: " + linhas.length + " &nbsp;|&nbsp; MAPACOT V5</div>"
+    + "<div class=\"footer\">Total de eventos: " + linhas.length + " &nbsp;|&nbsp; MAPACOT V6</div>"
     + "</body></html>";
 }
 function logEventoDiag(texto) {
@@ -297,7 +297,7 @@ var sbSaveMapa = function sbSaveMapa(m) {
   delete dadosLimpos._versaoServidor; // nunca persiste este campo de controle dentro dos dados do mapa
   // Diagnóstico: registra qual versão do app fez este salvamento. Se dados sumirem/regredirem,
   // este campo revela se um arquivo antigo (sem as correções) salvou por cima.
-  dadosLimpos._appVersao = "5.0-histpersist";
+  dadosLimpos._appVersao = "6.0-histpersist";
 
   if (!estadoSalvamentoMapa[idMapa]) {
     estadoSalvamentoMapa[idMapa] = { fila: Promise.resolve(), ultimaVersaoConhecida: m._versaoServidor };
@@ -1065,7 +1065,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
 
   var body = '<div style="border:1px solid #c0ccdd;border-top:none;padding:10px 12px;background:#fff;">'
     +leg+itensHTML
-    +'<div style="margin-top:6px;font-size:9px;color:#999;text-align:right;">GERADO EM '+(now instanceof Date?now:new Date(now)).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"})+' \u2013 '+fmtHora(now)+' \u2013 MAPACOT V3 CSS</div>'
+    +'<div style="margin-top:6px;font-size:9px;color:#999;text-align:right;">GERADO EM '+(now instanceof Date?now:new Date(now)).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"})+' \u2013 '+fmtHora(now)+' \u2013 MAPACOT V6 CSS</div>'
     +'</div>';
   return css + hdr + body;
 };
@@ -1177,7 +1177,7 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
     +'</style>';
   return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
     +'<div class="hdr"><h2>RELATORIO DE PEDIDOS DE COMPRA</h2>'
-    +'<p style="font-size:9px;opacity:.85;margin:3px 0 0">MAPACOT V4 CSS - Gerado em '+dtG+'</p></div>'
+    +'<p style="font-size:9px;opacity:.85;margin:3px 0 0">MAPACOT V6 CSS - Gerado em '+dtG+'</p></div>'
     +'<div class="fb">Filtros: '+fi.join(' | ')+'</div>'
     +'<div class="kpi">'
     +'<div class="kc"><span class="kl">Total POs</span><span class="kv" style="color:#2a5298">'+pedidosFilt.length+'</span></div>'
@@ -1198,7 +1198,7 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
       +'<th class="p" style="text-align:center">Qt.Recebida</th><th class="p" style="text-align:center">Qt.A Receber</th><th class="p" style="text-align:center">% Recebido</th>'
       +'<th class="p" style="text-align:right">Vl.Total</th><th class="p">Fornecedores</th>'
       +'</tr></thead><tbody>'+iR+'</tbody></table>')
-    +'<div class="rod">MAPACOT V4 CSS - '+dtG+'</div></body></html>';
+    +'<div class="rod">MAPACOT V6 CSS - '+dtG+'</div></body></html>';
 }
 // ===========================================================================
 // ─── RELAÇÃO DE INSUMOS ───────────────────────────────────────────────────────
@@ -1292,7 +1292,7 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
     + obsHTML
     + '<div class="sign">'
     + '<div class="sbox"><div class="sline">Solicitante / Responsável</div></div>'
-    + '<div style="text-align:center;font-size:8px;color:#bbb;align-self:flex-end;">MAPACOT V4 CSS &nbsp;·&nbsp; ' + dt + '</div>'
+    + '<div style="text-align:center;font-size:8px;color:#bbb;align-self:flex-end;">MAPACOT V6 CSS &nbsp;·&nbsp; ' + dt + '</div>'
     + '<div class="sbox"><div class="sline">Aprovação / Visto</div></div>'
     + '</div>'
     + '</div>'
@@ -1326,7 +1326,7 @@ buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
   }).join('');
   return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
     + '<h2>RELAÇÃO DE INSUMOS — MAPA DE COTAÇÃO</h2>'
-    + '<div class="sub">'+esc((obraName||'').toUpperCase())+' &nbsp;|&nbsp; GERADO EM '+dt+' – '+hr+' – MAPACOT V3 CSS</div>'
+    + '<div class="sub">'+esc((obraName||'').toUpperCase())+' &nbsp;|&nbsp; GERADO EM '+dt+' – '+hr+' – MAPACOT V6 CSS</div>'
     + '<table>'
     + '<thead><tr>'
     + '<th style="width:40px;text-align:center;">#</th>'
@@ -1336,7 +1336,7 @@ buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
     + '</tr></thead>'
     + '<tbody>'+rows+'</tbody>'
     + '</table>'
-    + '<div class="footer">Total de insumos: '+itens.length+' &nbsp;|&nbsp; MAPACOT V3 CSS</div>'
+    + '<div class="footer">Total de insumos: '+itens.length+' &nbsp;|&nbsp; MAPACOT V6 CSS</div>'
     + '</body></html>';
 };
 

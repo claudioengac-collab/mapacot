@@ -366,7 +366,7 @@ function Login(_ref18) {
       marginBottom: 22,
       letterSpacing: 0.5
     }
-  }, "VERS\xC3O 5.0 \u2014 HIST\xD3RICO 7 DIAS"), /*#__PURE__*/React.createElement("div", {
+  }, "VERS\xC3O 6.0 \u2014 HIST\xD3RICO 7 DIAS"), /*#__PURE__*/React.createElement("div", {
     onClick: function () { window.abrirDiagnosticoMapacot(); },
     style: {
       fontSize: 10,
@@ -991,7 +991,7 @@ function App() {
       color: "#7a9cc8",
       letterSpacing: 1
     }
-  }, "SISTEMA DE COTA\xC7\xC3O \xB7 V5.0 \u2014 HIST\xD3RICO 7 DIAS \xB7 ", /*#__PURE__*/React.createElement("span", {
+  }, "SISTEMA DE COTA\xC7\xC3O \xB7 V6.0 \u2014 HIST\xD3RICO 7 DIAS \xB7 ", /*#__PURE__*/React.createElement("span", {
     onClick: function () { window.abrirDiagnosticoMapacot(); },
     style: { textDecoration: "underline", cursor: "pointer" }
   }, "DIAGN\xD3STICO")))), /*#__PURE__*/React.createElement("div", {
