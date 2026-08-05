@@ -6431,9 +6431,10 @@ var _useState27 = useState(init),
     onConfig: setPedidoConfig,
     poFinanceiro: poFinanceiro,
     onFinanceiro: setPoFinanceiro,
+    observacaoInicial: '',
     onVoltar: function(){ setShowPedidoConfig(false); setShowPedidoModal(true); },
     onClose: function(){ setShowPedidoConfig(false); },
-    onGerar: function(config, finConfig, onDone, formaPagamento){
+    onGerar: function(config, finConfig, onDone, formaPagamento, obsPedido){
       // Agrupar por fornecedor
       var grupos = {};
       Object.keys(config).forEach(function(itemId){
@@ -6442,12 +6443,7 @@ var _useState27 = useState(init),
         (config[itemId]||[]).forEach(function(linha){
           if (!linha.fornId || !linha.qt || Number(linha.qt)<=0) return;
           var k = linha.fornId;
-          if (!grupos[k]) grupos[k] = { fornId: linha.fornId, fornNome: linha.fornNome, itens: [], obs: '' };
-          if (linha.obs && linha.obs.trim()) {
-            grupos[k].obs = grupos[k].obs
-              ? grupos[k].obs + ' | ' + linha.obs.trim()
-              : linha.obs.trim();
-          }
+          if (!grupos[k]) grupos[k] = { fornId: linha.fornId, fornNome: linha.fornNome, itens: [] };
           var vlUnit = Number(linha.vlUnit)||0;
           var qtN = Number(linha.qt)||0;
           var existingItem = grupos[k].itens.find(function(i){ return i.item_id === item.id; });
@@ -6512,7 +6508,7 @@ var _useState27 = useState(init),
             fornecedor_id: g.fornId,
             fornecedor_nome: g.fornNome,
             itens: g.itens,
-            observacao: g.obs||'',
+            observacao: obsPedido||'',
             financeiro: { 
               desconto:descVal, desconto_mode:descMode,
               acrescimo:acrVal, acrescimo_mode:acrMode,
@@ -6588,13 +6584,14 @@ var _useState27 = useState(init),
     pedidos: (pedidos||[]).filter(function(p){ return p.id !== poEmEdicao.id; }),
     modoEdicao: true,
     formaPagamentoInicial: poEmEdicao.forma_pagamento||'',
+    observacaoInicial: poEmEdicao.observacao||'',
     config: configEdicao,
     onConfig: setConfigEdicao,
     poFinanceiro: poFinanceiro,
     onFinanceiro: setPoFinanceiro,
     onVoltar: function(){},
     onClose: function(){ setShowPedidoEdicao(false); setPoEmEdicao(null); setPoFinanceiro({}); setConfigEdicao({}); },
-    onGerar: function(config, finConfig, onDone, formaPagamento, obsTocada){
+    onGerar: function(config, finConfig, onDone, formaPagamento, obsPedido){
       // Modo edição: recalcula itens e total a partir do config atual (igual ao fluxo novo)
       var itensEditados = [];
       var sub = 0;
@@ -6636,25 +6633,10 @@ var _useState27 = useState(init),
           alert('\u274C O pedido deve ter pelo menos um insumo. Adicione itens antes de salvar.');
           return;
         }
-      // FIX (achado por Claudio, 04/08): a observação digitada no campo "Observação para o(s)
-      // pedido(s) deste item" nunca era incluída nos dados enviados ao salvar uma EDIÇÃO de
-      // pedido (na criação de um pedido novo já funcionava corretamente). Resultado: o texto
-      // aparecia digitado na tela, o pedido era "atualizado com sucesso", mas a observação
-      // nunca chegava a ser salva em lugar nenhum. Agora ela é somada aqui, do mesmo jeito que
-      // já era feito na criação — e, se nada novo for digitado nesta edição, mantém a
-      // observação que o pedido já tinha, em vez de apagá-la.
-      // Como a observação agora fica sempre sincronizada entre todos os itens durante a edição
-      // (ver updateObsemTodos), qualquer item tem o mesmo texto — basta ler de um só.
-      var obsAcumulada = '';
-      Object.keys(config).some(function(itemId){
-        var linha = (config[itemId]||[])[0];
-        if (linha && linha.obs && linha.obs.trim()) { obsAcumulada = linha.obs.trim(); return true; }
-        return false;
-      });
-      // FIX 3: só preserva a observação antiga se o usuário NUNCA tocou no campo nesta edição.
-      // Se ele tocou (mesmo que o resultado final seja vazio, por ter apagado de propósito),
-      // respeita a escolha dele — inclusive apagar.
-      var observacaoFinal = obsTocada ? obsAcumulada : (obsAcumulada || poEmEdicao.observacao || '');
+      // FIX 4 (Claudio, 05/08): a observação virou um campo único do pedido inteiro (não mais
+      // uma caixa por item que precisava ser sincronizada/agregada) — resolve de vez a série
+      // de bugs anteriores, porque não existe mais cópia nenhuma para gerenciar.
+      var observacaoFinal = obsPedido||'';
       var fin = (finConfig||{})[poEmEdicao.fornecedor_id]||{};
       var dV=parsePOVal(fin.desconto), dM=fin.desconto_mode||'%';
       var aV=parsePOVal(fin.acrescimo), aM=fin.acrescimo_mode||'%';
@@ -6710,12 +6692,7 @@ var _useState27 = useState(init),
       // Inicializar configEdicao com os itens do PO
       var cfgEd = {};
       (po.itens||[]).forEach(function(it){
-        // FIX 2 (o texto sumia se o Claudio tinha digitado em um item que não o primeiro):
-        // mostra a observação já salva em TODOS os itens ao reabrir para editar — como ela é
-        // guardada como um texto único do pedido (não por item), não tem como saber "em qual
-        // item" foi digitada originalmente. Mostrando em todos, o texto aparece onde quer que
-        // o usuário olhe, e pode ser corrigido dali.
-        cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0, obs: po.observacao||'' }];
+        cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0 }];
       });
       setConfigEdicao(cfgEd);
       setShowPedidos(false);
@@ -6911,13 +6888,15 @@ function ModalPedidoStep2(_ref_po2) {
   var modoEdicao=_ref_po2.modoEdicao||false;
   var _sFP=useState(_ref_po2.formaPagamentoInicial||''),formaPagamento=_slicedToArray(_sFP,2)[0],setFormaPagamento=_slicedToArray(_sFP,2)[1];
   var _sGer=useState(false),gerando=_slicedToArray(_sGer,2)[0],setGerando=_slicedToArray(_sGer,2)[1];
-  // FIX 3 (achado pelo Claudio, ao perguntar se eu tinha testado "com texto, sem texto"):
-  // sem isto, era impossível distinguir "o usuário não mexeu na observação" de "o usuário
-  // mexeu e decidiu deixar vazio de propósito" — as duas situações pareciam idênticas (campo
-  // vazio), e a proteção contra apagar sem querer acabava impedindo também apagar de verdade.
-  var _sObsTocada=useState(false),obsTocada=_slicedToArray(_sObsTocada,2)[0],setObsTocada=_slicedToArray(_sObsTocada,2)[1];
+  // FIX 4 (Claudio, 05/08): a observação é uma coisa só do pedido — nunca fez sentido ter
+  // várias caixas de digitar (uma por item) representando um único texto. Isso foi a raiz de
+  // toda a série de bugs anteriores (esquecer de salvar, mostrar só num item, duplicar ao
+  // corrigir, não conseguir apagar de propósito). Agora existe UM campo só, sempre, em criar
+  // e em editar — sem nenhuma lógica de juntar/sincronizar cópias, porque não existem cópias.
+  var _sObsPedido=useState(_ref_po2.observacaoInicial||''),obsPedido=_slicedToArray(_sObsPedido,2)[0],setObsPedido=_slicedToArray(_sObsPedido,2)[1];
 
   var itemIds = Object.keys(config||{});
+
 
   // Calcular poStatus por item
   var poStatus = {};
@@ -6964,22 +6943,6 @@ function ModalPedidoStep2(_ref_po2) {
           n[itemId][idx] = Object.assign({}, n[itemId][idx], { fornNome: forn.nome, vlUnit: vlUnit, fornId: val });
         }
       }
-      return n;
-    });
-  }
-  // FIX 2 (Claudio, 04/08): a observação é um único texto do PEDIDO, não por item — mas o
-  // campo de digitar aparece dentro de cada item. Antes, editar num item só atualizava aquele
-  // item, deixando "cópias" desatualizadas nos outros; ao salvar, a antiga e a nova ficavam
-  // juntas (texto duplicado). Agora, digitar em QUALQUER item atualiza a observação em TODOS
-  // os itens ao mesmo tempo — ficam sempre iguais entre si, então salvar nunca duplica nem
-  // perde a correção de um erro de digitação.
-  function updateObsemTodos(val) {
-    setObsTocada(true);
-    onConfig(function(prev){
-      var n = {};
-      Object.keys(prev).forEach(function(id){
-        n[id] = (prev[id]||[]).map(function(l){ return Object.assign({}, l, { obs: val }); });
-      });
       return n;
     });
   }
@@ -7080,29 +7043,6 @@ function ModalPedidoStep2(_ref_po2) {
                 onClick: function(){ addLinha(itemId); },
                 style:{background:'#f5f5f5',border:'1px dashed #bbb',color:'#888',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer',width:'100%',marginTop:4,textAlign:'center'}
               }, '+ adicionar outro fornecedor para este item'),
-              // Campo observação — CAIXA ALTA
-              /*#__PURE__*/React.createElement('div', { style:{marginTop:8} },
-                /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#555',fontWeight:'bold',textTransform:'uppercase',display:'block',marginBottom:4} },
-                  '\uD83D\uDCDD Observa\u00E7\u00E3o para o(s) pedido(s) deste item'
-                ),
-                /*#__PURE__*/React.createElement('textarea', {
-                  value: linhas[0].obs||'',
-                  onChange: function(e){
-                    var val = e.target.value.toUpperCase();
-                    if (modoEdicao) {
-                      // Editando um pedido já existente: a observação é um texto único do
-                      // pedido, então mantém todos os itens sincronizados entre si.
-                      updateObsemTodos(val);
-                    } else {
-                      // Criando um pedido novo: mantém o comportamento original — cada item
-                      // pode ter sua própria nota, que é combinada ao gerar o(s) pedido(s).
-                      linhas.forEach(function(_,i){ updateLinha(itemId,i,'obs',val); });
-                    }
-                  },
-                  placeholder:'EX: CONFIRMAR DISPONIBILIDADE ANTES DA ENTREGA...',
-                  style:{width:'100%',padding:'7px 10px',border:'1px solid #d4b8ff',borderRadius:4,fontSize:10,color:'#333',resize:'vertical',minHeight:48,fontFamily:'Arial,sans-serif',background:'#faf7ff',textTransform:'uppercase'}
-                })
-              ),
               // Alerta de quantidade
               qtOver && /*#__PURE__*/React.createElement('div', { style:{fontSize:9,color:'#c0392b',marginTop:4,background:'#FCEBEB',padding:'4px 8px',borderRadius:3} },
                 '\u26A0 Qt. distribuída: '+qtDistrib+' — maior que a pendente ('+ps.qtPend+'). Verifique.'
@@ -7116,6 +7056,18 @@ function ModalPedidoStep2(_ref_po2) {
             )
           );
         }),
+      // ── Observação do Pedido (campo único — Claudio, 05/08) ──────────────
+      /*#__PURE__*/React.createElement('div', { style:{border:'1px solid #86efac',borderRadius:6,background:'#f0fdf4',padding:'10px 12px',marginBottom:10} },
+        /*#__PURE__*/React.createElement('label', { style:{fontSize:10,color:'#15803d',fontWeight:'bold',textTransform:'uppercase',display:'block',marginBottom:5} },
+          '\uD83D\uDCDD Observa\u00E7\u00E3o deste pedido'
+        ),
+        /*#__PURE__*/React.createElement('textarea', {
+          value: obsPedido,
+          onChange: function(e){ setObsPedido(e.target.value.toUpperCase()); },
+          placeholder:'EX: CONFIRMAR DISPONIBILIDADE ANTES DA ENTREGA...',
+          style:{width:'100%',padding:'7px 10px',border:'1px solid #86efac',borderRadius:4,fontSize:10,color:'#333',resize:'vertical',minHeight:48,fontFamily:'Arial,sans-serif',background:'#fff',textTransform:'uppercase'}
+        })
+      ),
       // ── Seção Financeira por Fornecedor ──────────────────────────────────
       nPOs > 0 && /*#__PURE__*/React.createElement('div', { style:{border:'1px solid #d4b8ff',borderRadius:6,overflow:'hidden',marginBottom:10,background:'#faf7ff'} },
         /*#__PURE__*/React.createElement('div', { style:{background:'#7c3aed',color:'#fff',padding:'8px 12px',fontSize:10,fontWeight:'bold'} },
@@ -7239,7 +7191,7 @@ function ModalPedidoStep2(_ref_po2) {
         !modoEdicao && /*#__PURE__*/React.createElement('button', { onClick:onVoltar, style:{background:'#2a5298',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, '\u2190 Voltar'),
         /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, 'Cancelar'),
         /*#__PURE__*/React.createElement('button', {
-          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }, formaPagamento, obsTocada); },
+          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }, formaPagamento, obsPedido); },
           disabled: gerando,
           style:{background: gerando ? '#9d6fe8' : '#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor: gerando ? 'not-allowed' : 'pointer',fontWeight:'bold',opacity: gerando ? 0.7 : 1}
         }, gerando ? '\u23F3 Gerando...' : '\uD83D\uDED2 Gerar Pedidos')
