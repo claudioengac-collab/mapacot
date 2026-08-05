@@ -6594,7 +6594,7 @@ var _useState27 = useState(init),
     onFinanceiro: setPoFinanceiro,
     onVoltar: function(){},
     onClose: function(){ setShowPedidoEdicao(false); setPoEmEdicao(null); setPoFinanceiro({}); setConfigEdicao({}); },
-    onGerar: function(config, finConfig, onDone, formaPagamento){
+    onGerar: function(config, finConfig, onDone, formaPagamento, obsTocada){
       // Modo edição: recalcula itens e total a partir do config atual (igual ao fluxo novo)
       var itensEditados = [];
       var sub = 0;
@@ -6643,14 +6643,18 @@ var _useState27 = useState(init),
       // nunca chegava a ser salva em lugar nenhum. Agora ela é somada aqui, do mesmo jeito que
       // já era feito na criação — e, se nada novo for digitado nesta edição, mantém a
       // observação que o pedido já tinha, em vez de apagá-la.
+      // Como a observação agora fica sempre sincronizada entre todos os itens durante a edição
+      // (ver updateObsemTodos), qualquer item tem o mesmo texto — basta ler de um só.
       var obsAcumulada = '';
-      Object.keys(config).forEach(function(itemId){
-        (config[itemId]||[]).forEach(function(linha){
-          if (linha.obs && linha.obs.trim()) {
-            obsAcumulada = obsAcumulada ? obsAcumulada + ' | ' + linha.obs.trim() : linha.obs.trim();
-          }
-        });
+      Object.keys(config).some(function(itemId){
+        var linha = (config[itemId]||[])[0];
+        if (linha && linha.obs && linha.obs.trim()) { obsAcumulada = linha.obs.trim(); return true; }
+        return false;
       });
+      // FIX 3: só preserva a observação antiga se o usuário NUNCA tocou no campo nesta edição.
+      // Se ele tocou (mesmo que o resultado final seja vazio, por ter apagado de propósito),
+      // respeita a escolha dele — inclusive apagar.
+      var observacaoFinal = obsTocada ? obsAcumulada : (obsAcumulada || poEmEdicao.observacao || '');
       var fin = (finConfig||{})[poEmEdicao.fornecedor_id]||{};
       var dV=parsePOVal(fin.desconto), dM=fin.desconto_mode||'%';
       var aV=parsePOVal(fin.acrescimo), aM=fin.acrescimo_mode||'%';
@@ -6668,7 +6672,7 @@ var _useState27 = useState(init),
         financeiro: {desconto:dV,desconto_mode:dM,acrescimo:aV,acrescimo_mode:aM,frete:fV,frete_mode:fM,impostos:iV,impostos_mode:iM},
         total: total,
         forma_pagamento: formaPagamento||'',
-        observacao: obsAcumulada || poEmEdicao.observacao || ''
+        observacao: observacaoFinal
       };
       logEventoDiag("PEDIDO editado: PO-" + String(poEmEdicao.numero).padStart(3,'0'));
       sbUpdatePedido(poEmEdicao.id, campos).then(function(){
@@ -6705,11 +6709,13 @@ var _useState27 = useState(init),
       setPoFinanceiro(_defineProperty({}, po.fornecedor_id, po.financeiro||{}));
       // Inicializar configEdicao com os itens do PO
       var cfgEd = {};
-      (po.itens||[]).forEach(function(it, idx){
-        // FIX: mostra a observação já salva do pedido no primeiro item, em vez de sempre em
-        // branco — assim o usuário vê o que já existia antes de editar (relacionado ao fix
-        // acima, que corrige o salvamento da observação).
-        cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0, obs: idx===0 ? (po.observacao||'') : '' }];
+      (po.itens||[]).forEach(function(it){
+        // FIX 2 (o texto sumia se o Claudio tinha digitado em um item que não o primeiro):
+        // mostra a observação já salva em TODOS os itens ao reabrir para editar — como ela é
+        // guardada como um texto único do pedido (não por item), não tem como saber "em qual
+        // item" foi digitada originalmente. Mostrando em todos, o texto aparece onde quer que
+        // o usuário olhe, e pode ser corrigido dali.
+        cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0, obs: po.observacao||'' }];
       });
       setConfigEdicao(cfgEd);
       setShowPedidos(false);
@@ -6905,6 +6911,11 @@ function ModalPedidoStep2(_ref_po2) {
   var modoEdicao=_ref_po2.modoEdicao||false;
   var _sFP=useState(_ref_po2.formaPagamentoInicial||''),formaPagamento=_slicedToArray(_sFP,2)[0],setFormaPagamento=_slicedToArray(_sFP,2)[1];
   var _sGer=useState(false),gerando=_slicedToArray(_sGer,2)[0],setGerando=_slicedToArray(_sGer,2)[1];
+  // FIX 3 (achado pelo Claudio, ao perguntar se eu tinha testado "com texto, sem texto"):
+  // sem isto, era impossível distinguir "o usuário não mexeu na observação" de "o usuário
+  // mexeu e decidiu deixar vazio de propósito" — as duas situações pareciam idênticas (campo
+  // vazio), e a proteção contra apagar sem querer acabava impedindo também apagar de verdade.
+  var _sObsTocada=useState(false),obsTocada=_slicedToArray(_sObsTocada,2)[0],setObsTocada=_slicedToArray(_sObsTocada,2)[1];
 
   var itemIds = Object.keys(config||{});
 
@@ -6953,6 +6964,22 @@ function ModalPedidoStep2(_ref_po2) {
           n[itemId][idx] = Object.assign({}, n[itemId][idx], { fornNome: forn.nome, vlUnit: vlUnit, fornId: val });
         }
       }
+      return n;
+    });
+  }
+  // FIX 2 (Claudio, 04/08): a observação é um único texto do PEDIDO, não por item — mas o
+  // campo de digitar aparece dentro de cada item. Antes, editar num item só atualizava aquele
+  // item, deixando "cópias" desatualizadas nos outros; ao salvar, a antiga e a nova ficavam
+  // juntas (texto duplicado). Agora, digitar em QUALQUER item atualiza a observação em TODOS
+  // os itens ao mesmo tempo — ficam sempre iguais entre si, então salvar nunca duplica nem
+  // perde a correção de um erro de digitação.
+  function updateObsemTodos(val) {
+    setObsTocada(true);
+    onConfig(function(prev){
+      var n = {};
+      Object.keys(prev).forEach(function(id){
+        n[id] = (prev[id]||[]).map(function(l){ return Object.assign({}, l, { obs: val }); });
+      });
       return n;
     });
   }
@@ -7062,7 +7089,15 @@ function ModalPedidoStep2(_ref_po2) {
                   value: linhas[0].obs||'',
                   onChange: function(e){
                     var val = e.target.value.toUpperCase();
-                    linhas.forEach(function(_,i){ updateLinha(itemId,i,'obs',val); });
+                    if (modoEdicao) {
+                      // Editando um pedido já existente: a observação é um texto único do
+                      // pedido, então mantém todos os itens sincronizados entre si.
+                      updateObsemTodos(val);
+                    } else {
+                      // Criando um pedido novo: mantém o comportamento original — cada item
+                      // pode ter sua própria nota, que é combinada ao gerar o(s) pedido(s).
+                      linhas.forEach(function(_,i){ updateLinha(itemId,i,'obs',val); });
+                    }
                   },
                   placeholder:'EX: CONFIRMAR DISPONIBILIDADE ANTES DA ENTREGA...',
                   style:{width:'100%',padding:'7px 10px',border:'1px solid #d4b8ff',borderRadius:4,fontSize:10,color:'#333',resize:'vertical',minHeight:48,fontFamily:'Arial,sans-serif',background:'#faf7ff',textTransform:'uppercase'}
@@ -7204,7 +7239,7 @@ function ModalPedidoStep2(_ref_po2) {
         !modoEdicao && /*#__PURE__*/React.createElement('button', { onClick:onVoltar, style:{background:'#2a5298',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, '\u2190 Voltar'),
         /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, 'Cancelar'),
         /*#__PURE__*/React.createElement('button', {
-          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }, formaPagamento); },
+          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }, formaPagamento, obsTocada); },
           disabled: gerando,
           style:{background: gerando ? '#9d6fe8' : '#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor: gerando ? 'not-allowed' : 'pointer',fontWeight:'bold',opacity: gerando ? 0.7 : 1}
         }, gerando ? '\u23F3 Gerando...' : '\uD83D\uDED2 Gerar Pedidos')
