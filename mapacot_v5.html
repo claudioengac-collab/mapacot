@@ -997,7 +997,13 @@ var sbUpdatePedido = function(id, fields) {
   }).then(function(r){
     if (!r.ok) return r.text().then(function(t){ throw new Error('Erro ao atualizar pedido ('+r.status+'): '+t); });
   }).catch(function(e){
+    // FIX (achado por Claudio, 04/08): antes esta função "engolia" o erro aqui e não o repassava
+    // adiante — o código que chamava via .then() continuava normalmente, achando que tinha dado
+    // certo, e chegava a mostrar "✅ atualizado com sucesso!" mesmo quando a gravação tinha
+    // falhado de verdade. Agora o erro é relançado, para quem chamou saber que realmente falhou
+    // e mostrar o aviso correto (e registrar no diagnóstico) em vez do falso sucesso.
     window.avisarErroSalvamento('Não foi possível atualizar o pedido. Verifique sua conexão.');
+    throw e;
   });
 };
 var sbGetNextNumeroPO = function() {
@@ -6532,6 +6538,7 @@ var _useState27 = useState(init),
           setShowPedidos(true);
         }).catch(function(e){
           if(onDone) onDone();
+          logEventoDiag("\u2716 ERRO ao gerar pedido(s): " + (e && e.message ? e.message : "falha de conex\u00e3o"));
           alert('❌ Erro ao gerar pedidos:\n' + (e.message||'Verifique sua conexão com a internet e tente novamente.'));
         });
       });
@@ -6629,6 +6636,21 @@ var _useState27 = useState(init),
           alert('\u274C O pedido deve ter pelo menos um insumo. Adicione itens antes de salvar.');
           return;
         }
+      // FIX (achado por Claudio, 04/08): a observação digitada no campo "Observação para o(s)
+      // pedido(s) deste item" nunca era incluída nos dados enviados ao salvar uma EDIÇÃO de
+      // pedido (na criação de um pedido novo já funcionava corretamente). Resultado: o texto
+      // aparecia digitado na tela, o pedido era "atualizado com sucesso", mas a observação
+      // nunca chegava a ser salva em lugar nenhum. Agora ela é somada aqui, do mesmo jeito que
+      // já era feito na criação — e, se nada novo for digitado nesta edição, mantém a
+      // observação que o pedido já tinha, em vez de apagá-la.
+      var obsAcumulada = '';
+      Object.keys(config).forEach(function(itemId){
+        (config[itemId]||[]).forEach(function(linha){
+          if (linha.obs && linha.obs.trim()) {
+            obsAcumulada = obsAcumulada ? obsAcumulada + ' | ' + linha.obs.trim() : linha.obs.trim();
+          }
+        });
+      });
       var fin = (finConfig||{})[poEmEdicao.fornecedor_id]||{};
       var dV=parsePOVal(fin.desconto), dM=fin.desconto_mode||'%';
       var aV=parsePOVal(fin.acrescimo), aM=fin.acrescimo_mode||'%';
@@ -6645,7 +6667,8 @@ var _useState27 = useState(init),
         itens: itensEditados,
         financeiro: {desconto:dV,desconto_mode:dM,acrescimo:aV,acrescimo_mode:aM,frete:fV,frete_mode:fM,impostos:iV,impostos_mode:iM},
         total: total,
-        forma_pagamento: formaPagamento||''
+        forma_pagamento: formaPagamento||'',
+        observacao: obsAcumulada || poEmEdicao.observacao || ''
       };
       logEventoDiag("PEDIDO editado: PO-" + String(poEmEdicao.numero).padStart(3,'0'));
       sbUpdatePedido(poEmEdicao.id, campos).then(function(){
@@ -6658,6 +6681,7 @@ var _useState27 = useState(init),
         alert('\u2705 Pedido PO-'+String(poEmEdicao.numero).padStart(3,'0')+' atualizado com sucesso!');
       }).catch(function(e){
         if(onDone) onDone();
+        logEventoDiag("\u2716 ERRO ao editar pedido PO-" + String(poEmEdicao.numero).padStart(3,'0') + ": " + (e && e.message ? e.message : "falha de conex\u00e3o"));
         alert('\u274C Erro ao salvar edi\u00e7\u00e3o do pedido. Verifique sua conex\u00e3o e tente novamente.');
       });
     }
@@ -6681,8 +6705,11 @@ var _useState27 = useState(init),
       setPoFinanceiro(_defineProperty({}, po.fornecedor_id, po.financeiro||{}));
       // Inicializar configEdicao com os itens do PO
       var cfgEd = {};
-      (po.itens||[]).forEach(function(it){
-        cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0, obs: '' }];
+      (po.itens||[]).forEach(function(it, idx){
+        // FIX: mostra a observação já salva do pedido no primeiro item, em vez de sempre em
+        // branco — assim o usuário vê o que já existia antes de editar (relacionado ao fix
+        // acima, que corrige o salvamento da observação).
+        cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0, obs: idx===0 ? (po.observacao||'') : '' }];
       });
       setConfigEdicao(cfgEd);
       setShowPedidos(false);
@@ -6696,6 +6723,9 @@ var _useState27 = useState(init),
       logEventoDiag("PEDIDO status alterado: id " + id + " (" + (statusAnterior||"?") + " \u2192 " + status + ")");
       sbUpdatePedido(id, campos).then(function(){
         sbGetPedidos().then(function(d){ setPedidos(d||[]); });
+      }).catch(function(e){
+        logEventoDiag("\u2716 ERRO ao alterar status do pedido id " + id + ": " + (e && e.message ? e.message : "falha de conex\u00e3o"));
+        window.avisarErroSalvamento('Não foi possível atualizar o status do pedido. Verifique sua conexão e tente novamente.');
       });
     },
     onPDF: function(po){ logEventoDiag("PDF pedido gerado: PO-" + String(po.numero).padStart(3,'0')); abrirPDF(buildPedidoPDF(po)); }
@@ -10893,15 +10923,14 @@ function App() {
       if (tipo === "insumos") sbSaveInsumos(updated.insumos, versaoInsumosRef.current).then(function(novaVersao){
         versaoInsumosRef.current = novaVersao;
       }).catch(function (e) {
-        console.error('MAPACOT: Erro ao salvar insumos:', e);
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar o insumo. Verifique sua conexão.');
       });
       else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
         versaoCadastrosRef.current = novaVersao;
       }).catch(function (e) {
-        console.error('MAPACOT: Erro ao salvar cadastros:', e);
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
-        else alert('\u26A0\uFE0F N\u00e3o foi poss\u00edvel salvar o cadastro no servidor.\nVerifique sua conex\u00e3o e tente novamente.');
+        else window.avisarErroSalvamento('Não foi possível salvar o cadastro no servidor. Verifique sua conexão e tente novamente.');
       });
       return updated;
     });
@@ -11720,6 +11749,7 @@ var SC = {
 // de verdade (ex: sem internet) - não bloqueia a tela, desaparece sozinho.
 // Qualquer parte do sistema pode chamar window.avisarErroSalvamento(mensagem).
 window.avisarErroSalvamento = function(mensagem) {
+  logEventoDiag("\u2716 ERRO DE SALVAMENTO: " + mensagem);
   window.dispatchEvent(new CustomEvent('mapacot-erro-salvamento', { detail: mensagem }));
 };
 
