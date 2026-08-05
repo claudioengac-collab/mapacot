@@ -2272,11 +2272,11 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
 
   // --- CSS ---
   var css = [
-    "@page{size:A4 landscape;margin:6mm;}",
+    "@page{size:A4 landscape;margin:4mm;}",
     "body{font-family:Arial,sans-serif;font-size:10px;text-transform:uppercase;margin:0;}",
     "@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}",
     "table{border-collapse:collapse;width:100%;table-layout:fixed;}",
-    "th,td{border:1px solid #bbb;padding:4px 5px;overflow:hidden;word-break:break-word;}",
+    "th,td{border:1px solid #bbb;padding:3px 4px;overflow:hidden;word-break:break-word;line-height:1.25;}",
     "th{background:#2a5298;color:#fff;text-align:center;font-size:9px;line-height:1.3;vertical-align:bottom;}",
     "th.menor-h{background:#7b5e00;}",
     "td.num{text-align:right;}",
@@ -2286,7 +2286,8 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
     "td.winner{background:#c8ecd2;font-weight:bold;text-align:right;}",
     "tr.even td{background:#f5f7fc;}",
     "tr.even td.menor-cell{background:#fff3c0;}",
-    "tr.even td.winner{background:#b8e6c4;}"
+    "tr.even td.winner{background:#b8e6c4;}",
+    "tbody tr{page-break-inside:avoid;break-inside:avoid;}"
   ].join("");
 
   // --- Header row ---
