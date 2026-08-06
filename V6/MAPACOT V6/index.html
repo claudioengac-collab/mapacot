@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MAPACOT V6</title>
+<script src="lib-1-react.js"></script>
+<script src="lib-2-react-dom-scheduler.js"></script>
+<script src="lib-3-xlsx.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4ff;min-height:100vh;}
+input{text-transform:uppercase;}
+input[type=password]{text-transform:none;}
+/* Cabeçalho do mapa: nome da obra sempre em cima, botões sempre embaixo (qualquer tamanho de tela) */
+.rsp-appbar{flex-wrap:wrap!important;gap:8px!important;}
+.rsp-appbar>button:first-child{order:1;}
+.rsp-appbar>div:nth-child(2){order:2;flex:1;min-width:0;}
+.rsp-appbar>div:nth-child(3){order:3;width:100%;display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+@media(max-width:640px){
+  html{width:100%;overflow-x:hidden;overscroll-behavior:none;}body,#root{width:100%;overscroll-behavior:none;}
+  @keyframes fadeInDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .hdr-nav .hdr-lbl{display:none!important;width:0!important;overflow:hidden!important;}
+  .hdr-nav button{padding:7px 9px!important;min-width:0;}
+  .rsp-appbar{padding:8px 10px!important;}
+  .rsp-appbar>div:nth-child(3){flex-wrap:nowrap;}
+  .rsp-appbar>div:nth-child(3) button{padding:5px 8px!important;font-size:10px!important;gap:2px!important;flex:1;justify-content:center;}
+  .rsp-appbar>div:nth-child(3) span{font-size:10px!important;margin-left:auto;flex-shrink:0;white-space:nowrap;}
+}
+.scroll-mirror {
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 20px;
+  border: 1px solid #c8ccd8;
+  border-bottom: none;
+  background: #f0f2f5;
+}
+.scroll-mirror-inner { height: 1px; }
+/* FIX: barra de rolagem mais grossa e fácil de tocar/arrastar no tablet (antes ficava fina
+   demais, 12px, dificultando pegar com o dedo — aumentada para 20px, com a barra em si (o
+   "polegar" clicável) também mais grossa via CSS de scrollbar). */
+.scroll-mirror::-webkit-scrollbar { height: 16px; }
+.scroll-mirror::-webkit-scrollbar-thumb { background: #8a94ad; border-radius: 8px; }
+.scroll-mirror::-webkit-scrollbar-track { background: #e4e8f0; }
+</style>
+
+</head>
+<body>
+<div id="root"></div>
+<script src="lib-4-pdfjs.js"></script>
+<script src="mapacot-1-core.js?v=7"></script>
+<script src="mapacot-2-ui-comum.js?v=7"></script>
+<script src="mapacot-3-cadastros.js?v=7"></script>
+<script src="mapacot-4-orcamento.js?v=7"></script>
+<script src="mapacot-5-relatorios.js?v=7"></script>
+<script src="mapacot-6-mapa.js?v=7"></script>
+<script src="mapacot-7-pedidos.js?v=7"></script>
+<script src="mapacot-8-ia-excel.js?v=7"></script>
+<script src="mapacot-9-app.js?v=7"></script>
+</body>
+</html>
