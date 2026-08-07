@@ -1335,17 +1335,21 @@ var _useState27 = useState(init),
     showResumo && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
       style: _objectSpread(_objectSpread({}, SC.td), {}, {
         background: "#e8eeff",
-        borderLeft: "2px solid #b8c8e8"
+        borderLeft: "2px solid #b8c8e8",
+        borderRight: "none"
       })
     }), /*#__PURE__*/React.createElement("td", {
       style: _objectSpread(_objectSpread({}, SC.td), {}, {
         textAlign: "right",
         fontWeight: 700,
-        background: "#e8eeff"
+        background: "#e8eeff",
+        borderLeft: "none",
+        borderRight: "none"
       })
     }, resumoTotal > 0 ? fmtMoney(resumoTotal) : "—"), /*#__PURE__*/React.createElement("td", {
       style: _objectSpread(_objectSpread({}, SC.td), {}, {
         background: "#e8eeff",
+        borderLeft: "none",
         borderRight: "2px solid #b8c8e8"
       })
     })), visibleChunk.map(function (f) {
@@ -1393,18 +1397,22 @@ var _useState27 = useState(init),
           return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
             style: _objectSpread(_objectSpread({}, SC.td), {}, {
               background: bg,
-              borderLeft: bl
+              borderLeft: bl,
+              borderRight: "none"
             })
           }), /*#__PURE__*/React.createElement("td", {
             style: _objectSpread(_objectSpread({}, SC.td), {}, {
               textAlign: "right",
               fontWeight: 700,
               color: "#1a56b0",
-              background: bg
+              background: bg,
+              borderLeft: "none",
+              borderRight: "none"
             })
           }, vl > 0 ? fmtMoney(vl) : "—"), /*#__PURE__*/React.createElement("td", {
             style: _objectSpread(_objectSpread({}, SC.td), {}, {
               background: bg,
+              borderLeft: "none",
               borderRight: br
             })
           }));
@@ -1433,7 +1441,8 @@ var _useState27 = useState(init),
         return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("td", {
           style: _objectSpread(_objectSpread({}, SC.td), {}, {
             background: bg,
-            borderLeft: bl
+            borderLeft: bl,
+            borderRight: "none"
           })
         }), /*#__PURE__*/React.createElement(EC, {
           value: (_rodapeResumo$row$key2 = rodapeResumo[row.key]) !== null && _rodapeResumo$row$key2 !== void 0 ? _rodapeResumo$row$key2 : "",
@@ -1447,11 +1456,14 @@ var _useState27 = useState(init),
           moneyDisplay: true,
           guardEdit: true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
-            background: bg
+            background: bg,
+            borderLeft: "none",
+            borderRight: "none"
           })
         }), /*#__PURE__*/React.createElement("td", {
           style: _objectSpread(_objectSpread({}, SC.td), {}, {
             background: bg,
+            borderLeft: "none",
             borderRight: br
           })
         }));
