@@ -2261,6 +2261,11 @@ var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orca
 var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo) {
   // FIX: esc() local para evitar XSS/quebra de layout com nomes/descrições contendo < > & "
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // FIX: corta o texto de verdade (no código, não via CSS) — garante altura de linha previsível
+  // em QUALQUER navegador/sistema na hora de imprimir/gerar PDF. Uma tentativa anterior usava um
+  // CSS que corta visualmente (line-clamp), mas esse tipo de regra é conhecida por falhar
+  // especificamente na hora de imprimir em alguns casos, mesmo funcionando bem na tela.
+  function truncar(s, max){ s = String(s||''); return s.length > max ? s.slice(0, max - 1).trim() + '\u2026' : s; }
   var resultados = [];
   mapasComCurrent.forEach(function (mapa) {
     (mapa.itens || []).forEach(function (item) {
@@ -2324,9 +2329,9 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
 
     return "<tr" + rowCls + ">"
       + "<td style=\"text-align:center;width:28px;\">"  + esc(mapa.numero||"\u2014") + "</td>"
-      + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + esc((mapa.obra||"\u2014").toUpperCase()) + "</td>"
+      + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + esc(truncar((mapa.obra||"\u2014").toUpperCase(), 36)) + "</td>"
       + "<td style=\"text-align:center;width:58px;\">" + fmtDate(new Date(mapa.criadoEm)) + "</td>"
-      + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc((item.descricao||"").toUpperCase()) + "</td>"
+      + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc(truncar((item.descricao||"").toUpperCase(), 16)) + "</td>"
       + "<td class=\"num\" style=\"width:34px;\">" + (item.qt||"") + "</td>"
       + "<td style=\"text-align:center;width:28px;\">" + (item.unid||"") + "</td>"
       + "<td class=\"menor-cell\" style=\"width:80px;\">"
