@@ -545,7 +545,7 @@ var _useState27 = useState(init),
   };
   var calcVL = function calcVL(fid) {
     var r = rodape[fid] || {};
-    return totalBruto(fid) - Math.max(0, parseMoney(r.desconto) || 0) + Math.max(0, parseMoney(r.impostos) || 0) + Math.max(0, parseMoney(r.frete) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
+    return totalBruto(fid) - Math.max(0, parseMoney(r.desconto) || 0) + Math.max(0, parseMoney(r.impostos) || 0) + Math.max(0, parseMoney(r.frete) || 0) + Math.max(0, parseMoney(r.outros) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
   };
   var bestFornId = function () {
     var minVal = null,
@@ -564,7 +564,7 @@ var _useState27 = useState(init),
     return acc + (r.vlTotal || 0);
   }, 0);
   var calcVLResumo = function calcVLResumo() {
-    return resumoTotal - Math.max(0, parseMoney(rodapeResumo.desconto) || 0) + Math.max(0, parseMoney(rodapeResumo.impostos) || 0) + Math.max(0, parseMoney(rodapeResumo.frete) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
+    return resumoTotal - Math.max(0, parseMoney(rodapeResumo.desconto) || 0) + Math.max(0, parseMoney(rodapeResumo.impostos) || 0) + Math.max(0, parseMoney(rodapeResumo.frete) || 0) + Math.max(0, parseMoney(rodapeResumo.outros) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
   };
   // FIX 5: usar "fornecedores" (lista completa) na TELA, não "fornecedoresVisiveis" (filtrada).
   // Antes, ocultar um fornecedor (clicando no "olho") o removia por completo das colunas
@@ -587,6 +587,10 @@ var _useState27 = useState(init),
   }, {
     key: "frete",
     label: "FRETE",
+    money: true
+  }, {
+    key: "outros",
+    label: "OUTROS",
     money: true
   }, {
     key: "valorLiquido",
@@ -1261,6 +1265,7 @@ var _useState27 = useState(init),
           placeholder: "0,00",
           align: "right",
           numericOnly: true,
+          moneyDisplay: true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4",
             background: fornOcultos.has(f.id) ? bg : (isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg),
@@ -1438,6 +1443,8 @@ var _useState27 = useState(init),
           placeholder: "0,00",
           align: "right",
           maxLen: row.maxLen,
+          numericOnly: true,
+          moneyDisplay: true,
           guardEdit: true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             background: bg
@@ -1473,6 +1480,7 @@ var _useState27 = useState(init),
           align: row.money ? "right" : "left",
           maxLen: row.maxLen,
           numericOnly: row.money,
+          moneyDisplay: row.money,
           wrapText: row.money ? false : true,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4"

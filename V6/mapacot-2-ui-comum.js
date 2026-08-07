@@ -286,7 +286,19 @@ function EC(_ref0) {
     detailValue = _ref0.detailValue,
     onDetailChange = _ref0.onDetailChange,
     wrapText = _ref0.wrapText,
-    guardEdit = _ref0.guardEdit;
+    guardEdit = _ref0.guardEdit,
+    moneyDisplay = _ref0.moneyDisplay;
+  // FIX (pedido do Claudio): campos de dinheiro mostravam o valor "cru" digitado (ex: 1000,00),
+  // sem separador de milhar, mesmo fora do modo de edição — diferente do PDF, que já usava
+  // fmtMoney. Esta função só formata a EXIBIÇÃO (fora de edição); o valor bruto continua sendo
+  // o que é editado/salvo, sem mudar nenhum dado. Permite até 4 casas decimais (pedido do
+  // Claudio, para preços unitários de alta precisão), mostrando só as casas realmente usadas.
+  var fmtMoneyDisplay = function fmtMoneyDisplay(v) {
+    if (v === null || v === undefined || v === "") return v;
+    var n = typeof v === "number" ? v : parseMoney(v);
+    if (n === null || isNaN(n)) return v;
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  };
   var _useState5 = useState(false),
     _useState6 = _slicedToArray(_useState5, 2),
     ed = _useState6[0],
@@ -386,7 +398,7 @@ function EC(_ref0) {
     colSpan: colSpan,
     title: guardReady ? "Clique novamente para editar" : undefined,
     onClick: start
-  }, value !== "" && value !== null && value !== undefined ? (wrapText ? /*#__PURE__*/React.createElement("span", {style:{wordBreak:"break-word",whiteSpace:"pre-wrap",display:"block"}}, value) : value) : /*#__PURE__*/React.createElement("span", {
+  }, value !== "" && value !== null && value !== undefined ? (wrapText ? /*#__PURE__*/React.createElement("span", {style:{wordBreak:"break-word",whiteSpace:"pre-wrap",display:"block"}}, value) : (moneyDisplay ? fmtMoneyDisplay(value) : value)) : /*#__PURE__*/React.createElement("span", {
     style: {
       color: "#ccc"
     }

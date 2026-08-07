@@ -1370,7 +1370,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   };
   var calcVL = function calcVL(fid) {
     var r = rodape[fid] || {};
-    return totalBruto(fid) - Math.max(0, parseMoney(r.desconto) || 0) + Math.max(0, parseMoney(r.impostos) || 0) + Math.max(0, parseMoney(r.frete) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
+    return totalBruto(fid) - Math.max(0, parseMoney(r.desconto) || 0) + Math.max(0, parseMoney(r.impostos) || 0) + Math.max(0, parseMoney(r.frete) || 0) + Math.max(0, parseMoney(r.outros) || 0); // FIX: protege contra valor negativo digitado por engano, que inverteria a conta
   };
   var bestFornId = function () {
     var minVal = null,
@@ -1461,7 +1461,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var rC0=orcRes0>=0?'#186818':'#aa1c1c';
     var rL0=orcRes0>=0?'\u25cf LUCRO':'\u25cf PREJ.';
     var rod0=mapa.rodape||{},rSum0=rod0['__resumo__']||{};
-    var vlLiq0=rTot0-(parseMoney(rSum0.desconto)||0)+(parseMoney(rSum0.impostos)||0)+(parseMoney(rSum0.frete)||0);
+    var vlLiq0=rTot0-(parseMoney(rSum0.desconto)||0)+(parseMoney(rSum0.impostos)||0)+(parseMoney(rSum0.frete)||0)+(parseMoney(rSum0.outros)||0);
     var rodP0=''
       +'<tr style="background:#c5d8f0;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;">TOTAL</td>'
         +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
@@ -1482,7 +1482,11 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
         +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
         +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
-      +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">VALOR L\u00cdQUIDO</td>'
+      +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">OUTROS</td>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'"></td><td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
+      +'<tr><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">VALOR L\u00cdQUIDO</td>'
         +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
         +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
         +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td>'
@@ -1544,6 +1548,10 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     label: "FRETE",
     money: true
   }, {
+    key: "outros",
+    label: "OUTROS",
+    money: true
+  }, {
     key: "valorLiquido",
     label: "VALOR LÍQUIDO",
     computed: true
@@ -1590,7 +1598,8 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
           var desc = parseMoney(rr.desconto) || 0;
           var imp = parseMoney(rr.impostos) || 0;
           var fret = parseMoney(rr.frete) || 0;
-          var vl = resumoTotal - desc + imp + fret;
+          var outr = parseMoney(rr.outros) || 0;
+          var vl = resumoTotal - desc + imp + fret + outr;
           val = vl > 0 ? fmtMoney(vl) : "—";
         } else {
           var raw = rr[row.key] || "";
