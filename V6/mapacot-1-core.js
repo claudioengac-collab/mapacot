@@ -425,9 +425,15 @@ var sbGetInsumos = /*#__PURE__*/function () {
           return r.json();
         case 3:
           d = _context5.v;
-          // FIX: retorna {lista, versao} em vez de só o array, para permitir o mesmo controle
-          // de versão contra múltiplas abas já aplicado em mapas/cadastros/fornecedores
-          return _context5.a(2, { lista: ((_d$2 = d[0]) === null || _d$2 === void 0 || (_d$2 = _d$2.dados) === null || _d$2 === void 0 ? void 0 : _d$2.insumos) || [], versao: d[0] && d[0].atualizado_em });
+          // FIX: retorna {lista, sinonimos, versao} — sinonimos é o dicionário {nome do
+          // insumo: [lista de sinônimos]}, adicionado para o recurso de casamento inteligente
+          // por palavras-chave. Usa acesso seguro (sem optional chaining encadeado reaproveitado)
+          // para evitar qualquer risco de o campo antigo "lista" quebrar com essa adição.
+          return _context5.a(2, {
+            lista: (d[0] && d[0].dados && d[0].dados.insumos) || [],
+            sinonimos: (d[0] && d[0].dados && d[0].dados.insumoSinonimos) || {},
+            versao: d[0] && d[0].atualizado_em
+          });
       }
     }, _callee5);
   }));
@@ -461,7 +467,11 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
     });
   });
 }
-var sbSaveInsumos = function sbSaveInsumos(insumos, versaoConhecida) {
+var sbSaveInsumos = function sbSaveInsumos(insumos, sinonimos, versaoConhecida) {
+  // FIX: adiciona "sinonimos" como parâmetro EXPLÍCITO (não opcional no final) — de propósito,
+  // para forçar cada lugar que chama esta função a decidir conscientemente o que enviar aqui,
+  // em vez de um valor "esquecido" apagar silenciosamente os sinônimos já salvos (mesmo tipo de
+  // bug de campo esquecido já visto antes em sbSaveCadastros/fornecedorObs).
   return verificarVersaoAntesDeSalvar("insumos", versaoConhecida).then(function(){
     var novaVersao = new Date().toISOString().replace("Z", "+00:00");
     return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
@@ -470,7 +480,8 @@ var sbSaveInsumos = function sbSaveInsumos(insumos, versaoConhecida) {
       body: JSON.stringify({
         id: "insumos",
         dados: {
-          insumos: insumos
+          insumos: insumos,
+          insumoSinonimos: sinonimos || {}
         },
         atualizado_em: novaVersao
       })

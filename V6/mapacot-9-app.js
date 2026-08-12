@@ -602,6 +602,7 @@ function App() {
                 return {
                   obras: cad.obras || [],
                   insumos: [],
+                  insumoSinonimos: {}, // FIX: placeholder — preenchido de verdade junto com a lista de insumos, no carregamento em segundo plano (case 8)
                   unidades: cad.unidades || DEFAULT_UNIDADES,
                   fornecedores: cad.fornecedores || [],
                   fornecedorObs: cad.fornecedorObs || {} // FIX: mesmo bug de sbSaveCadastros — o
@@ -628,7 +629,8 @@ function App() {
             versaoInsumosRef.current = insumos.versao; // FIX: guarda a versão para o controle de múltiplas abas
             if (insumos.lista.length) setCadastros(function (prev) {
               return _objectSpread(_objectSpread({}, prev), {}, {
-                insumos: insumos.lista
+                insumos: insumos.lista,
+                insumoSinonimos: insumos.sinonimos || {}
               });
             });
             _context8.n = 10;
@@ -736,7 +738,7 @@ function App() {
         return normalize(x) === v;
       })) return prev;
       var updated = _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, tipo, [].concat(_toConsumableArray(lista), [v]).sort()));
-      if (tipo === "insumos") sbSaveInsumos(updated.insumos, versaoInsumosRef.current).then(function(novaVersao){
+      if (tipo === "insumos") sbSaveInsumos(updated.insumos, updated.insumoSinonimos, versaoInsumosRef.current).then(function(novaVersao){
         versaoInsumosRef.current = novaVersao;
       }).catch(function (e) {
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
@@ -765,7 +767,14 @@ function App() {
         delete novoObs[normalize(valor)];
         updated.fornecedorObs = novoObs;
       }
-      if (tipo === 'insumos') sbSaveInsumos(updated.insumos, versaoInsumosRef.current).then(function(novaVersao){
+      // FIX: mesmo cuidado, agora para sinônimos — ao excluir um INSUMO, remove também os
+      // sinônimos salvos dele, senão ficam órfãos no banco (nenhum insumo visível pra editá-los).
+      if (tipo === 'insumos' && prev.insumoSinonimos && prev.insumoSinonimos[normalize(valor)]) {
+        var novoSin = _objectSpread({}, prev.insumoSinonimos);
+        delete novoSin[normalize(valor)];
+        updated.insumoSinonimos = novoSin;
+      }
+      if (tipo === 'insumos') sbSaveInsumos(updated.insumos, updated.insumoSinonimos, versaoInsumosRef.current).then(function(novaVersao){
         versaoInsumosRef.current = novaVersao;
       }).catch(function(e){
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
@@ -798,7 +807,15 @@ function App() {
         delete novoObs[vOld];
         updated.fornecedorObs = novoObs;
       }
-      if (tipo === 'insumos') sbSaveInsumos(updated.insumos, versaoInsumosRef.current).then(function(novaVersao){
+      // FIX: mesmo cuidado, agora para sinônimos — ao renomear um INSUMO, migra os sinônimos
+      // salvos do nome antigo para o novo, senão ficariam "presos" no nome antigo, inacessíveis.
+      if (tipo === 'insumos' && prev.insumoSinonimos && prev.insumoSinonimos[vOld]) {
+        var novoSin = _objectSpread({}, prev.insumoSinonimos);
+        novoSin[vNew] = novoSin[vOld];
+        delete novoSin[vOld];
+        updated.insumoSinonimos = novoSin;
+      }
+      if (tipo === 'insumos') sbSaveInsumos(updated.insumos, updated.insumoSinonimos, versaoInsumosRef.current).then(function(novaVersao){
         versaoInsumosRef.current = novaVersao;
       }).catch(function(e){
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
@@ -813,6 +830,34 @@ function App() {
       return updated;
     });
   }, [mapas]);
+  // FIX: sinônimos por insumo — lista de formas alternativas que aquele insumo pode aparecer
+  // em orçamentos de fornecedores diferentes (ex: "TUBO ESGOTO BR 100MM", "TUBO PVC SERIE
+  // NORMAL DN 100"). Guardado à parte, na MESMA linha "insumos" do banco (junto com a lista de
+  // nomes), usando sbSaveInsumos — não em sbSaveCadastros, que é para a linha "global" separada.
+  // Recebe a lista COMPLETA de sinônimos daquele insumo (substitui a anterior por inteiro) —
+  // é responsabilidade de quem chama (a tela) montar essa lista completa a cada adição/remoção.
+  var setSinonimosInsumo = useCallback(function (nomeInsumo, listaSinonimos) {
+    var nome = normalize(nomeInsumo);
+    if (!nome) return;
+    var limpos = (listaSinonimos || [])
+      .map(function (s) { return String(s || '').trim().toUpperCase().slice(0, 300); })
+      .filter(function (s) { return s.length > 0; });
+    setCadastros(function (prev) {
+      var sinAtual = prev.insumoSinonimos || {};
+      var novoSin = _objectSpread({}, sinAtual);
+      if (limpos.length) novoSin[nome] = limpos;
+      else delete novoSin[nome]; // lista vazia remove a entrada, não deixa lixo salvo (mesmo padrão do setObsFornecedor)
+      var updated = _objectSpread(_objectSpread({}, prev), {}, { insumoSinonimos: novoSin });
+      logEventoDiag("SIN\u00d4NIMOS atualizados para insumo: " + nome + " (" + limpos.length + " sin\u00f4nimo(s))");
+      sbSaveInsumos(updated.insumos, updated.insumoSinonimos, versaoInsumosRef.current).then(function(novaVersao){
+        versaoInsumosRef.current = novaVersao;
+      }).catch(function(e){
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar os sinônimos. Verifique sua conexão.');
+      });
+      return updated;
+    });
+  }, []);
   // FIX: observação livre por fornecedor (até 5000 caracteres) — guardada à parte da lista de
   // nomes já existente, sem alterar nada da estrutura atual. Usa o mesmo sbSaveCadastros (já
   // ajustado acima para incluir este campo).
@@ -1299,6 +1344,7 @@ function App() {
     onRemove: removeCadastro,
     onEdit: editCadastro,
     onSetObs: setObsFornecedor,
+    onSetSinonimos: setSinonimosInsumo,
     mapas: mapas,
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCad(false); setTimeout(function(){ setObraImportando(obra); setShowImportOrc(true); }, 200); },

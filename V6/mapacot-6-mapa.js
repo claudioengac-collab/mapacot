@@ -2013,6 +2013,7 @@ var _useState27 = useState(init),
   showLerIA && /*#__PURE__*/React.createElement(ModalLerComIA, {
     mapa: mapa, itens: itens,
     aprendizados: aprendizados,
+    insumoSinonimos: cadastros.insumoSinonimos || {},
     onClose: function(){ setShowLerIA(false); },
     onAprendizadoSalvo: registrarAprendizado,
     onConfirm: function(ligs) {

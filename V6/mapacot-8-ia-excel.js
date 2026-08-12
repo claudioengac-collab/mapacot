@@ -1740,6 +1740,7 @@ function buscarCotacaoDolarIA() {
 function ModalLerComIA(_ref_ia) {
   var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso, onAprendizadoSalvo=_ref_ia.onAprendizadoSalvo||function(){};
   var aprendizados=_ref_ia.aprendizados||{};
+  var insumoSinonimos=_ref_ia.insumoSinonimos||{};
   var CE=React.createElement;
   var _sStep=useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
   var _sArq=useState(null),arquivo=_slicedToArray(_sArq,2)[0],setArquivo=_slicedToArray(_sArq,2)[1];
@@ -1778,6 +1779,57 @@ function ModalLerComIA(_ref_ia) {
     // sem par", rejeitando o match mesmo sendo exatamente a mesma peça.
     t = t.replace(/(\d+)\s+(MM|CM|M2|M3|KG|ML|L|UN|PC|CJ|MT|M|A|V|W)\b/g, '$1$2');
     return t;
+  };
+  // ═══ OPÇÃO 2 da fila de casamento — sinônimos ensinados por insumo (pedido do Claudio) ═══
+  // Puramente ADITIVO: só entra em ação para insumos que JÁ TÊM pelo menos 1 sinônimo
+  // cadastrado manualmente. Para insumos sem nenhum sinônimo ensinado, o comportamento
+  // continua 100% idêntico ao de antes (cai direto na Opção 3 / wordScore, sem nenhuma
+  // mudança) — não substitui, não desliga e não altera nada do que já existia.
+  //
+  // Ideia: em vez de exigir uma frase EXATA já vista, aprende quais PALAVRAS são o "núcleo"
+  // do insumo (aparecem em pelo menos 60% do nome + sinônimos cadastrados) — e reconhece
+  // qualquer texto novo do orçamento que compartilhe a maior parte dessas palavras-núcleo,
+  // mesmo numa frase nunca vista antes. Exige pelo menos 2 palavras-chave (nunca casa por
+  // 1 palavra genérica isolada) e pelo menos 70% delas presentes no texto novo.
+  var calcularPalavrasChave = function(nomePrincipal, listaSinonimos) {
+    var variacoes = [nomePrincipal].concat(listaSinonimos || []).filter(Boolean).map(normalizar);
+    if (variacoes.length < 2) return []; // precisa do nome + pelo menos 1 sinônimo
+    var contagem = {};
+    variacoes.forEach(function(v) {
+      var vistos = {};
+      v.split(" ").filter(function(w){ return w.length > 2 || /^\d+[A-Z]?$/.test(w); }).forEach(function(w) {
+        if (vistos[w]) return; // conta 1 vez por variação, mesmo que a palavra se repita nela
+        vistos[w] = true;
+        contagem[w] = (contagem[w] || 0) + 1;
+      });
+    });
+    var minimoAparicoes = Math.ceil(variacoes.length * 0.6);
+    var chaves = Object.keys(contagem).filter(function(w) { return contagem[w] >= minimoAparicoes; });
+    return chaves.length >= 2 ? chaves : [];
+  };
+  var tentarMatchPorSinonimo = function(textoOrcamento) {
+    var palavrasTexto = normalizar(textoOrcamento).split(" ").filter(function(w){ return w.length > 2 || /^\d+[A-Z]?$/.test(w); });
+    // FIX: mesmo tipo de problema já visto com "90"/"90 GRAUS" — uma palavra-chave tipo "100MM"
+    // (número + unidade colada) não batia com um texto novo que tem só "100" solto (ex: "100 X
+    // 6M", onde o "100" não vem seguido da unidade). Aceita a forma sem unidade como equivalente,
+    // SÓ para a palavra-chave (nunca o contrário) — não afeta a extração das palavras-chave em
+    // si, só essa comparação pontual, e nunca confunde "100MM" com "100CM" (unidades diferentes).
+    var baseSemUnidade = function(w) { var m = w.match(/^(\d+)[A-Z]+$/); return m ? m[1] : null; };
+    var melhorId = null, melhorPct = 0;
+    itens.forEach(function(mi) {
+      var sinonimosDoItem = insumoSinonimos[mi.descricao];
+      if (!sinonimosDoItem || !sinonimosDoItem.length) return; // só considera insumos já ensinados
+      var chaves = calcularPalavrasChave(mi.descricao, sinonimosDoItem);
+      if (!chaves.length) return;
+      var acertos = chaves.filter(function(c){
+        if (palavrasTexto.indexOf(c) >= 0) return true;
+        var base = baseSemUnidade(c);
+        return base ? palavrasTexto.indexOf(base) >= 0 : false;
+      }).length;
+      var pct = acertos / chaves.length;
+      if (pct > melhorPct) { melhorPct = pct; melhorId = mi.id; }
+    });
+    return melhorPct >= 0.7 ? melhorId : null;
   };
   var wordScore=function(a,b){
     var EXCECOES_PALAVRA_CURTA = {"TE":1}; // FIX: "TÊ" (peça de tubulação em T) tem só 2 letras e
@@ -1827,6 +1879,9 @@ function ModalLerComIA(_ref_ia) {
         var itemConhecido = itens.find(function(mi){ return mi.descricao === descConhecida; });
         if (itemConhecido) { result[idx] = itemConhecido.id; return; }
       }
+      // Op\u00e7\u00e3o 2: bate com as palavras-chave de algum insumo que j\u00e1 tem sin\u00f4nimos ensinados?
+      var idPorSinonimo = tentarMatchPorSinonimo(oi.descricao);
+      if (idPorSinonimo) { result[idx] = idPorSinonimo; return; }
       var best=0,bestId="";
       itens.forEach(function(mi){var sc=wordScore(oi.descricao,mi.descricao);if(sc>best){best=sc;bestId=mi.id;}});
       result[idx]=best>=0.35?bestId:"";

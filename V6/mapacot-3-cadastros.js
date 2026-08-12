@@ -7,6 +7,7 @@ function CadastrosModal(_ref11) {
     onRemove = _ref11.onRemove,
     onEdit = _ref11.onEdit,
     onSetObs = _ref11.onSetObs || function(){},
+    onSetSinonimos = _ref11.onSetSinonimos || function(){},
     orcamentos = _ref11.orcamentos || {},
     onImportarOrcamento = _ref11.onImportarOrcamento || null,
     onLimparOrcamento = _ref11.onLimparOrcamento || null,
@@ -19,6 +20,11 @@ function CadastrosModal(_ref11) {
   // FIX: estado local para o campo livre de observação por fornecedor (até 5000 caracteres)
   var _useStateObs = useState(null), obsAbertaPara = _slicedToArray(_useStateObs, 2)[0], setObsAbertaPara = _slicedToArray(_useStateObs, 2)[1];
   var _useStateObsTxt = useState(""), obsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[0], setObsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[1];
+  // FIX: estado local para sinônimos por insumo — mesmo padrão da observação do fornecedor
+  // acima (buffer local, só salva de verdade quando clica em SALVAR).
+  var _useStateSin = useState(null), sinAbertoPara = _slicedToArray(_useStateSin, 2)[0], setSinAbertoPara = _slicedToArray(_useStateSin, 2)[1];
+  var _useStateSinLista = useState([]), sinListaEditando = _slicedToArray(_useStateSinLista, 2)[0], setSinListaEditando = _slicedToArray(_useStateSinLista, 2)[1];
+  var _useStateSinNovo = useState(""), sinNovoTexto = _slicedToArray(_useStateSinNovo, 2)[0], setSinNovoTexto = _slicedToArray(_useStateSinNovo, 2)[1];
   var _useState1 = useState(""),
     _useState10 = _slicedToArray(_useState1, 2),
     novo = _useState10[0],
@@ -252,7 +258,7 @@ function CadastrosModal(_ref11) {
         alignItems: "center",
         gap: 8,
         padding: "7px 12px",
-        borderBottom: (i < lista.length - 1 && obsAbertaPara !== item) ? "1px solid #f0f2f6" : undefined,
+        borderBottom: (i < lista.length - 1 && obsAbertaPara !== item && sinAbertoPara !== item) ? "1px solid #f0f2f6" : undefined,
         background: editIdx === i ? "#f0f4ff" : i % 2 === 0 ? "#fff" : "#fafbfd"
       }
     }, editIdx === i ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
@@ -370,7 +376,25 @@ function CadastrosModal(_ref11) {
         color: (cadastros.fornecedorObs || {})[normalize(item)] ? "#b87800" : "#999",
         cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center"
       }
-    }, "\ud83d\udcdd"))),
+    }, "\ud83d\udcdd"),
+    tab === "insumos" && (function() {
+      var qtdSin = ((cadastros.insumoSinonimos || {})[normalize(item)] || []).length;
+      return /*#__PURE__*/React.createElement("button", {
+        onClick: function() {
+          if (sinAbertoPara === item) { setSinAbertoPara(null); return; }
+          setSinAbertoPara(item);
+          setSinListaEditando(((cadastros.insumoSinonimos || {})[normalize(item)] || []).slice());
+          setSinNovoTexto("");
+        },
+        title: qtdSin ? "TEM " + qtdSin + " SIN\xd4NIMO(S) — CLIQUE PARA VER/EDITAR" : "ENSINAR FORMAS ALTERNATIVAS DESSE INSUMO (SIN\xd4NIMOS)",
+        style: {
+          background: qtdSin ? "#e6f4ea" : "#f0eaff",
+          border: "none", borderRadius: 5, padding: "4px 7px",
+          color: qtdSin ? "#186818" : "#6b3fa0",
+          cursor: "pointer", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap"
+        }
+      }, "\ud83d\udd17", qtdSin ? " " + qtdSin : "");
+    })())),
     obsAbertaPara === item && /*#__PURE__*/React.createElement("div", {
       style: { padding: "10px 14px 14px", background: "#fffbf0", borderBottom: i < lista.length - 1 ? "1px solid #f0f2f6" : undefined, display: "flex", flexDirection: "column", gap: 6 }
     },
@@ -393,6 +417,61 @@ function CadastrosModal(_ref11) {
             style: { background: "#e8f5e9", border: "none", borderRadius: 5, padding: "5px 12px", color: "#2e7d32", cursor: "pointer", fontWeight: 700, fontSize: 11 }
           }, "SALVAR OBSERVA\xc7\xc3O")
         )
+      )
+    ),
+    sinAbertoPara === item && /*#__PURE__*/React.createElement("div", {
+      style: { padding: "10px 14px 14px", background: "#faf9ff", borderBottom: i < lista.length - 1 ? "1px solid #f0f2f6" : undefined, display: "flex", flexDirection: "column", gap: 8 }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 10.5, color: "#888" } },
+        "Formas alternativas que este insumo j\xe1 apareceu em or\xe7amentos de fornecedores. Cole a frase exata, como veio."
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+        sinListaEditando.length === 0
+          ? /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "#bbb" } }, "Nenhum sin\xf4nimo cadastrado ainda.")
+          : sinListaEditando.map(function(sin, si) {
+              return /*#__PURE__*/React.createElement("span", {
+                key: si,
+                style: { background: "#fff", border: "1px solid #d0d0e0", borderRadius: 20, padding: "5px 8px 5px 12px", fontSize: 11.5, display: "flex", alignItems: "center", gap: 6 }
+              },
+                sin,
+                /*#__PURE__*/React.createElement("button", {
+                  onClick: function() { setSinListaEditando(sinListaEditando.filter(function(_, k) { return k !== si; })); },
+                  style: { border: "none", background: "#eee", borderRadius: "50%", width: 16, height: 16, fontSize: 9, cursor: "pointer", lineHeight: 1, color: "#888" }
+                }, "\u2715")
+              );
+            })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6 } },
+        /*#__PURE__*/React.createElement("input", {
+          value: sinNovoTexto,
+          onChange: function(e) { setSinNovoTexto(e.target.value); },
+          onKeyDown: function(e) {
+            if (e.key === "Enter" && sinNovoTexto.trim()) {
+              setSinListaEditando(sinListaEditando.concat([sinNovoTexto.trim().toUpperCase()]));
+              setSinNovoTexto("");
+            }
+          },
+          placeholder: "Digite outra forma que esse item pode aparecer...",
+          style: { flex: 1, border: "1px solid #ccc", borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: "inherit", textTransform: "none", outline: "none" }
+        }),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function() {
+            if (!sinNovoTexto.trim()) return;
+            setSinListaEditando(sinListaEditando.concat([sinNovoTexto.trim().toUpperCase()]));
+            setSinNovoTexto("");
+          },
+          style: { background: "#f5a623", border: "none", borderRadius: 6, padding: "6px 12px", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }
+        }, "+ ADICIONAR")
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", gap: 6 } },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function() { setSinAbertoPara(null); },
+          style: { background: "#f5f5f5", border: "none", borderRadius: 5, padding: "5px 12px", color: "#888", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+        }, "CANCELAR"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function() { onSetSinonimos(item, sinListaEditando); setSinAbertoPara(null); },
+          style: { background: "#e8f5e9", border: "none", borderRadius: 5, padding: "5px 12px", color: "#2e7d32", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+        }, "SALVAR SIN\xd4NIMOS")
       )
     ));
   })), /*#__PURE__*/React.createElement("div", {
