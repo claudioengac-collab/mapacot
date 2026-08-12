@@ -1623,7 +1623,15 @@ var conflitosJaAvisados = {};
 window.avisarConflitoVersaoUmaVez = function(chave, mensagem) {
   if (conflitosJaAvisados[chave]) return;
   conflitosJaAvisados[chave] = true;
-  window.avisarErroSalvamento(mensagem);
+  // FIX (pedido do Claudio): o toast genérico de erro (5 segundos, discreto, some sozinho) não
+  // era visível o bastante para esse caso específico — o usuário editava, o salvamento era
+  // corretamente BLOQUEADO (proteção contra sobrescrever dados de outra aba), mas o aviso passava
+  // despercebido, dando a impressão de "editei e não salvou, sem motivo". Este caso agora usa um
+  // aviso PRÓPRIO, separado do genérico: fica na tela até o usuário agir (não some sozinho), e
+  // tem um botão "RECARREGAR AGORA" que resolve o problema com um clique só. O toast genérico
+  // (erro de conexão, etc.) continua exatamente como estava, sem nenhuma mudança.
+  logEventoDiag("\u2716 ERRO DE SALVAMENTO: " + mensagem);
+  window.dispatchEvent(new CustomEvent('mapacot-conflito-versao', { detail: mensagem }));
 };
 
 function ToastErroSalvamento() {
@@ -1647,6 +1655,43 @@ function ToastErroSalvamento() {
   }, '⚠ ' + toast);
 }
 
+// FIX (pedido do Claudio): aviso PRÓPRIO para conflito de versão (outra aba/dispositivo salvou
+// antes) — diferente do toast genérico acima, este NÃO some sozinho, fica fixo no TOPO da tela
+// (mais visível, dificil de não notar) até o usuário agir, e tem um botão que resolve o
+// problema com um clique. Testado para nunca cobrir menus/topo do sistema (fica acima de tudo,
+// mas empurra o conteúdo pra baixo com um espaçador, em vez de sobrepor).
+function AvisoConflitoVersao() {
+  var _sV = useState(null), aviso = _slicedToArray(_sV,2)[0], setAviso = _slicedToArray(_sV,2)[1];
+  useEffect(function(){
+    function aoReceber(e){ setAviso(e.detail || 'Estes dados foram modificados em outra aba ou dispositivo.'); }
+    window.addEventListener('mapacot-conflito-versao', aoReceber);
+    return function(){ window.removeEventListener('mapacot-conflito-versao', aoReceber); };
+  }, []);
+  if (!aviso) return null;
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+    /*#__PURE__*/React.createElement('div', { style:{ height: 60 } }), // espaçador — evita cobrir o topo do sistema
+    /*#__PURE__*/React.createElement('div', {
+      style:{
+        position:'fixed', top:0, left:0, right:0, zIndex:999999,
+        background:'#c0392b', color:'#fff', padding:'12px 16px',
+        display:'flex', alignItems:'center', justifyContent:'center', gap:14,
+        flexWrap:'wrap', boxShadow:'0 2px 10px rgba(0,0,0,.35)'
+      }
+    },
+      /*#__PURE__*/React.createElement('span', { style:{ fontSize:13, fontWeight:700, textAlign:'center' } }, '⚠ ' + aviso),
+      /*#__PURE__*/React.createElement('button', {
+        onClick: function(){ window.location.reload(); },
+        style:{ background:'#fff', color:'#c0392b', border:'none', borderRadius:6, padding:'7px 16px', fontWeight:800, fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }
+      }, '\u21BB RECARREGAR AGORA'),
+      /*#__PURE__*/React.createElement('button', {
+        onClick: function(){ setAviso(null); },
+        title: 'Fechar (n\u00e3o recomendado — os dados n\u00e3o editados continuam desatualizados)',
+        style:{ background:'transparent', color:'#fff', border:'1px solid rgba(255,255,255,.6)', borderRadius:6, padding:'7px 12px', fontWeight:700, fontSize:12, cursor:'pointer' }
+      }, '\u2715')
+    )
+  );
+}
+
 function Root() {
   var _React$useState = React.useState(function () {
       return sessionStorage.getItem("mapacot_auth") === "1";
@@ -1660,11 +1705,13 @@ function Root() {
         return setAuth(true);
       }
     }),
-    /*#__PURE__*/React.createElement(ToastErroSalvamento, null)
+    /*#__PURE__*/React.createElement(ToastErroSalvamento, null),
+    /*#__PURE__*/React.createElement(AvisoConflitoVersao, null)
   );
   return /*#__PURE__*/React.createElement(React.Fragment, null,
     /*#__PURE__*/React.createElement(App, null),
-    /*#__PURE__*/React.createElement(ToastErroSalvamento, null)
+    /*#__PURE__*/React.createElement(ToastErroSalvamento, null),
+    /*#__PURE__*/React.createElement(AvisoConflitoVersao, null)
   );
 }
 // Sincronizar barras de rolagem duplas para TODOS os mapas
