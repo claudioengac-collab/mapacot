@@ -2038,7 +2038,15 @@ function ModalLerComIA(_ref_ia) {
       }
       if (numeros.length<3) continue;
 
-      var UNIDADE_RE = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ)$/i;
+      // FIX (bugs reais, confirmados com 2 orçamentos diferentes — Agroboi e Costa Rep): a lista de
+      // unidades reconhecidas não tinha "PT" (pacote), "SC" (saco) e "RL" (rolo) — três abreviações
+      // comuns em orçamentos de fornecedor. Sem reconhecer a unidade, a pista "tem unidade logo
+      // depois = é a quantidade" não disparava para esses itens, e a heurística mais fraca ("número
+      // maior que 1 provavelmente é a quantidade") decidia errado sempre que o preço era maior que a
+      // quantidade real (comum). Adiciona só estas 3, confirmadas com documentos reais — não
+      // adivinha outras abreviações não confirmadas, para não arriscar reconhecer palavra errada
+      // como unidade em outro tipo de documento.
+      var UNIDADE_RE = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ|PT|SC|RL)$/i;
       var FORMATO_QTD_RE = /,\d{3}$|,\d{5}$/; // ex: "1,000", "15,000" (3 casas) ou "26,00000" (5 casas) — sempre quantidade nesses padrões
       var unitValidado=null, qtdValidada=null, melhorDiferenca=Infinity, melhorBonus=-1, melhorPrioridade=-1;
       for (var xi=0; xi<numeros.length; xi++) {
@@ -2050,12 +2058,26 @@ function ModalLerComIA(_ref_ia) {
             if (qtd>=1 && unit>0) {
               var diferenca=Math.abs(qtd*unit-total)/Math.max(total,1);
               if (diferenca<0.015) { // FIX: tolerância aumentada de 1% para 1,5% para cobrir arredondamento real de alguns documentos (ex: Acreferro)
-                // FIX: prioridade 2 (máxima) quando o candidato a quantidade TEM o formato de 3 casas
-                // decimais (pista mais confiável que existe); prioridade 1 quando qtd>1 (heurística
-                // antiga, evita ambiguidade); prioridade 0 (fallback) quando só bate com qtd=1 "seco".
-                var prioridade = FORMATO_QTD_RE.test(textosOriginais[xi]) ? 2 : (qtd>1 ? 1 : 0);
+                // FIX (bug real, reproduzido com o item "CAVADEIRA RETA C/CABO" do orçamento da
+                // Agroboi — relatado pelo Claudio como "trouxe a quantidade e não o valor"): quando
+                // a quantidade REAL de um item é exatamente 1 (ex: "1 CAVADEIRA"), e o preço
+                // unitário é maior que 1 (praticamente sempre é, ex: R$ 53,50), a antiga regra
+                // "número > 1 provavelmente é a quantidade" prefere errado — ela troca preço por
+                // quantidade, porque 53,50 > 1,00 parece "mais quantidade" que 1,00 sozinho.
+                // A pista de que logo depois do número vem uma UNIDADE (ex: "1,00" seguido de "UN")
+                // já existia no código (variável "bonus"), mas só era usada para desempate por
+                // ÚLTIMO — DEPOIS da regra fraca já ter decidido errado. Move essa pista mais forte
+                // e mais direta pra DENTRO do cálculo de prioridade, com peso maior que o "maior que
+                // 1", corrigindo exatamente esse caso sem enfraquecer a regra existente pros outros.
                 var proxTokenDaQtd = (textos[posicoes[xi]+1]||"").trim();
                 var bonus = UNIDADE_RE.test(proxTokenDaQtd) ? 1 : 0;
+                // FIX: prioridade 3 (máxima) quando o candidato a quantidade TEM o formato de 3 casas
+                // decimais (pista mais confiável que existe); prioridade 2 quando tem uma unidade
+                // (UN/PC/KG...) logo depois no documento original (pista direta e confiável, cobre o
+                // caso de quantidade=1); prioridade 1 quando qtd>1 sem nenhuma das pistas acima
+                // (heurística mais fraca, só usada quando não há evidência melhor); prioridade 0
+                // (fallback) quando só bate com qtd=1 "seco", sem nenhuma pista de apoio.
+                var prioridade = FORMATO_QTD_RE.test(textosOriginais[xi]) ? 3 : (bonus ? 2 : (qtd>1 ? 1 : 0));
                 if (prioridade>melhorPrioridade || (prioridade===melhorPrioridade && (diferenca<melhorDiferenca || (diferenca===melhorDiferenca && bonus>melhorBonus)))) {
                   melhorDiferenca=diferenca; melhorBonus=bonus; melhorPrioridade=prioridade; unitValidado=unit; qtdValidada=qtd;
                 }
