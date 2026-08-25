@@ -763,6 +763,18 @@ var parseMoney = function parseMoney(s) {
 var normalize = function normalize(s) {
   return (s || "").trim().toUpperCase();
 };
+// FIX (pedido do Claudio — busca "TE" não encontrava "TÊ"): função NOVA, só para busca/filtro
+// visual (Banco de Cadastros e sugestões de autocomplete). A função "normalize" original NÃO
+// foi alterada — continua exatamente igual, porque ela também é usada como CHAVE para dados já
+// salvos (sinônimos de insumo, observações de fornecedor) e para decidir se um nome "já existe"
+// ou "está em uso" em outros pontos do sistema. Mudar o comportamento dela ali apagaria o acesso
+// a dados já cadastrados e mudaria regras de negócio sem necessidade. Esta função nova faz tudo
+// que a original faz, e ADICIONALMENTE remove acentos — usa a mesma técnica já comprovada em
+// outra parte do sistema (leitura de orçamento por IA): decompor o caractere acentuado em
+// "letra base + acento" (NFD) e descartar só o acento, preservando a letra.
+var normalizeBusca = function normalizeBusca(s) {
+  return (s || "").trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+};
 var addToList = function addToList(list, val) {
   var v = normalize(val);
   if (!v) return list;

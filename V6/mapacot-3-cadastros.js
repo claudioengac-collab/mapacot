@@ -89,10 +89,10 @@ function CadastrosModal(_ref11) {
     icon: "🏗️"
   }];
   var lista = React.useMemo(function () {
-    var b = normalize(buscaDelay);
+    var b = normalizeBusca(buscaDelay);
     if (tab === "insumos" && !b) return [];
     return (cadastros[tab] || []).filter(function (x) {
-      return normalize(x).includes(b);
+      return normalizeBusca(x).includes(b);
     }).slice(0, 500);
   }, [cadastros, tab, buscaDelay]);
   var handleAdd = function handleAdd() {

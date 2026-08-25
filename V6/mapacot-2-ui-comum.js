@@ -23,12 +23,12 @@ function AutocompleteInput(_ref9) {
     hi = _useState4[0],
     setHi = _useState4[1];
   var ref = useRef();
-  var nv = normalize(value);
+  var nv = normalizeBusca(value);
   var filtered = nv.length > 0 ? (suggestions || []).filter(function (s) {
-    return normalize(s).includes(nv) && normalize(s) !== nv;
+    return normalizeBusca(s).includes(nv) && normalizeBusca(s) !== nv;
   }).sort(function (a, b) {
-    var as = normalize(a).startsWith(nv);
-    var bs = normalize(b).startsWith(nv);
+    var as = normalizeBusca(a).startsWith(nv);
+    var bs = normalizeBusca(b).startsWith(nv);
     return as && !bs ? -1 : !as && bs ? 1 : 0;
   }).slice(0, 500) : showOnFocus && open ? (suggestions || []).slice(0, 500) : [];
   var dropRef = useRef();
