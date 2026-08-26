@@ -1258,9 +1258,15 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
     + '.sbox{text-align:center;} .sline{border-top:1px solid #333;margin-top:32px;padding-top:4px;font-size:9px;color:#888;min-width:160px;}'
     + '.rodape{text-align:center;font-size:8px;color:#bbb;margin-top:16px;}'
     + '</style>';
+  // FIX (implementação alinhada com layout aprovado — situação 2, opção B): coluna extra
+  // mostrando de qual mapa cada item veio. Só aparece quando o pedido REALMENTE envolve mais de
+  // um mapa — para pedidos de um só mapa (o caso mais comum), o PDF continua idêntico a antes,
+  // sem essa coluna extra desnecessária.
+  var mostrarColunaMapa = po.mapas_numeros && po.mapas_numeros.length > 1;
   var itensHTML = (po.itens||[]).map(function(it, i){
     return '<tr>'
       + '<td>' + (i+1) + '</td>'
+      + (mostrarColunaMapa ? '<td style="text-align:center;color:#7c3aed;font-weight:bold;">MP ' + (it.mapa_numero!=null?it.mapa_numero:'?') + '</td>' : '')
       + '<td><strong>' + (it.descricao||'') + '</strong></td>'
       + '<td style="font-size:9px;color:#555;">' + (it.detalhe||'') + '</td>'
       + '<td style="text-align:center;">' + (it.unid||'') + '</td>'
@@ -1284,13 +1290,18 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   var vlFrete = Math.max(0, freteMode==='%' ? subtotal*freteVal/100 : freteVal);
   var vlImp   = Math.max(0, impMode==='%'   ? baseImp*impVal/100    : impVal);
   function fR(v){ return 'R$ '+fmtBRL(v); }
+  // FIX (continuação da implementação da coluna MAPA): os colspans das linhas de subtotal/
+  // desconto/total precisam "esticar" 1 coluna a mais quando a coluna MAPA está sendo exibida,
+  // senão o alinhamento da tabela fica torto.
+  var colspanFin = mostrarColunaMapa ? 6 : 5;
+  var colspanTotal = mostrarColunaMapa ? 7 : 6;
   var finHTML = '';
   if(descVal||acrVal||freteVal||impVal){
-    finHTML = '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#666;">Subtotal</td><td style="text-align:right;font-size:9px;">'+fR(subtotal)+'</td></tr>';
-    if(descVal) finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#c0392b;">Desconto ('+(descMode==='%'?descVal+'%':fR(descVal))+')</td><td style="text-align:right;font-size:9px;color:#c0392b;">- '+fR(vlDesc)+'</td></tr>';
-    if(acrVal)  finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#3B6D11;">Acréscimo ('+(acrMode==='%'?acrVal+'%':fR(acrVal))+')</td><td style="text-align:right;font-size:9px;color:#3B6D11;">+ '+fR(vlAcr)+'</td></tr>';
-    if(impVal)  finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#b06000;">Impostos ('+(impMode==='%'?impVal+'%':fR(impVal))+')</td><td style="text-align:right;font-size:9px;color:#b06000;">+ '+fR(vlImp)+'</td></tr>';
-    if(freteVal) finHTML += '<tr style="background:#f9f9f9"><td colspan="5" style="text-align:right;font-size:9px;color:#185FA5;">Frete '+(freteMode==='%'?'('+freteVal+'%)':'')+' </td><td style="text-align:right;font-size:9px;color:#185FA5;">+ '+fR(vlFrete)+'</td></tr>';
+    finHTML = '<tr style="background:#f9f9f9"><td colspan="'+colspanFin+'" style="text-align:right;font-size:9px;color:#666;">Subtotal</td><td style="text-align:right;font-size:9px;">'+fR(subtotal)+'</td></tr>';
+    if(descVal) finHTML += '<tr style="background:#f9f9f9"><td colspan="'+colspanFin+'" style="text-align:right;font-size:9px;color:#c0392b;">Desconto ('+(descMode==='%'?descVal+'%':fR(descVal))+')</td><td style="text-align:right;font-size:9px;color:#c0392b;">- '+fR(vlDesc)+'</td></tr>';
+    if(acrVal)  finHTML += '<tr style="background:#f9f9f9"><td colspan="'+colspanFin+'" style="text-align:right;font-size:9px;color:#3B6D11;">Acréscimo ('+(acrMode==='%'?acrVal+'%':fR(acrVal))+')</td><td style="text-align:right;font-size:9px;color:#3B6D11;">+ '+fR(vlAcr)+'</td></tr>';
+    if(impVal)  finHTML += '<tr style="background:#f9f9f9"><td colspan="'+colspanFin+'" style="text-align:right;font-size:9px;color:#b06000;">Impostos ('+(impMode==='%'?impVal+'%':fR(impVal))+')</td><td style="text-align:right;font-size:9px;color:#b06000;">+ '+fR(vlImp)+'</td></tr>';
+    if(freteVal) finHTML += '<tr style="background:#f9f9f9"><td colspan="'+colspanFin+'" style="text-align:right;font-size:9px;color:#185FA5;">Frete '+(freteMode==='%'?'('+freteVal+'%)':'')+' </td><td style="text-align:right;font-size:9px;color:#185FA5;">+ '+fR(vlFrete)+'</td></tr>';
   }
   var totalFmt = fR(po.total||0);
   var obsHTML = po.observacao ? '<div class="obs"><strong>Observações:</strong> ' + po.observacao + '</div>' : '';
@@ -1308,9 +1319,9 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
     + (po.forma_pagamento ? '<div class="box"><label>Forma de Pagamento</label><span>' + esc(po.forma_pagamento) + '</span></div>' : '')
     + '</div>'
     + '<table>'
-    + '<thead><tr><th>#</th><th>Descrição</th><th>Detalhe</th><th>Unid.</th><th style="text-align:right">Qt.</th><th style="text-align:right">Vl. Unit.</th><th style="text-align:right">Vl. Total</th></tr></thead>'
+    + '<thead><tr><th>#</th>' + (mostrarColunaMapa ? '<th>Mapa</th>' : '') + '<th>Descrição</th><th>Detalhe</th><th>Unid.</th><th style="text-align:right">Qt.</th><th style="text-align:right">Vl. Unit.</th><th style="text-align:right">Vl. Total</th></tr></thead>'
     + '<tbody>' + itensHTML + finHTML
-    + '<tr class="tr"><td colspan="6" style="text-align:right;">TOTAL DO PEDIDO</td><td style="text-align:right;font-size:13px;">' + totalFmt + '</td></tr>'
+    + '<tr class="tr"><td colspan="'+colspanTotal+'" style="text-align:right;">TOTAL DO PEDIDO</td><td style="text-align:right;font-size:13px;">' + totalFmt + '</td></tr>'
     + '</tbody></table>'
     + obsHTML
     + '<div class="sign">'

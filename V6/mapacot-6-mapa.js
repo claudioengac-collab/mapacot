@@ -73,6 +73,12 @@ var _useState27 = useState(init),
   var _useStatePOEdit=useState(null),poEmEdicao=_slicedToArray(_useStatePOEdit,2)[0],setPoEmEdicao=_slicedToArray(_useStatePOEdit,2)[1];
   var _useStatePOEShow=useState(false),showPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[0],setShowPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[1];
   var _useStateCfgEd=useState({}),configEdicao=_slicedToArray(_useStateCfgEd,2)[0],setConfigEdicao=_slicedToArray(_useStateCfgEd,2)[1];
+  // FIX (pedido do Claudio, implementação alinhada com layout aprovado): rastreia quais OUTROS
+  // mapas (da mesma obra) foram incluídos na seleção de itens do pedido em andamento. Fica vazio
+  // ([]) na maior parte do tempo — só é usado enquanto o modal de criar pedido está aberto, e é
+  // limpo ao fechar. Puramente aditivo: não interfere em nada do fluxo de um único mapa (o caso
+  // mais comum), que continua funcionando exatamente igual quando esta lista está vazia.
+  var _useStateMapasAdic=useState([]),mapasAdicionaisPO=_slicedToArray(_useStateMapasAdic,2)[0],setMapasAdicionaisPO=_slicedToArray(_useStateMapasAdic,2)[1];
   var _useStateImpExcel=useState(false),showImportExcel=_slicedToArray(_useStateImpExcel,2)[0],setShowImportExcel=_slicedToArray(_useStateImpExcel,2)[1];
   var _useStateSIP=useState([]),itensSelecionadosPO=_slicedToArray(_useStateSIP,2)[0],setItensSelecionadosPO=_slicedToArray(_useStateSIP,2)[1];
   var _useStatePOCfg=useState({}),pedidoConfig=_slicedToArray(_useStatePOCfg,2)[0],setPedidoConfig=_slicedToArray(_useStatePOCfg,2)[1];
@@ -513,6 +519,26 @@ var _useState27 = useState(init),
   var itensVisiveis = filteredItens.filter(function(i) { return !ocultos.has(i.id); });
   var fornecedoresVisiveis = fornecedores.filter(function(f) { return !fornOcultos.has(f.id); });
   var itensAtivos = itensVisiveis.filter(function(i) { return !i.excluido; });
+  // FIX (implementação alinhada com layout aprovado pelo Claudio): mapas da MESMA obra que o
+  // mapa aberto agora, disponíveis para trazer itens ao pedido em andamento — nunca de outra
+  // obra, por segurança. Recalculado a cada render (lista pequena, sem custo perceptível),
+  // seguindo o mesmo padrão já usado para "itensAtivos" logo acima.
+  var mapasDaMesmaObra = (mapas||[]).filter(function(m){ return m && m.id !== mapa.id && (m.obra||'') === (mapa.obra||''); });
+  // Lista combinada: itens do mapa aberto agora + itens dos mapas adicionados à seleção (se
+  // houver). Cada item ganha 2 campos novos (_mapaOrigemId, _mapaOrigemNumero) que não existiam
+  // antes — são só informativos, não interferem em nenhum campo já usado pelo resto do sistema.
+  // Quando "mapasAdicionaisPO" está vazio (o caso mais comum, um só mapa), esta lista é
+  // idêntica a "itensAtivos" — o fluxo de um único mapa continua funcionando exatamente igual.
+  var itensCombinadosPO = itensAtivos.map(function(it){
+    return Object.assign({}, it, { _mapaOrigemId: mapa.id, _mapaOrigemNumero: mapa.numero });
+  });
+  mapasAdicionaisPO.forEach(function(mapaId){
+    var m = (mapas||[]).find(function(mm){ return mm && mm.id === mapaId; });
+    if (!m) return;
+    (m.itens||[]).filter(function(it){ return !it.excluido; }).forEach(function(it){
+      itensCombinadosPO.push(Object.assign({}, it, { _mapaOrigemId: m.id, _mapaOrigemNumero: m.numero }));
+    });
+  });
   // ── V4 CSS — Mapa de itens totalmente atendidos por pedidos ───────────────
   var itensAtendidosMap = {};
   // Usa mapa.itens (lista completa) em vez de itensAtivos (filtra ocultos/excluídos)
@@ -521,7 +547,14 @@ var _useState27 = useState(init),
     var qtTotal = Number(item.qt)||0;
     var qtPedida = 0;
     var pedidosVinculados = [];
-    (pedidos||[]).filter(function(po){ return po.mapa_id===mapa.id && po.status!=='cancelado'; }).forEach(function(po){
+    // FIX (mesma causa raiz já corrigida em ModalPedidoStep1 — achado ao testar mais um
+    // cenário da função de pedido multi-mapa): antes disso, só contava pedidos cujo mapa
+    // ÂNCORA era exatamente este mapa aberto agora. Se um item deste mapa foi incluído num
+    // pedido criado a partir de OUTRO mapa (a função nova permite isso), o "cadeado" de item
+    // atendido nunca aparecia aqui, mesmo o item já tendo sido pedido de verdade. Como
+    // "item.id" já é globalmente único, basta procurar por ele — sem precisar também bater o
+    // mapa_id do pedido.
+    (pedidos||[]).filter(function(po){ return po.status!=='cancelado'; }).forEach(function(po){
       var it = (po.itens||[]).find(function(i){ return i.item_id===item.id; });
       if(it){
         qtPedida += Number(it.qt_pedida)||0;
@@ -2049,12 +2082,24 @@ var _useState27 = useState(init),
   // ── MODAL STEP 1 — Seleção de Itens para Pedido ──────────────────────────
   showPedidoModal && /*#__PURE__*/React.createElement(ModalPedidoStep1, {
     mapa: mapa,
-    itens: itensAtivos,
+    itens: itensCombinadosPO,
+    mapasDaMesmaObra: mapasDaMesmaObra,
+    mapasAdicionaisPO: mapasAdicionaisPO,
+    onAdicionarMapa: function(mapaId){ setMapasAdicionaisPO(function(prev){ return prev.indexOf(mapaId)>=0 ? prev : prev.concat([mapaId]); }); },
+    onRemoverMapa: function(mapaId){
+      setMapasAdicionaisPO(function(prev){ return prev.filter(function(id){ return id!==mapaId; }); });
+      // FIX: ao remover um mapa da seleção, também desmarca (se estiverem marcados) os itens
+      // que vieram dele — evita ficar com itens "fantasmas" selecionados de um mapa que o
+      // usuário decidiu não incluir mais.
+      var m = (mapas||[]).find(function(mm){ return mm && mm.id === mapaId; });
+      var idsDoMapa = m ? (m.itens||[]).map(function(it){ return it.id; }) : [];
+      setItensSelecionadosPO(function(prev){ return prev.filter(function(id){ return idsDoMapa.indexOf(id)<0; }); });
+    },
     pedidos: pedidos,
     itensSelecionados: itensSelecionadosPO,
     onToggle: function(id){ setItensSelecionadosPO(function(prev){ var n=prev.slice(); var i=n.indexOf(id); if(i>=0) n.splice(i,1); else n.push(id); return n; }); },
     onToggleAll: function(ids){ setItensSelecionadosPO(ids); },
-    onClose: function(){ setShowPedidoModal(false); },
+    onClose: function(){ setShowPedidoModal(false); setMapasAdicionaisPO([]); },
     onContinuar: function(){
       var cfg = {};
       itensSelecionadosPO.forEach(function(id){
@@ -2068,7 +2113,8 @@ var _useState27 = useState(init),
   // ── MODAL STEP 2 — Configurar Fornecedor e Quantidade ──────────────────
   showPedidoConfig && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
-    itens: itensAtivos,
+    itens: itensCombinadosPO,
+    mapas: mapas,
     pedidos: pedidos,
     config: pedidoConfig,
     onConfig: setPedidoConfig,
@@ -2076,12 +2122,12 @@ var _useState27 = useState(init),
     onFinanceiro: setPoFinanceiro,
     observacaoInicial: '',
     onVoltar: function(){ setShowPedidoConfig(false); setShowPedidoModal(true); },
-    onClose: function(){ setShowPedidoConfig(false); },
+    onClose: function(){ setShowPedidoConfig(false); setMapasAdicionaisPO([]); },
     onGerar: function(config, finConfig, onDone, formaPagamento, obsPedido){
       // Agrupar por fornecedor
       var grupos = {};
       Object.keys(config).forEach(function(itemId){
-        var item = itensAtivos.find(function(i){ return i.id === itemId; });
+        var item = itensCombinadosPO.find(function(i){ return i.id === itemId; });
         if (!item) return;
         (config[itemId]||[]).forEach(function(linha){
           if (!linha.fornId || !linha.qt || Number(linha.qt)<=0) return;
@@ -2102,7 +2148,14 @@ var _useState27 = useState(init),
               qt_pedida: qtN,
               qt_total: Number(item.qt)||0,
               vl_unit: vlUnit,
-              vl_total: vlUnit * qtN
+              vl_total: vlUnit * qtN,
+              // FIX (implementação alinhada com layout aprovado): grava de qual mapa este item
+              // específico veio — necessário porque itens de um mesmo pedido agora podem vir de
+              // mapas diferentes. Usa o mapa aberto como reserva de segurança (nunca fica sem
+              // valor), mas na prática sempre vem de "_mapaOrigemId/_mapaOrigemNumero", que a
+              // lista combinada preenche para TODO item, seja do mapa aberto ou de outro incluído.
+              mapa_id: item._mapaOrigemId || mapa.id,
+              mapa_numero: item._mapaOrigemNumero != null ? item._mapaOrigemNumero : mapa.numero
             });
           }
         });
@@ -2147,6 +2200,12 @@ var _useState27 = useState(init),
             id: uid(),
             numero: num,
             mapa_id: mapa.id,
+            // FIX (implementação alinhada com layout aprovado): lista única dos números de mapa
+            // que contribuíram itens para ESTE pedido específico (um por fornecedor/grupo) —
+            // usada na exibição e no PDF. "mapa_id" acima continua existindo e apontando pro mapa
+            // que estava aberto quando o pedido foi criado (o "âncora") — nada que já dependia
+            // dele foi alterado; isto é só um campo novo, adicional.
+            mapas_numeros: Array.from(new Set(g.itens.map(function(it){ return it.mapa_numero; }).filter(function(n){ return n!=null; }))),
             obra: mapa.obra||'',
             fornecedor_id: g.fornId,
             fornecedor_nome: g.fornNome,
@@ -2172,6 +2231,7 @@ var _useState27 = useState(init),
         Promise.all(promises).then(function(novos){
           sbGetPedidos().then(function(d){ setPedidos(d||[]); });
           setShowPedidoConfig(false);
+          setMapasAdicionaisPO([]);
           if(onDone) onDone();
           alert('✅ ' + novos.length + ' pedido(s) gerado(s) com sucesso!\n' + novos.map(function(p){ return 'PO-'+String(p.numero).padStart(3,'0')+' \u2192 '+p.fornecedor_nome; }).join('\n'));
           setShowPedidos(true);
@@ -2222,6 +2282,7 @@ var _useState27 = useState(init),
     mapa: mapa,
     itens: (mapa && mapa.itens)||[],
     itensPedidoOriginal: poEmEdicao.itens||[],
+    mapas: mapas,
     // FIX CRÍTICO: excluir o próprio pedido do cálculo de "já pedido" — senão o sistema
     // conta a quantidade que está sendo editada como se já tivesse sido processada,
     // fazendo o "pendente" aparecer 0 e gerando avisos incorretos.
@@ -2271,7 +2332,13 @@ var _useState27 = useState(init),
                 qt_pedida: qtN,
                 qt_total: Number(itOrig.qt_total)||0,
                 vl_unit: vlUnit,
-                vl_total: vlTot
+                vl_total: vlTot,
+                // FIX (achado ao testar "editar um pedido que já nasceu com itens de vários
+                // mapas" — a origem estava se perdendo ao salvar uma edição): usa a origem já
+                // salva no próprio pedido (itOrig.mapa_id/numero) — reserva de segurança pro
+                // mapa aberto agora, caso o pedido seja de antes dessa informação existir.
+                mapa_id: itOrig.mapa_id || mapa.id,
+                mapa_numero: itOrig.mapa_numero != null ? itOrig.mapa_numero : mapa.numero
               });
             }
           });
@@ -2297,7 +2364,11 @@ var _useState27 = useState(init),
               qt_pedida: qtN,
               qt_total: Number(item.qt)||0,
               vl_unit: vlUnit,
-              vl_total: vlTot
+              vl_total: vlTot,
+              // FIX (mesma correção do bloco acima): este item foi encontrado dentro de
+              // "mapa.itens" (o mapa aberto agora), então pertence a ele com certeza.
+              mapa_id: mapa.id,
+              mapa_numero: mapa.numero
             });
           }
         });
@@ -2325,6 +2396,11 @@ var _useState27 = useState(init),
       var total=base+vlI+vlF;
       var campos = {
         itens: itensEditados,
+        // FIX (mesma verificação extra que achou os 2 problemas acima): recalcula a lista de
+        // mapas envolvidos a partir dos itens já editados (agora que cada um tem mapa_numero
+        // corretamente) — sem isso, um pedido editado ficaria com a informação de mapas
+        // desatualizada, mesmo que os itens individuais estivessem corretos.
+        mapas_numeros: Array.from(new Set(itensEditados.map(function(it){ return it.mapa_numero; }).filter(function(n){ return n!=null; }))),
         financeiro: {desconto:dV,desconto_mode:dM,acrescimo:aV,acrescimo_mode:aM,frete:fV,frete_mode:fM,impostos:iV,impostos_mode:iM},
         total: total,
         forma_pagamento: formaPagamento||'',

@@ -1,12 +1,25 @@
 function ModalPedidoStep1(_ref_po1) {
   var mapa=_ref_po1.mapa, itens=_ref_po1.itens, pedidos=_ref_po1.pedidos, itensSelecionados=_ref_po1.itensSelecionados;
   var onToggle=_ref_po1.onToggle, onToggleAll=_ref_po1.onToggleAll, onClose=_ref_po1.onClose, onContinuar=_ref_po1.onContinuar;
+  // FIX (implementação alinhada com layout aprovado pelo Claudio — situação 1, opção C): mapas
+  // da mesma obra disponíveis para trazer itens, e os que já foram adicionados à seleção atual.
+  var mapasDaMesmaObra = _ref_po1.mapasDaMesmaObra||[];
+  var mapasAdicionaisPO = _ref_po1.mapasAdicionaisPO||[];
+  var onAdicionarMapa = _ref_po1.onAdicionarMapa||function(){};
+  var onRemoverMapa = _ref_po1.onRemoverMapa||function(){};
+  var _sMostrarSeletor = useState(false), mostrarSeletorMapa = _slicedToArray(_sMostrarSeletor,2)[0], setMostrarSeletorMapa = _slicedToArray(_sMostrarSeletor,2)[1];
 
   // Calcular status de PO por item
   var poStatus = {};
   (itens||[]).forEach(function(item){
+    // FIX (implementação alinhada com layout aprovado): removida a exigência de
+    // "po.mapa_id===mapa.id" — antes disso fazia sentido porque cada item só podia vir do mapa
+    // aberto, mas agora um item pode ter sido incluído num pedido cujo mapa ÂNCORA é outro. Como
+    // "item.id" já é um identificador único gerado por mapa (nunca colide entre mapas
+    // diferentes), buscar só por ele é suficiente e correto — sem essa mudança, pedidos de itens
+    // trazidos de outro mapa apareceriam incorretamente como "sem pedido".
     var posdoItem = (pedidos||[]).filter(function(po){
-      return mapa && po.mapa_id===mapa.id && (po.itens||[]).some(function(it){ return it.item_id===item.id; }) && po.status!=='cancelado';
+      return (po.itens||[]).some(function(it){ return it.item_id===item.id; }) && po.status!=='cancelado';
     });
     var qtTotal = Number(item.qt)||0;
     var qtPedida = 0;
@@ -35,6 +48,22 @@ function ModalPedidoStep1(_ref_po1) {
                (item.detalhe||'').toUpperCase().includes(termoBusca);
       })
     : (itens||[]);
+  // FIX (implementação alinhada com layout aprovado — situação 1, opção C): agrupa os itens
+  // filtrados por mapa de origem, com o mapa aberto agora sempre em primeiro lugar (é o caso
+  // mais comum e o que o usuário já está olhando), seguido dos demais em ordem de número.
+  // Quando não há nenhum mapa adicional selecionado (o caso mais comum, um só mapa), este
+  // agrupamento resulta em um único grupo — visualmente quase idêntico ao comportamento antigo.
+  var gruposPorMapa = {};
+  itensFiltrados.forEach(function(item){
+    var k = item._mapaOrigemId || (mapa && mapa.id) || 'sem-mapa';
+    if (!gruposPorMapa[k]) gruposPorMapa[k] = { mapaId:k, numero: item._mapaOrigemNumero, itens: [] };
+    gruposPorMapa[k].itens.push(item);
+  });
+  var listaGrupos = Object.values(gruposPorMapa).sort(function(a,b){
+    if (mapa && a.mapaId===mapa.id) return -1;
+    if (mapa && b.mapaId===mapa.id) return 1;
+    return (a.numero||0) - (b.numero||0);
+  });
   var ovStyle = { position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.55)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:12,overscrollBehavior:'none' };
   var modalStyle = { background:'#fff',borderRadius:8,overflow:'hidden',width:'100%',maxWidth:700,maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 8px 32px rgba(0,0,0,0.3)' };
   var hdrStyle = { background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between' };
@@ -103,36 +132,92 @@ function ModalPedidoStep1(_ref_po1) {
                     '\uD83D\uDD0D Nenhum insumo encontrado para "' + termoBusca + '"'
                   )
                 )
-              : itensFiltrados.map(function(item){
-              var ps = poStatus[item.id]||{};
-              var sel = itensSelecionados.indexOf(item.id)>=0;
-              var qtPend = Math.max(0,(Number(item.qt)||0) - (ps.qtPedida||0));
-              return /*#__PURE__*/React.createElement('tr', { key:item.id, style:{background:sel?'#f5f0ff':'transparent'} },
-                /*#__PURE__*/React.createElement('td', { 
-                  style:{textAlign:'center',padding:'8px 4px',borderBottom:'1px solid #eee'}
-                },
-                  /*#__PURE__*/React.createElement('input', { 
-                    type:'checkbox', 
-                    checked:sel, 
-                    onChange:function(){ onToggle(item.id); },
-                    style:{cursor:'pointer',accentColor:'#7c3aed',width:22,height:22,display:'block',margin:'0 auto'} 
-                  })
+              : listaGrupos.map(function(grupo){
+              // FIX (implementação alinhada com layout aprovado — situação 1, opção C): título
+              // separando cada grupo de mapa. Só aparece de fato como "grupo visível" quando há
+              // mais de 1 mapa envolvido — com um só mapa (o caso mais comum), o título ainda
+              // aparece, mas como não há nada pra "separar", o efeito visual é discreto.
+              var ehMapaAtual = mapa && grupo.mapaId === mapa.id;
+              return /*#__PURE__*/React.createElement(React.Fragment, { key:grupo.mapaId },
+                /*#__PURE__*/React.createElement('tr', null,
+                  /*#__PURE__*/React.createElement('td', { colSpan:7, style:{padding:'8px 6px 4px',fontWeight:800,fontSize:10.5,color:'#5b21b6',background:'#faf8ff',borderTop: '2px solid #e4d6ff'} },
+                    '\u25BE MAPA ' + (grupo.numero!=null?grupo.numero:'?') + (ehMapaAtual ? ' (este que voc\u00ea abriu)' : '')
+                  )
                 ),
-                /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',fontWeight:'bold'} }, item.num),
-                /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
-                  /*#__PURE__*/React.createElement('strong', null, item.descricao||''),
-                  /*#__PURE__*/React.createElement('br',null),
-                  /*#__PURE__*/React.createElement('span', { style:{fontSize:9,color:'#888'} }, item.detalhe||'')
-                ),
-                /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee'} }, (item.qt||0)+' '+(item.unid||'')),
-                /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',color:'#185FA5',fontWeight:'bold'} }, ps.qtPedida||0),
-                /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',color:qtPend>0?'#b06000':'#3B6D11',fontWeight:'bold'} }, qtPend),
-                /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
-                  /*#__PURE__*/React.createElement('span', { style:{background:ps.bg,color:ps.color,padding:'2px 8px',borderRadius:99,fontSize:9,fontWeight:'bold'} }, ps.label||'')
-                )
+                grupo.itens.map(function(item){
+                  var ps = poStatus[item.id]||{};
+                  var sel = itensSelecionados.indexOf(item.id)>=0;
+                  var qtPend = Math.max(0,(Number(item.qt)||0) - (ps.qtPedida||0));
+                  return /*#__PURE__*/React.createElement('tr', { key:item.id, style:{background:sel?'#f5f0ff':'transparent'} },
+                    /*#__PURE__*/React.createElement('td', {
+                      style:{textAlign:'center',padding:'8px 4px',borderBottom:'1px solid #eee'}
+                    },
+                      /*#__PURE__*/React.createElement('input', {
+                        type:'checkbox',
+                        checked:sel,
+                        onChange:function(){ onToggle(item.id); },
+                        style:{cursor:'pointer',accentColor:'#7c3aed',width:22,height:22,display:'block',margin:'0 auto'}
+                      })
+                    ),
+                    /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',fontWeight:'bold'} }, item.num),
+                    /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
+                      /*#__PURE__*/React.createElement('strong', null, item.descricao||''),
+                      /*#__PURE__*/React.createElement('br',null),
+                      /*#__PURE__*/React.createElement('span', { style:{fontSize:9,color:'#888'} }, item.detalhe||'')
+                    ),
+                    /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee'} }, (item.qt||0)+' '+(item.unid||'')),
+                    /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',color:'#185FA5',fontWeight:'bold'} }, ps.qtPedida||0),
+                    /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',color:qtPend>0?'#b06000':'#3B6D11',fontWeight:'bold'} }, qtPend),
+                    /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
+                      /*#__PURE__*/React.createElement('span', { style:{background:ps.bg,color:ps.color,padding:'2px 8px',borderRadius:99,fontSize:9,fontWeight:'bold'} }, ps.label||'')
+                    )
+                  );
+                })
               );
             })
           )
+        ),
+        // FIX (implementação alinhada com layout aprovado — situação 1): seção para trazer itens
+        // de outros mapas da mesma obra. Só aparece quando existe pelo menos 1 mapa elegível
+        // (mesma obra, diferente do aberto) — se não houver nenhum, a seção nem é exibida.
+        mapasDaMesmaObra.length > 0 && /*#__PURE__*/React.createElement('div', { style:{marginTop:10} },
+          !mostrarSeletorMapa
+            ? /*#__PURE__*/React.createElement('div', {
+                onClick: function(){ setMostrarSeletorMapa(true); },
+                style:{display:'flex',alignItems:'center',justifyContent:'center',gap:8,background:'#f9f6ff',border:'2px dashed #b794f6',borderRadius:8,padding:'10px 12px',cursor:'pointer',color:'#7c3aed',fontWeight:700,fontSize:11}
+              }, '\u2795 Adicionar itens de outro mapa desta obra')
+            : /*#__PURE__*/React.createElement('div', { style:{background:'#faf8ff',border:'1px solid #d4b8ff',borderRadius:8,padding:10} },
+                /*#__PURE__*/React.createElement('label', { style:{fontSize:9,fontWeight:700,color:'#666',display:'block',marginBottom:5} }, 'ESCOLHA O MAPA (s\u00f3 aparecem mapas da mesma obra):'),
+                /*#__PURE__*/React.createElement('select', {
+                  value: '',
+                  onChange: function(e){ if(e.target.value){ onAdicionarMapa(e.target.value); setMostrarSeletorMapa(false); } },
+                  style:{width:'100%',padding:7,border:'1px solid #ccc',borderRadius:5,fontSize:11}
+                },
+                  /*#__PURE__*/React.createElement('option', { value:'' }, '\u2014 selecione \u2014'),
+                  mapasDaMesmaObra.filter(function(m){ return mapasAdicionaisPO.indexOf(m.id)<0; }).map(function(m){
+                    return /*#__PURE__*/React.createElement('option', { key:m.id, value:m.id }, 'MP ' + m.numero + ' \u00b7 ' + (m.obra||''));
+                  })
+                ),
+                /*#__PURE__*/React.createElement('div', {
+                  onClick: function(){ setMostrarSeletorMapa(false); },
+                  style:{fontSize:9,color:'#888',marginTop:6,cursor:'pointer',textAlign:'right'}
+                }, 'cancelar')
+              )
+        ),
+        mapasAdicionaisPO.length > 0 && /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexWrap:'wrap',gap:6,marginTop:8,paddingTop:8,borderTop:'1px dashed #ddd',alignItems:'center'} },
+          /*#__PURE__*/React.createElement('span', { style:{fontSize:9,color:'#888'} }, 'Mapas inclu\u00eddos:'),
+          mapasAdicionaisPO.map(function(mapaId){
+            var m = mapasDaMesmaObra.find(function(mm){ return mm.id===mapaId; });
+            if (!m) return null;
+            return /*#__PURE__*/React.createElement('span', { key:mapaId, style:{background:'#e8eeff',color:'#2a5298',borderRadius:10,padding:'2px 6px 2px 9px',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',gap:5} },
+              'MP ' + m.numero,
+              /*#__PURE__*/React.createElement('span', {
+                onClick: function(){ onRemoverMapa(mapaId); },
+                title: 'Remover este mapa da sele\u00e7\u00e3o',
+                style:{cursor:'pointer',background:'rgba(255,255,255,.6)',borderRadius:'50%',width:14,height:14,display:'flex',alignItems:'center',justifyContent:'center',fontSize:8}
+              }, '\u2715')
+            );
+          })
         )
       ),
       /*#__PURE__*/React.createElement('div', { style:ftrStyle },
@@ -174,6 +259,26 @@ function ModalPedidoStep2(_ref_po2) {
   // os dados que o PRÓPRIO pedido já guarda de cada item (descrição, unidade, quantidade) — usada
   // só como reserva, exclusivamente quando o item não é achado no mapa aberto no momento.
   var itensPedidoOriginal = _ref_po2.itensPedidoOriginal||[];
+  // FIX (implementação alinhada com layout aprovado — itens de outros mapas dentro do mesmo
+  // pedido): lista completa de mapas, necessária para resolver os fornecedores/preços corretos
+  // de um item que veio de um mapa DIFERENTE do que está aberto agora.
+  var mapasTodos = _ref_po2.mapas||[];
+  // Dado um item (que pode ter vindo do mapa aberto ou de outro, incluído na seleção), resolve
+  // o MAPA CORRETO de onde puxar fornecedores/preços — nesta ordem de prioridade:
+  // 1) "_mapaOrigemId" — vem da lista combinada montada no Step1, é o caminho normal ao CRIAR
+  //    um pedido novo com itens de vários mapas.
+  // 2) "mapa_id" — o item já vem com essa informação gravada quando se está REABRINDO/editando
+  //    um pedido cujos itens foram salvos com a origem (implementação atual em diante).
+  // 3) o mapa aberto agora — reserva de segurança para o caso mais comum (um só mapa, sem
+  //    nenhuma das informações acima), preservando o comportamento de sempre sem nenhuma mudança.
+  function resolverMapaDoItem(item) {
+    var idOrigem = (item && (item._mapaOrigemId || item.mapa_id)) || null;
+    if (idOrigem) {
+      var achado = mapasTodos.find(function(m){ return m && m.id === idOrigem; });
+      if (achado) return achado;
+    }
+    return mapa;
+  }
   var _sFP=useState(_ref_po2.formaPagamentoInicial||''),formaPagamento=_slicedToArray(_sFP,2)[0],setFormaPagamento=_slicedToArray(_sFP,2)[1];
   var _sGer=useState(false),gerando=_slicedToArray(_sGer,2)[0],setGerando=_slicedToArray(_sGer,2)[1];
   // FIX 4 (Claudio, 05/08): a observação é uma coisa só do pedido — nunca fez sentido ter
@@ -192,7 +297,12 @@ function ModalPedidoStep2(_ref_po2) {
     var qtTotal = Number(item.qt)||0;
     var qtPedida = 0;
     var qtAtendida = 0;
-    (pedidos||[]).filter(function(po){ return po.mapa_id===mapa.id && po.status!=='cancelado'; }).forEach(function(po){
+    // FIX (mesma causa raiz corrigida em ModalPedidoStep1 e no "cadeado" da tela do mapa —
+    // achado ao testar mais um cenário da função de pedido multi-mapa): remove a exigência de
+    // "po.mapa_id===mapa.id" — um item pode ter sido incluído num pedido cujo mapa ÂNCORA é
+    // outro, e mesmo assim precisa contar aqui. "item.id" já é globalmente único, então buscar
+    // só por ele é suficiente e correto.
+    (pedidos||[]).filter(function(po){ return po.status!=='cancelado'; }).forEach(function(po){
       var it=(po.itens||[]).find(function(i){ return i.item_id===item.id; });
       if(it){ qtPedida+=Number(it.qt_pedida)||0; if(po.status==='recebido') qtAtendida+=Number(it.qt_pedida)||0; }
     });
@@ -238,10 +348,14 @@ function ModalPedidoStep2(_ref_po2) {
       n[itemId][idx] = Object.assign({}, n[itemId][idx], _defineProperty({}, field, val));
       // Atualizar preço quando muda fornecedor
       if (field==='fornId') {
-        var forn = (mapa.fornecedores||[]).find(function(f){ return f.id===val; });
         var item = (itens||[]).find(function(i){ return i.id===itemId; });
+        // FIX (implementação alinhada com layout aprovado): resolve fornecedor/preço no mapa de
+        // ORIGEM do item, não necessariamente o mapa aberto agora — essencial quando o item veio
+        // de outro mapa incluído na seleção.
+        var mapaDoItem = resolverMapaDoItem(item);
+        var forn = ((mapaDoItem && mapaDoItem.fornecedores)||[]).find(function(f){ return f.id===val; });
         if (forn && item) {
-          var preco = (mapa.precos||{})[item.id+'_'+val] || '';
+          var preco = ((mapaDoItem && mapaDoItem.precos)||{})[item.id+'_'+val] || '';
           var vlUnit = preco ? Number(String(preco).replace(',','.')) : 0;
           n[itemId][idx] = Object.assign({}, n[itemId][idx], { fornNome: forn.nome, vlUnit: vlUnit, fornId: val });
         }
@@ -285,13 +399,21 @@ function ModalPedidoStep2(_ref_po2) {
             // nenhum — caso, na prática, quase impossível, já que esses dados são sempre salvos.
             var itOrig = itensPedidoOriginal.find(function(i){ return i.item_id===itemId; });
             if (itOrig) {
-              item = { id: itemId, num: '—', descricao: itOrig.descricao||'', detalhe: itOrig.detalhe||'', unid: itOrig.unid||'', qt: itOrig.qt_total||0 };
+              // FIX (implementação alinhada com layout aprovado): inclui mapa_id/mapa_numero
+              // (se o pedido já os tiver salvo) no item reconstruído — sem isso, a resolução de
+              // fornecedor/preço certo (função "resolverMapaDoItem") não saberia de qual mapa
+              // este item específico veio, e cairia incorretamente no mapa aberto agora.
+              item = { id: itemId, num: '—', descricao: itOrig.descricao||'', detalhe: itOrig.detalhe||'', unid: itOrig.unid||'', qt: itOrig.qt_total||0, mapa_id: itOrig.mapa_id, mapa_numero: itOrig.mapa_numero };
             }
           }
           if (!item) return /*#__PURE__*/React.createElement('div', { key:itemId, style:{border:'1px solid #f0a500',background:'#fff8e6',borderRadius:6,padding:'10px 12px',marginBottom:10,fontSize:10,color:'#7a5c00'} },
             '\u26A0\uFE0F Este insumo foi removido do mapa e não pode mais ser editado aqui, mas continua incluído neste pedido.'
           );
           var ps = poStatus[itemId]||{};
+          // FIX (implementação alinhada com layout aprovado): resolve o mapa de origem UMA vez
+          // por item (usado logo abaixo, tanto no fornecedor já selecionado quanto na lista de
+          // opções do select) — evita repetir a mesma busca várias vezes.
+          var mapaDoItem = resolverMapaDoItem(item);
           var linhas = config[itemId]||[{ fornId:'', fornNome:'', vlUnit:0, qt:'', obs:'' }];
           var qtDistrib = linhas.reduce(function(s,l){ return s+(Number(l.qt)||0); },0);
           var qtOk = qtDistrib > 0 && qtDistrib === ps.qtPend;
@@ -324,7 +446,7 @@ function ModalPedidoStep2(_ref_po2) {
             // Linhas de fornecedor
             /*#__PURE__*/React.createElement('div', { style:{padding:'10px 12px'} },
               linhas.map(function(linha, idx){
-                var forn = (mapa.fornecedores||[]).find(function(f){ return f.id===linha.fornId; });
+                var forn = ((mapaDoItem && mapaDoItem.fornecedores)||[]).find(function(f){ return f.id===linha.fornId; });
                 var vlFmt = linha.vlUnit ? 'R$ '+fmtBRL(linha.vlUnit) : '—';
                 var vlTotal = (Number(linha.vlUnit)||0)*(Number(linha.qt)||0);
                 var vlTotalFmt = vlTotal>0 ? '= R$ '+fmtBRL(vlTotal) : '';
@@ -337,8 +459,8 @@ function ModalPedidoStep2(_ref_po2) {
                     style:{padding:'5px 8px',border:'1px solid #ddd',borderRadius:4,fontSize:10,width:'100%',background: modoEdicao ? '#f0f0f0' : '#fff',cursor: modoEdicao ? 'not-allowed' : 'pointer'}
                   },
                     /*#__PURE__*/React.createElement('option', { value:'' }, '— Selecionar fornecedor —'),
-                    (mapa.fornecedores||[]).map(function(f){
-                      var preco = (mapa.precos||{})[item.id+'_'+f.id];
+                    (mapaDoItem.fornecedores||[]).map(function(f){
+                      var preco = (mapaDoItem.precos||{})[item.id+'_'+f.id];
                       var label = f.nome + (preco ? ' — R$ '+String(preco).replace('.',',') : '');
                       return /*#__PURE__*/React.createElement('option', { key:f.id, value:f.id }, label);
                     })
