@@ -2221,6 +2221,7 @@ var _useState27 = useState(init),
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
     itens: (mapa && mapa.itens)||[],
+    itensPedidoOriginal: poEmEdicao.itens||[],
     // FIX CRÍTICO: excluir o próprio pedido do cálculo de "já pedido" — senão o sistema
     // conta a quantidade que está sendo editada como se já tivesse sido processada,
     // fazendo o "pendente" aparecer 0 e gerando avisos incorretos.
@@ -2241,9 +2242,39 @@ var _useState27 = useState(init),
       Object.keys(config).forEach(function(itemId){
         var item = ((mapa && mapa.itens)||[]).find(function(i){ return i.id===itemId; });
         if(!item) {
-          // item pode ter sido removido do mapa - usar dados originais do PO
+          // FIX (2ª parte do mesmo bug — achado ao testar a correção anterior): item de outro
+          // mapa — antes disso, o código usava os dados ORIGINAIS do pedido sem olhar pra
+          // "config" (o estado que a tela edita), ou seja, mudar a quantidade na tela parecia
+          // funcionar (aparecia o número novo), mas ao salvar, a mudança era descartada
+          // silenciosamente e o valor antigo voltava. Agora usa a MESMA lógica do bloco de baixo
+          // (que já funcionava certo pra itens do mapa aberto): pega a quantidade/valor que estão
+          // de fato em "config" agora — só usa a descrição/detalhe/unidade originais do pedido,
+          // que não são editáveis nesse fluxo mesmo (não mudam, só a quantidade muda aqui).
           var itOrig = (poEmEdicao.itens||[]).find(function(i){ return i.item_id===itemId; });
-          if(itOrig){ itensEditados.push(itOrig); sub += Number(itOrig.vl_total||0); }
+          if (!itOrig) return;
+          (config[itemId]||[]).forEach(function(linha){
+            if(!linha.qt || Number(linha.qt)<=0) return;
+            var vlUnit = Number(linha.vlUnit)||Number(itOrig.vl_unit)||0;
+            var qtN = Number(linha.qt)||0;
+            var vlTot = vlUnit * qtN;
+            sub += vlTot;
+            var existente = itensEditados.find(function(i){ return i.item_id === itemId; });
+            if (existente) {
+              existente.qt_pedida += qtN;
+              existente.vl_total += vlTot;
+            } else {
+              itensEditados.push({
+                item_id: itemId,
+                descricao: itOrig.descricao||'',
+                detalhe: itOrig.detalhe||'',
+                unid: itOrig.unid||'',
+                qt_pedida: qtN,
+                qt_total: Number(itOrig.qt_total)||0,
+                vl_unit: vlUnit,
+                vl_total: vlTot
+              });
+            }
+          });
           return;
         }
         (config[itemId]||[]).forEach(function(linha){

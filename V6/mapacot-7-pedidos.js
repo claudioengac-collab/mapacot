@@ -167,6 +167,13 @@ function ModalPedidoStep2(_ref_po2) {
   var poFinanceiro=_ref_po2.poFinanceiro||{}, onFinanceiro=_ref_po2.onFinanceiro;
   var onVoltar=_ref_po2.onVoltar, onClose=_ref_po2.onClose, onGerar=_ref_po2.onGerar;
   var modoEdicao=_ref_po2.modoEdicao||false;
+  // FIX (bug real, relatado pelo Claudio): ao editar um pedido, se o mapa aberto no momento
+  // não for o mesmo mapa de onde o pedido foi originalmente criado, os itens do pedido não
+  // eram encontrados na lista do mapa aberto — e a tela mostrava "este insumo foi removido do
+  // mapa", uma mensagem enganosa (o item não sumiu, só é de outro mapa). Esta prop nova carrega
+  // os dados que o PRÓPRIO pedido já guarda de cada item (descrição, unidade, quantidade) — usada
+  // só como reserva, exclusivamente quando o item não é achado no mapa aberto no momento.
+  var itensPedidoOriginal = _ref_po2.itensPedidoOriginal||[];
   var _sFP=useState(_ref_po2.formaPagamentoInicial||''),formaPagamento=_slicedToArray(_sFP,2)[0],setFormaPagamento=_slicedToArray(_sFP,2)[1];
   var _sGer=useState(false),gerando=_slicedToArray(_sGer,2)[0],setGerando=_slicedToArray(_sGer,2)[1];
   // FIX 4 (Claudio, 05/08): a observação é uma coisa só do pedido — nunca fez sentido ter
@@ -190,6 +197,21 @@ function ModalPedidoStep2(_ref_po2) {
       if(it){ qtPedida+=Number(it.qt_pedida)||0; if(po.status==='recebido') qtAtendida+=Number(it.qt_pedida)||0; }
     });
     poStatus[item.id]={qtTotal:qtTotal,qtPedida:qtPedida,qtAtendida:qtAtendida,qtPend:Math.max(0,qtTotal-qtPedida)};
+  });
+  // FIX (mesmo bug do item "removido do mapa"): pros itens do pedido que vieram de OUTRO mapa
+  // (não cobertos pelo loop acima, que só percorre o mapa aberto agora), calcula um status
+  // aproximado usando os dados que o próprio pedido já tem salvos — evita que os números apareçam
+  // em branco na tela. Não é tão preciso quanto o cálculo normal (não enxerga outros pedidos que
+  // porventura existam para esse item vindos daquele outro mapa), mas é uma aproximação razoável
+  // e nunca fica pior do que "em branco".
+  itemIds.forEach(function(itemId){
+    if (poStatus[itemId]) return; // já calculado normalmente acima, não sobrescreve
+    var itOrig = itensPedidoOriginal.find(function(i){ return i.item_id===itemId; });
+    if (!itOrig) return;
+    var qtTotal = Number(itOrig.qt_total)||0;
+    var qtPedida = Number(itOrig.qt_pedida)||0;
+    var qtAtendida = modoEdicao ? 0 : qtPedida; // status "recebido" desse pedido específico não é visível aqui; aproximação conservadora
+    poStatus[itemId]={qtTotal:qtTotal,qtPedida:qtPedida,qtAtendida:qtAtendida,qtPend:Math.max(0,qtTotal-qtPedida)};
   });
 
   // Calcular número de POs a gerar (por fornecedor único)
@@ -255,6 +277,17 @@ function ModalPedidoStep2(_ref_po2) {
         // Cards por item
         itemIds.map(function(itemId){
           var item = (itens||[]).find(function(i){ return i.id===itemId; });
+          if (!item) {
+            // FIX: item não achado no mapa aberto no momento — antes de desistir e mostrar o
+            // aviso de "removido", tenta montar o item a partir dos dados que o PRÓPRIO pedido
+            // já guarda (salvos quando o pedido foi criado, sempre disponíveis independente de
+            // qual mapa está aberto agora). Só mostra o aviso se REALMENTE não achar em lugar
+            // nenhum — caso, na prática, quase impossível, já que esses dados são sempre salvos.
+            var itOrig = itensPedidoOriginal.find(function(i){ return i.item_id===itemId; });
+            if (itOrig) {
+              item = { id: itemId, num: '—', descricao: itOrig.descricao||'', detalhe: itOrig.detalhe||'', unid: itOrig.unid||'', qt: itOrig.qt_total||0 };
+            }
+          }
           if (!item) return /*#__PURE__*/React.createElement('div', { key:itemId, style:{border:'1px solid #f0a500',background:'#fff8e6',borderRadius:6,padding:'10px 12px',marginBottom:10,fontSize:10,color:'#7a5c00'} },
             '\u26A0\uFE0F Este insumo foi removido do mapa e não pode mais ser editado aqui, mas continua incluído neste pedido.'
           );
