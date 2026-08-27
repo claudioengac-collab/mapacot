@@ -2196,16 +2196,18 @@ var _useState27 = useState(init),
           var vlFrete  = Math.max(0, freteMode==='%' ? subtotal*freteVal/100 : freteVal);
           var vlImp    = Math.max(0, impMode==='%'   ? baseImp*impVal/100    : impVal);
           var total    = baseImp + vlImp + vlFrete;
+          // FIX URGENTE (erro real reportado pelo Claudio: "Could not find the 'mapas_numeros'
+          // column of 'pedidos'"): o banco de dados (Supabase) só aceita, na tabela "pedidos",
+          // os campos que já existem como coluna lá — "mapas_numeros" nunca foi uma coluna,
+          // então o salvamento inteiro era rejeitado. A informação de qual mapa cada item veio
+          // já está segura dentro de "itens" (que aceita qualquer campo novo sem problema,
+          // confirmado que já funciona) — então não precisamos duplicar isso num campo à parte
+          // no pedido. Sempre que for preciso saber quais mapas estão envolvidos (só o PDF usa
+          // isso), calculamos na hora a partir dos itens, sem nunca mandar esse campo pro banco.
           var po = {
             id: uid(),
             numero: num,
             mapa_id: mapa.id,
-            // FIX (implementação alinhada com layout aprovado): lista única dos números de mapa
-            // que contribuíram itens para ESTE pedido específico (um por fornecedor/grupo) —
-            // usada na exibição e no PDF. "mapa_id" acima continua existindo e apontando pro mapa
-            // que estava aberto quando o pedido foi criado (o "âncora") — nada que já dependia
-            // dele foi alterado; isto é só um campo novo, adicional.
-            mapas_numeros: Array.from(new Set(g.itens.map(function(it){ return it.mapa_numero; }).filter(function(n){ return n!=null; }))),
             obra: mapa.obra||'',
             fornecedor_id: g.fornId,
             fornecedor_nome: g.fornNome,
@@ -2396,11 +2398,6 @@ var _useState27 = useState(init),
       var total=base+vlI+vlF;
       var campos = {
         itens: itensEditados,
-        // FIX (mesma verificação extra que achou os 2 problemas acima): recalcula a lista de
-        // mapas envolvidos a partir dos itens já editados (agora que cada um tem mapa_numero
-        // corretamente) — sem isso, um pedido editado ficaria com a informação de mapas
-        // desatualizada, mesmo que os itens individuais estivessem corretos.
-        mapas_numeros: Array.from(new Set(itensEditados.map(function(it){ return it.mapa_numero; }).filter(function(n){ return n!=null; }))),
         financeiro: {desconto:dV,desconto_mode:dM,acrescimo:aV,acrescimo_mode:aM,frete:fV,frete_mode:fM,impostos:iV,impostos_mode:iM},
         total: total,
         forma_pagamento: formaPagamento||'',

@@ -1262,7 +1262,11 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   // mostrando de qual mapa cada item veio. Só aparece quando o pedido REALMENTE envolve mais de
   // um mapa — para pedidos de um só mapa (o caso mais comum), o PDF continua idêntico a antes,
   // sem essa coluna extra desnecessária.
-  var mostrarColunaMapa = po.mapas_numeros && po.mapas_numeros.length > 1;
+  // FIX URGENTE (mesma correção do erro "mapas_numeros column not found"): calcula a lista de
+  // mapas envolvidos NA HORA, direto dos itens (cada um já guarda seu mapa_numero) — em vez de
+  // depender de um campo separado no pedido, que o banco de dados não aceita.
+  var mapasEnvolvidosNoPedido = Array.from(new Set((po.itens||[]).map(function(it){ return it.mapa_numero; }).filter(function(n){ return n!=null; })));
+  var mostrarColunaMapa = mapasEnvolvidosNoPedido.length > 1;
   var itensHTML = (po.itens||[]).map(function(it, i){
     return '<tr>'
       + '<td>' + (i+1) + '</td>'
