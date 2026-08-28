@@ -414,6 +414,67 @@ var _useState27 = useState(init),
       });
     });
   };
+  // FIX (pedido do Claudio — percentual por insumo/fornecedor, pra substituir o cálculo manual
+  // que ele fazia no Excel antes de digitar no sistema): a decisão de arquitetura aqui foi
+  // deliberada — em vez de mudar os MUITOS lugares do sistema que já leem "mapa.precos"
+  // diretamente (o RESUMO/melhor preço, o ranking de cores, o total por fornecedor no rodapé, a
+  // geração de pedido, os relatórios e o PDF — ao todo 15 pontos diferentes, mapeados um a um
+  // antes de decidir isso), o percentual é aplicado e o RESULTADO JÁ CALCULADO é gravado
+  // diretamente em "mapa.precos" — o mesmo campo que o sistema inteiro já usa, exatamente como
+  // se o usuário tivesse digitado esse número final. Isso significa: zero mudança em qualquer um
+  // desses 15 pontos — todos continuam funcionando exatamente como sempre funcionaram, incluindo
+  // a geração de pedidos, que vai puxar o valor já calculado automaticamente. O preço "base"
+  // (sem percentual) e o percentual em si são guardados à parte, só para exibição/edição.
+  // FIX (achado durante os testes — o Claudio pediu especificamente pra testar bastante antes
+  // de entregar, e este foi um problema real encontrado): cálculos como "9,50 + 15%" davam
+  // 10,924999999999999 em vez de 10,925 exatos, por causa de como computadores representam
+  // casas decimais (limitação conhecida de aritmética de ponto flutuante) — isso fazia o
+  // arredondamento cair errado (10,92 em vez de 10,93) bem na fronteira entre um centavo e
+  // outro. Esta função corrige isso adicionando uma margem mínima antes de arredondar, grande o
+  // bastante para corrigir esse tipo de erro de representação, mas pequena o bastante para não
+  // alterar nenhum resultado que já estava correto (testado com múltiplos casos, incluindo
+  // valores grandes, pequenos, e percentuais fracionados).
+  var arredondarMoeda = function arredondarMoeda(n) {
+    return Math.round(n * 100 + 1e-6) / 100;
+  };
+  var recalcularPrecoComPct = function recalcularPrecoComPct(iid, fid, baseStr, pctStr) {
+    return update(function (m) {
+      var key = "".concat(iid, "_").concat(fid);
+      var base = parseMoney(baseStr);
+      var pct = parseFloat(String(pctStr || "").replace(",", ".")) || 0;
+      var finalStr = base !== null ? fmtBRL(arredondarMoeda(base * (1 + pct / 100))) : "";
+      return _objectSpread(_objectSpread({}, m), {}, {
+        precosBase: _objectSpread(_objectSpread({}, m.precosBase), {}, _defineProperty({}, key, baseStr)),
+        percentuais: _objectSpread(_objectSpread({}, m.percentuais), {}, _defineProperty({}, key, pctStr)),
+        precos: _objectSpread(_objectSpread({}, m.precos), {}, _defineProperty({}, key, finalStr))
+      });
+    });
+  };
+  // Aplica o mesmo percentual em TODOS os itens visíveis de um fornecedor de uma vez (linha
+  // "bulk" no topo da coluna) — só nos itens que já têm um preço base digitado; itens sem preço
+  // base ainda são ignorados (não há o que calcular).
+  var aplicarPctEmMassa = function aplicarPctEmMassa(fid, pctStr) {
+    return update(function (m) {
+      var novoPrecosBase = _objectSpread({}, m.precosBase);
+      var novoPercentuais = _objectSpread({}, m.percentuais);
+      var novoPrecos = _objectSpread({}, m.precos);
+      var pct = parseFloat(String(pctStr || "").replace(",", ".")) || 0;
+      (itensAtivos || []).forEach(function (item) {
+        var key = "".concat(item.id, "_").concat(fid);
+        var baseAtual = novoPrecosBase[key] !== undefined ? novoPrecosBase[key] : m.precos[key];
+        var base = parseMoney(baseAtual);
+        if (base === null) return; // sem preço base ainda — nada a calcular
+        novoPrecosBase[key] = baseAtual;
+        novoPercentuais[key] = pctStr;
+        novoPrecos[key] = fmtBRL(arredondarMoeda(base * (1 + pct / 100)));
+      });
+      return _objectSpread(_objectSpread({}, m), {}, {
+        precosBase: novoPrecosBase,
+        percentuais: novoPercentuais,
+        precos: novoPrecos
+      });
+    });
+  };
   var setDetalheForn = function setDetalheForn(iid, fid, v) {
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
@@ -505,6 +566,8 @@ var _useState27 = useState(init),
   var itens = mapa.itens,
     fornecedores = mapa.fornecedores,
     precos = mapa.precos,
+    precosBase = mapa.precosBase || {},
+    percentuais = mapa.percentuais || {},
     detalhes = mapa.detalhes || {},
     rodape = mapa.rodape;
   var rodapeResumo = rodape["__resumo__"] || {};
@@ -1019,7 +1082,22 @@ var _useState27 = useState(init),
         onClick: function(){ return toggleFornOculto(f.id); },
         title: fornOcultos.has(f.id) ? "Mostrar fornecedor" : "Ocultar fornecedor",
         style: { cursor:"pointer", fontSize:13, userSelect:"none", display:"inline-flex", alignItems:"center" }
-      }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41"))));
+      }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41"),
+      // FIX (pedido do Claudio — percentual por insumo): ícone pra aplicar um percentual de uma
+      // vez em TODOS os itens deste fornecedor — junto dos ícones que já existiam aqui (excluir,
+      // mostrar/ocultar), seguindo o mesmo padrão visual e o mesmo mecanismo de confirmação
+      // simples (prompt) já usado em outras partes do sistema, sem precisar de um modal novo.
+      /*#__PURE__*/React.createElement("span", {
+        onClick: function(){
+          var valor = window.prompt("Aplicar quantos % em TODOS os itens de \"" + (f.nome||"este fornecedor") + "\"?\n\n(Só é aplicado nos itens que já têm um preço digitado.)", "");
+          if (valor === null) return; // cancelou
+          var pctNum = parseFloat(String(valor).replace(",", "."));
+          if (isNaN(pctNum)) { alert("Digite um número válido."); return; }
+          aplicarPctEmMassa(f.id, valor.replace(",", "."));
+        },
+        title: "Aplicar percentual em todos os itens deste fornecedor",
+        style: { cursor:"pointer", fontSize:11, userSelect:"none", display:"inline-flex", alignItems:"center", background:"rgba(255,255,255,0.2)", borderRadius:3, padding:"2px 4px", fontWeight:700 }
+      }, "%"))));
     }), emptyChunk && /*#__PURE__*/React.createElement("th", {
       style: _objectSpread(_objectSpread({}, thC), {}, {
         borderLeft: "2px solid rgba(255,255,255,0.2)",
@@ -1287,31 +1365,72 @@ var _useState27 = useState(init),
         var isMin = resumo.vlUnit !== null && unit !== null && unit > 0 && unit === resumo.vlUnit;
         var isRank2 = !isMin && _rank2Price !== null && unit !== null && unit > 0 && unit === _rank2Price;
         var isRank3 = !isMin && !isRank2 && _rank3Price !== null && unit !== null && unit > 0 && unit === _rank3Price;
+        // FIX (pedido do Claudio — percentual por insumo): campo base (o que veio no orçamento,
+        // sem cálculo nenhum) + campo de percentual — igual ao layout já aprovado com ele.
+        var baseAtualStr = (precosBase && precosBase[key] !== undefined) ? precosBase[key] : ((_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "");
+        var pctAtualStr = (percentuais && percentuais[key] !== undefined) ? percentuais[key] : "";
+        var pctAtualNum = parseFloat(String(pctAtualStr || "").replace(",", ".")) || 0;
+        var cellBg = fornOcultos.has(f.id) ? bg : (isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg);
+        var cellColor = fornOcultos.has(f.id) ? "#bbb" : (isMin ? "#1a6a1a" : isRank2 ? "#a05000" : isRank3 ? "#a01010" : undefined);
         return _isAtendido
           ? /*#__PURE__*/React.createElement("td", Object.assign({}, _cellProps, { key: key, style: Object.assign({}, _cellProps.style, {textAlign:'right'}) }), (_precos$key = precos[key]) ? _precos$key : '—')
-          : /*#__PURE__*/React.createElement(EC, {
-          key: key,
-          value: (_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "",
-          onChange: function onChange(v) {
-            return setPreco(item.id, f.id, v.replace(/[^0-9.,]/g, ""));
-          },
-          placeholder: "0,00",
-          align: "right",
-          numericOnly: true,
-          moneyDisplay: true,
-          tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
-            borderLeft: "1px solid #e4e8f4",
-            background: fornOcultos.has(f.id) ? bg : (isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg),
-            color: fornOcultos.has(f.id) ? "#bbb" : (isMin ? "#1a6a1a" : isRank2 ? "#a05000" : isRank3 ? "#a01010" : undefined),
-            fontWeight: fornOcultos.has(f.id) ? 400 : (isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400),
-            opacity: fornOcultos.has(f.id) ? 0.35 : 1,
-            textDecoration: fornOcultos.has(f.id) ? "line-through" : "none"
-          }),
-          detailValue: (detalhes || {})[item.id + "_" + f.id] !== undefined ? (detalhes || {})[item.id + "_" + f.id] : "",
-          onDetailChange: function onDetailChange(v) {
-            return setDetalheForn(item.id, f.id, v);
-          }
-        });
+          : /*#__PURE__*/React.createElement("td", {
+              key: key,
+              style: _objectSpread(_objectSpread({}, SC.td), {}, {
+                borderLeft: "1px solid #e4e8f4",
+                background: cellBg,
+                padding: "3px 4px",
+                opacity: fornOcultos.has(f.id) ? 0.35 : 1
+              })
+            },
+              /*#__PURE__*/React.createElement("input", {
+                value: baseAtualStr,
+                placeholder: "0,00",
+                disabled: fornOcultos.has(f.id),
+                onChange: function onChange(e) {
+                  var v = e.target.value.replace(/[^0-9.,]/g, "");
+                  if (pctAtualNum !== 0) {
+                    recalcularPrecoComPct(item.id, f.id, v, pctAtualStr);
+                  } else {
+                    setPreco(item.id, f.id, v);
+                    recalcularPrecoComPct(item.id, f.id, v, pctAtualStr || "0");
+                  }
+                },
+                style: {
+                  width: "100%", textAlign: "right", fontSize: 11, border: "1px solid #ddd",
+                  borderRadius: 3, padding: "2px 4px", color: cellColor, fontWeight: isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400,
+                  background: "#fff"
+                }
+              }),
+              /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 2 } },
+                /*#__PURE__*/React.createElement("input", {
+                  value: pctAtualStr,
+                  placeholder: "%",
+                  disabled: fornOcultos.has(f.id),
+                  title: "Percentual a somar sobre o preço deste item",
+                  onChange: function onChange(e) {
+                    var v = e.target.value.replace(/[^0-9.,]/g, "");
+                    recalcularPrecoComPct(item.id, f.id, baseAtualStr, v);
+                  },
+                  style: {
+                    width: 30, textAlign: "center", fontSize: 9, border: "1px solid #ffb03a",
+                    background: "#fff8ec", color: "#b06000", fontWeight: 700, borderRadius: 3, padding: "1px 2px"
+                  }
+                }),
+                /*#__PURE__*/React.createElement("span", { style: { fontSize: 9, color: "#b06000" } }, "%")
+              ),
+              // Só mostra o resultado calculado quando o percentual realmente muda o valor —
+              // evita repetir o mesmo número duas vezes para fornecedores que não usam isso.
+              pctAtualNum !== 0 && /*#__PURE__*/React.createElement("div", {
+                style: { marginTop: 2, fontSize: 10.5, fontWeight: 800, color: "#0e7a3f", textAlign: "center" }
+              }, precos[key] || ""),
+              /*#__PURE__*/React.createElement(DetalheBtn, {
+                value: (detalhes || {})[item.id + "_" + f.id] !== undefined ? (detalhes || {})[item.id + "_" + f.id] : "",
+                onChange: function onChange(v) {
+                  return setDetalheForn(item.id, f.id, v);
+                }
+              })
+            );
       }), emptyChunk && /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           background: bg,
