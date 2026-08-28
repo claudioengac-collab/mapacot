@@ -414,6 +414,25 @@ var _useState27 = useState(init),
       });
     });
   };
+  // FIX (achado numa verificação extra, depois de perguntar "certeza?" sobre as casas decimais):
+  // "Casar Insumos" e "Ler com IA" atualizam o preço de um item chamando "setPreco" direto — o
+  // que já existia antes desta funcionalidade e continua correto para itens SEM percentual. O
+  // problema: se um item JÁ tinha um percentual aplicado, importar um preço novo por esses
+  // caminhos deixava a tela mostrando uma informação enganosa — o preço base e o % antigos
+  // continuavam aparecendo, mas sem bater mais com o preço final real (que a importação acabou
+  // de trocar). Esta função trata o preço importado como "o valor final de verdade" (sem
+  // percentual nenhum aplicado por cima, silenciosamente) — evita qualquer confusão sobre de
+  // onde veio o número mostrado na tela.
+  var setPrecoDireto = function setPrecoDireto(iid, fid, v) {
+    return update(function (m) {
+      var key = "".concat(iid, "_").concat(fid);
+      return _objectSpread(_objectSpread({}, m), {}, {
+        precos: _objectSpread(_objectSpread({}, m.precos), {}, _defineProperty({}, key, v)),
+        precosBase: _objectSpread(_objectSpread({}, m.precosBase), {}, _defineProperty({}, key, v)),
+        percentuais: _objectSpread(_objectSpread({}, m.percentuais), {}, _defineProperty({}, key, ""))
+      });
+    });
+  };
   // FIX (pedido do Claudio — percentual por insumo/fornecedor, pra substituir o cálculo manual
   // que ele fazia no Excel antes de digitar no sistema): a decisão de arquitetura aqui foi
   // deliberada — em vez de mudar os MUITOS lugares do sistema que já leem "mapa.precos"
@@ -2157,7 +2176,7 @@ var _useState27 = useState(init),
     onConfirm: function(ligs) {
       Object.keys(ligs).forEach(function(itemMapaId) {
         var lig=ligs[itemMapaId];
-        setPreco(itemMapaId, lig.fornId, fmtBRL(lig.preco));
+        setPrecoDireto(itemMapaId, lig.fornId, fmtBRL(lig.preco));
       });
       setShowCasar(false);
     }
@@ -2173,7 +2192,7 @@ var _useState27 = useState(init),
       logEventoDiag("LER COM IA: " + qtdLigs + " pre\u00e7o(s) importado(s) para o mapa " + (mapa.numero != null ? mapa.numero : "?"));
       Object.keys(ligs).forEach(function(itemMapaId) {
         var lig=ligs[itemMapaId];
-        setPreco(itemMapaId, lig.fornId, fmtBRL(lig.preco));
+        setPrecoDireto(itemMapaId, lig.fornId, fmtBRL(lig.preco));
       });
       setShowLerIA(false);
     },
