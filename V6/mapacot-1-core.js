@@ -508,7 +508,17 @@ var verificarVersaoAntesDeSalvar = function(idRegistro, versaoConhecida) {
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(rows){
       var versaoAtualServidor = rows[0] && rows[0].atualizado_em;
-      if (versaoAtualServidor && versaoAtualServidor !== versaoConhecida) {
+      // FIX URGENTE (causa raiz real do "aviso de recarregar aparecendo quase sempre", relatado
+      // pelo Claudio — insumo cadastrado sumindo ao clicar em recarregar): esta comparação usava
+      // "!==" — texto exato, letra por letra. Bancos de dados como o Postgres frequentemente
+      // devolvem uma data no MESMO instante exato, mas escrita de um jeito ligeiramente diferente
+      // do que o navegador calculou (por exemplo, com espaço em vez de "T", ou sem alguns zeros
+      // à direita) — mesmo sendo o MESMO momento, a comparação de texto via "!==" os tratava como
+      // diferentes, disparando um aviso de conflito FALSO toda vez que isso acontecia (não uma
+      // condição rara — praticamente sempre, dado que essa diferença de formato é comum). O
+      // mecanismo do MAPA já usa a comparação correta ("mesmaVersaoTs", definida logo acima) —
+      // esta correção só estende a MESMA proteção já comprovada para cá, sem criar nada novo.
+      if (versaoAtualServidor && !mesmaVersaoTs(versaoAtualServidor, versaoConhecida)) {
         var err = new Error('Estes dados foram modificados em outra aba ou dispositivo. Recarregue a página antes de continuar, para não sobrescrever as mudanças mais recentes.');
         err.isVersionConflict = true;
         throw err;
