@@ -1415,6 +1415,28 @@ var _useState27 = useState(init),
                     recalcularPrecoComPct(item.id, f.id, v, pctAtualStr || "0");
                   }
                 },
+                // FIX (regressão real reportada pelo Claudio): o campo de preço original, antes
+                // desta funcionalidade existir, formatava o número pra "36,00" assim que o
+                // usuário saía do campo (Tab ou Enter) — confirmado lendo o componente antigo
+                // (a função "fmtMoneyDisplay", usada só na exibição, nunca no dado salvo). O
+                // campo novo, criado para caber o preço base + o percentual na mesma célula, não
+                // tinha esse mesmo comportamento. Esta correção reaplica exatamente o mesmo
+                // resultado visual de antes — sem mexer em mais nada além disso.
+                onBlur: function onBlur(e) {
+                  var v = e.target.value.replace(/[^0-9.,]/g, "");
+                  var n = parseMoney(v);
+                  if (n === null) return;
+                  var formatado = fmtBRL(n);
+                  if (pctAtualNum !== 0) {
+                    recalcularPrecoComPct(item.id, f.id, formatado, pctAtualStr);
+                  } else {
+                    setPreco(item.id, f.id, formatado);
+                    recalcularPrecoComPct(item.id, f.id, formatado, pctAtualStr || "0");
+                  }
+                },
+                onKeyDown: function onKeyDown(e) {
+                  if (e.key === "Enter" || e.key === "Tab") { e.target.blur(); }
+                },
                 style: {
                   width: "100%", textAlign: "right", fontSize: 11, border: "1px solid #ddd",
                   borderRadius: 3, padding: "2px 4px", color: cellColor, fontWeight: isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400,
