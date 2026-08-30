@@ -770,6 +770,94 @@ var parseMoney = function parseMoney(s) {
   var n = parseFloat(String(s).replace(/\./g, "").replace(",", "."));
   return isNaN(n) ? null : n;
 };
+// FIX (pedido do Claudio — adicionar vários itens de uma vez no mapa, reconhecendo contra o
+// catálogo de insumos): estas duas funções ("normalizar" e "wordScore") já existiam antes, mas
+// estavam presas dentro de um único componente ("Ler com IA"), sem poder ser usadas em nenhum
+// outro lugar do sistema. Foram MOVIDAS pra cá (função global, igual outras já existentes nesta
+// mesma área do arquivo) exatamente como estavam, sem nenhuma mudança de lógica — só de
+// localização — para poderem ser reaproveitadas pela função nova, sem duplicar ~50 linhas de
+// lógica já madura e testada em produção com múltiplos fornecedores reais ao longo do tempo.
+var normalizar = function(s){
+  var t = String(s||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  t = t.replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();
+  t = t.replace(/(\d+)\s+GRAUS?\b/g, '$1G');
+  t = t.replace(/(\d+)\s+(MM|CM|M2|M3|KG|ML|L|UN|PC|CJ|MT|M|A|V|W)\b/g, '$1$2');
+  return t;
+};
+var wordScore=function(a,b){
+  var EXCECOES_PALAVRA_CURTA = {"TE":1};
+  var wa=normalizar(a).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w) || EXCECOES_PALAVRA_CURTA[w];});
+  var wb=normalizar(b).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w) || EXCECOES_PALAVRA_CURTA[w];});
+  if(!wa.length||!wb.length)return 0;
+  var pegarCategoria=function(palavras){
+    for(var pi=0;pi<palavras.length;pi++){ if(!/^\d+$/.test(palavras[pi])) return palavras[pi]; }
+    return palavras[0]||"";
+  };
+  var categoriaA=pegarCategoria(wa), categoriaB=pegarCategoria(wb);
+  var numRe=/\d/;
+  var numsA=wa.filter(function(w){return numRe.test(w);});
+  var numsB=wb.filter(function(w){return numRe.test(w);});
+  var numsASemPar=numsA.filter(function(w){return numsB.indexOf(w)<0;});
+  var numsBSemPar=numsB.filter(function(w){return numsA.indexOf(w)<0;});
+  if(numsASemPar.length && numsBSemPar.length) return 0;
+  var m=wa.filter(function(w){return wb.indexOf(w)>=0;}).length;
+  var score=m/Math.max(wa.length,wb.length);
+  if(categoriaA!==categoriaB) score=score*0.15;
+  return score;
+};
+// FIX (pedido do Claudio — adicionar vários itens de uma vez, colando uma lista): recebe o
+// texto colado (várias linhas) e devolve um array de {qtd, unid, descricao} — uma entrada por
+// linha. Cuidado especial: a DESCRIÇÃO quase sempre tem espaços dentro dela ("martelo tipo
+// unha"), então não dá pra simplesmente separar por espaço — isso quebraria a descrição em
+// pedaços. A estratégia: tenta separar por vírgula ou ponto-e-vírgula primeiro (Claudio
+// confirmou que são os separadores usados); só cai para separação por espaço puro se não achar
+// vírgula/ponto-e-vírgula nenhum na linha.
+var parsearLinhaColada = function(linha) {
+  var partes;
+  if (linha.indexOf(',') >= 0 || linha.indexOf(';') >= 0) {
+    partes = linha.split(/[,;]/).map(function(p){ return p.trim(); }).filter(function(p){ return p !== ''; });
+  } else {
+    var tokens = linha.trim().split(/\s+/);
+    partes = tokens.length >= 3 ? [tokens[0], tokens[1], tokens.slice(2).join(' ')] : tokens;
+  }
+  if (partes.length < 3) return null;
+  var qtdNum = parseFloat(String(partes[0]).replace(',', '.'));
+  if (isNaN(qtdNum) || qtdNum <= 0) return null;
+  return {
+    qtd: String(qtdNum).replace('.', ','),
+    unid: String(partes[1]).trim().toUpperCase(),
+    descricao: partes.slice(2).join(', ').trim().toUpperCase()
+  };
+};
+var parsearListaColada = function(textoColado) {
+  return (textoColado || '').split('\n')
+    .map(function(l){ return l.trim(); })
+    .filter(function(l){ return l !== ''; })
+    .map(parsearLinhaColada)
+    .filter(function(item){ return item !== null; });
+};
+// FIX (pedido do Claudio — "cada insumo novo deve cruzar com os insumos do banco de insumos, o
+// mapa não pode ser preenchido com insumos novos dessas listas"): pra cada descrição vinda da
+// lista colada, tenta reconhecer contra o catálogo geral de insumos — reaproveitando a mesma
+// lógica já usada em "Ler com IA" (consulta o que já foi ensinado primeiro; senão, usa
+// "wordScore"). Limiar de confiança (0.35) igual ao já usado em "fazerMatchs". Se não achar
+// nada com confiança suficiente, devolve null — quem chama decide o que fazer, nunca insere
+// sozinho.
+var casarComCatalogoInsumos = function(descricao, catalogoInsumos, aprendizadosAtuais) {
+  var chave = String(descricao || '').trim().toUpperCase();
+  if (!chave) return null;
+  var jaEnsinado = (aprendizadosAtuais || {})[chave];
+  if (jaEnsinado && (catalogoInsumos || []).indexOf(jaEnsinado) >= 0) {
+    return { oficial: jaEnsinado, viaEnsinado: true, score: 1 };
+  }
+  var melhor = 0, melhorNome = '';
+  (catalogoInsumos || []).forEach(function(nomeCatalogo) {
+    var sc = wordScore(descricao, nomeCatalogo);
+    if (sc > melhor) { melhor = sc; melhorNome = nomeCatalogo; }
+  });
+  if (melhor >= 0.35) return { oficial: melhorNome, viaEnsinado: false, score: melhor };
+  return null;
+};
 var normalize = function normalize(s) {
   return (s || "").trim().toUpperCase();
 };

@@ -1792,60 +1792,11 @@ function ModalLerComIA(_ref_ia) {
   // Agora converte o acento para sua forma sem acento (Ç->C, Ã->A) via normalize('NFD'), preservando
   // a palavra inteira. (2) usa String(s||"") em vez de (s||"") para nunca quebrar com erro fatal caso
   // a descrição venha como número/objeto (ex: dado corrompido ou resposta malformada da IA).
-  var normalizar=function(s){
-    var t = String(s||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-    t = t.replace(/[^A-Z0-9\s]/g," ").replace(/\s+/g," ").trim();
-    // FIX: encontrado através de relato real do usuário — "orçamento de 15 itens, a IA só
-    // reconhece 2 a 5". Causa raiz: a proteção contra confundir medidas diferentes (ex: 100MM
-    // vs 50MM) era ATIVADA MESMO quando a medida era A MESMA, só escrita de forma diferente —
-    // muito comum comparando um cadastro manual do mapa com texto extraído de PDF de fornecedor.
-    // "GRAUS"/"GRAU" por extenso vira sufixo "G" colado (ex: "90 GRAUS" e "90G" ficam idênticos).
-    t = t.replace(/(\d+)\s+GRAUS?\b/g, '$1G');
-    // Número e unidade separados por espaço viram a forma colada, que é como cadastros manuais
-    // tipicamente escrevem (ex: "100 MM" e "100MM" ficam idênticos após normalizar). Sem isso,
-    // a mesma medida escrita com espaço (comum em texto extraído de PDF) e sem espaço (comum em
-    // cadastro manual) eram tratadas como números DIFERENTES pela lógica de bloqueio de "número
-    // sem par", rejeitando o match mesmo sendo exatamente a mesma peça.
-    t = t.replace(/(\d+)\s+(MM|CM|M2|M3|KG|ML|L|UN|PC|CJ|MT|M|A|V|W)\b/g, '$1$2');
-    return t;
-  };
-  var wordScore=function(a,b){
-    var EXCECOES_PALAVRA_CURTA = {"TE":1}; // FIX: "TÊ" (peça de tubulação em T) tem só 2 letras e
-    // era descartado pelo filtro de tamanho mínimo — igual ao caso dos números curtos de ângulo já
-    // tratado abaixo, mas para nomes de peça. Lista pequena e específica, não abre o filtro geral
-    // (que continuaria deixando passar preposições como "DE"/"DO"/"DA" se apenas baixássemos o
-    // limite de tamanho para todas as palavras).
-    var wa=normalizar(a).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w) || EXCECOES_PALAVRA_CURTA[w];}); // FIX: mantém números curtos (ex: "45","90" de ângulo) que antes eram descartados por serem <=2 caracteres
-    var wb=normalizar(b).split(" ").filter(function(w){return w.length>2 || /^\d+$/.test(w) || EXCECOES_PALAVRA_CURTA[w];});
-    if(!wa.length||!wb.length)return 0;
-    // FIX: identifica a CATEGORIA do produto (LUVA, JOELHO, CURVA, TUBO, TÊ, CAP, ADAPTADOR...) —
-    // a primeira palavra que não é um código numérico isolado (pula "229272", "4010" no início).
-    // Essa palavra define O QUE a peça É, e pesa muito mais que atributos secundários (material,
-    // marca, medida). Sem isso, "LUVA 25MM SOLDAVEL MULTILIT" e "JOELHO 25MM SOLDAVEL MULTILIT"
-    // batiam quase igual (só a palavra central diferia), causando casamento errado.
-    var pegarCategoria=function(palavras){
-      for(var pi=0;pi<palavras.length;pi++){ if(!/^\d+$/.test(palavras[pi])) return palavras[pi]; }
-      return palavras[0]||"";
-    };
-    var categoriaA=pegarCategoria(wa), categoriaB=pegarCategoria(wb);
-    // FIX: tokens com dígito (medidas, códigos, gramaturas — ex: "100MM", "CP2", "4KG") costumam
-    // ser o que diferencia produtos da MESMA família mas de especificação DIFERENTE (ex: "TUBO PVC
-    // 100MM" vs "TUBO PVC 50MM", "CIMENTO CP2" vs "CIMENTO CP4"). Se AMBAS as descrições têm algum
-    // token numérico que NÃO tem correspondente exato na outra, isso indica uma SUBSTITUIÇÃO de
-    // especificação (não apenas informação a mais) — bloqueia o casamento (score=0) mesmo que as
-    // demais palavras coincidam. Só bloqueia quando os DOIS lados têm token sem par (não quando um
-    // lado só tem uma medida A MAIS que o outro não menciona, o que ainda pode ser o mesmo item).
-    var numRe=/\d/;
-    var numsA=wa.filter(function(w){return numRe.test(w);});
-    var numsB=wb.filter(function(w){return numRe.test(w);});
-    var numsASemPar=numsA.filter(function(w){return numsB.indexOf(w)<0;});
-    var numsBSemPar=numsB.filter(function(w){return numsA.indexOf(w)<0;});
-    if(numsASemPar.length && numsBSemPar.length) return 0;
-    var m=wa.filter(function(w){return wb.indexOf(w)>=0;}).length;
-    var score=m/Math.max(wa.length,wb.length);
-    if(categoriaA!==categoriaB) score=score*0.15; // FIX: categoria diferente = provavelmente peça diferente, mesmo com o resto parecido
-    return score;
-  };
+  // FIX (pedido do Claudio — adicionar vários itens de uma vez no mapa): "normalizar" e
+  // "wordScore" foram MOVIDAS pra função global, em mapacot-1-core.js — de lá continuam sendo
+  // usadas aqui exatamente como antes (confirmado, comparando caractere por caractere, que a
+  // lógica não mudou em nada). Ficam disponíveis pra outras partes do sistema reaproveitarem,
+  // sem duplicar essa lógica já madura e testada.
   var fazerMatchs=function(orcItens){
     var result={};
     orcItens.forEach(function(oi,idx){

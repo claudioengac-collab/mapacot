@@ -110,6 +110,7 @@ var _useState27 = useState(init),
     });
   };
   var _useStateEns=useState(false),showEnsinarSistema=_slicedToArray(_useStateEns,2)[0],setShowEnsinarSistema=_slicedToArray(_useStateEns,2)[1];
+  var _useStateAV=useState(false),showAdicionarVarios=_slicedToArray(_useStateAV,2)[0],setShowAdicionarVarios=_slicedToArray(_useStateAV,2)[1];
   useEffect(function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); },[]);
   useEffect(function(){
     if(mapa && mapa.id){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); }
@@ -335,6 +336,37 @@ var _useState27 = useState(init),
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
         itens: [].concat(_toConsumableArray(m.itens), [emptyItem(m.itens.length + 1)])
+      });
+    });
+  };
+  // FIX (correção de um erro real, achado testando no navegador — "parsearListaColada is not
+  // defined"): as 3 funções puras usadas aqui (parsearLinhaColada, parsearListaColada,
+  // casarComCatalogoInsumos) foram movidas pra escopo global, em mapacot-1-core.js — o NOVO
+  // modal que as usa é um componente SEPARADO deste (MapEditor), então precisava delas
+  // acessíveis globalmente, do mesmo jeito que já foi feito com "wordScore"/"normalizar".
+  // FIX (pedido do Claudio — adicionar vários itens de uma vez): mesmo padrão de "addItem" (uma
+  // linha acima) — cada item novo pega o próximo número disponível, entrando SEMPRE depois dos
+  // itens que já existem no mapa (item novo, mapa vazio ou com itens, o comportamento é o
+  // mesmo: sempre no final da lista atual). Recebe uma lista de {qtd, unid, descricao} JÁ
+  // RESOLVIDA (ou seja, cada descrição já é o nome OFICIAL do catálogo — a decisão de "isso pode
+  // entrar" já foi tomada antes de chegar aqui).
+  var addVariosItens = function addVariosItens(itensParaAdicionar) {
+    if (!itensParaAdicionar || !itensParaAdicionar.length) return Promise.resolve();
+    try { logEventoDiag("ADD " + itensParaAdicionar.length + " itens de uma vez (lista colada)"); } catch (e) {}
+    return update(function (m) {
+      var baseNum = m.itens.length;
+      var novos = itensParaAdicionar.map(function(it, idx) {
+        return {
+          id: uid(),
+          num: baseNum + idx + 1,
+          descricao: it.descricao || '',
+          detalhe: '',
+          qt: it.qtd || '',
+          unid: it.unid || ''
+        };
+      });
+      return _objectSpread(_objectSpread({}, m), {}, {
+        itens: [].concat(_toConsumableArray(m.itens), novos)
       });
     });
   };
@@ -1717,7 +1749,10 @@ var _useState27 = useState(init),
         style: SC.btnAddItem
       }, /*#__PURE__*/React.createElement(IcoPlus, {
         w: 14
-      }), " ADICIONAR ITEM"), /*#__PURE__*/React.createElement("span", {
+      }), " ADICIONAR ITEM"), /*#__PURE__*/React.createElement("button", {
+        onClick: function(){ setShowAdicionarVarios(true); },
+        style: _objectSpread(_objectSpread({}, SC.btnAddItem), {}, { background:"#f0a500", color:"#1a2b4a" })
+      }, "📋 ADICIONAR VÁRIOS DE UMA VEZ"), /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 13,
           fontWeight: 700,
@@ -2440,6 +2475,16 @@ var _useState27 = useState(init),
     onAprendizadoRemovido: desfazerAprendizado,
     onClose: function(){ setShowEnsinarSistema(false); }
   }),
+  showAdicionarVarios && /*#__PURE__*/React.createElement(ModalAdicionarVariosItens, {
+    cadastrosInsumos: cadastros.insumos||[],
+    aprendizados: aprendizados,
+    onRegistrarAprendizado: registrarAprendizado,
+    onConfirmar: function(itensParaAdicionar){
+      addVariosItens(itensParaAdicionar);
+      setShowAdicionarVarios(false);
+    },
+    onClose: function(){ setShowAdicionarVarios(false); }
+  }),
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
     itens: (mapa && mapa.itens)||[],
@@ -2623,4 +2668,211 @@ var _useState27 = useState(init),
   );
 }
 
-// ─── V4 CSS — Modal Pedido Step 1 ───────────────────────────────────────────
+// ─── V4 CSS — Adicionar Vários Itens de Uma Vez (colar lista ou importar Excel) ─────────────
+// FIX (pedido do Claudio — insumos recebidos em formatos variados, processo manual demorava
+// cerca de 1 hora): reaproveita o motor de reconhecimento já usado em "Ler com IA" (wordScore +
+// aprendizados, agora movidos pra escopo global) para cruzar cada descrição contra o CATÁLOGO
+// GERAL de insumos — nunca contra o mapa aberto. Regra confirmada com o Claudio: um item que não
+// bate com nada do catálogo NUNCA entra sozinho no mapa — fica separado, esperando ele decidir
+// (buscar e ensinar o sistema, ou deixar de fora por enquanto).
+function ModalAdicionarVariosItens(_ref_avi) {
+  var cadastrosInsumos = _ref_avi.cadastrosInsumos || [];
+  var aprendizados = _ref_avi.aprendizados || {};
+  var onRegistrarAprendizado = _ref_avi.onRegistrarAprendizado || function(){};
+  var onConfirmar = _ref_avi.onConfirmar || function(){};
+  var onClose = _ref_avi.onClose || function(){};
+
+  var _sAba = useState('colar'), aba = _slicedToArray(_sAba,2)[0], setAba = _slicedToArray(_sAba,2)[1];
+  var _sTexto = useState(''), textoColado = _slicedToArray(_sTexto,2)[0], setTextoColado = _slicedToArray(_sTexto,2)[1];
+  var _sProc = useState(false), processando = _slicedToArray(_sProc,2)[0], setProcessando = _slicedToArray(_sProc,2)[1];
+  var _sErro = useState(''), erro = _slicedToArray(_sErro,2)[0], setErro = _slicedToArray(_sErro,2)[1];
+  var _sResultados = useState(null), resultados = _slicedToArray(_sResultados,2)[0], setResultados = _slicedToArray(_sResultados,2)[1];
+  var _sBuscaItem = useState({}), buscaAberta = _slicedToArray(_sBuscaItem,2)[0], setBuscaAberta = _slicedToArray(_sBuscaItem,2)[1];
+  var _sTextoBusca = useState({}), textoBusca = _slicedToArray(_sTextoBusca,2)[0], setTextoBusca = _slicedToArray(_sTextoBusca,2)[1];
+
+  var processarItensBrutos = function(itensBrutos) {
+    var comMatch = itensBrutos.map(function(it){
+      var match = casarComCatalogoInsumos(it.descricao, cadastrosInsumos, aprendizados);
+      return {
+        qtd: it.qtd, unid: it.unid, descricaoOriginal: it.descricao,
+        match: match, decisao: match ? 'usar' : 'pular', ensinarNaConfirmacao: false
+      };
+    });
+    setResultados(comMatch);
+  };
+
+  var handleVerificarTexto = function() {
+    var itensBrutos = parsearListaColada(textoColado);
+    if (!itensBrutos.length) { setErro('Nenhuma linha reconhecida. Confira o formato: quantidade, unidade, descrição.'); return; }
+    setErro('');
+    // FIX (achado testando com o tamanho REAL do catálogo, ~19.371 insumos): comparar cada item
+    // colado contra um catálogo desse tamanho pode levar 1-2 segundos — sem nenhum aviso visual,
+    // a tela parece "travada" nesse intervalo, mesmo não tendo travado de verdade. O
+    // "setTimeout" força o navegador a MOSTRAR o aviso de "processando" primeiro, e só DEPOIS
+    // rodar a comparação pesada — sem essa técnica, o React "engoliria" a atualização de tela
+    // junto com o próprio travamento, e o aviso nunca chegaria a aparecer.
+    setProcessando(true);
+    setTimeout(function(){
+      processarItensBrutos(itensBrutos);
+      setProcessando(false);
+    }, 30);
+  };
+
+  var handleArquivoExcel = function(e) {
+    var file = e.target.files[0]; e.target.value=''; if(!file) return;
+    setProcessando(true); setErro('');
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try {
+        var wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var aoa = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        var itensBrutos = [];
+        for (var i=0; i<aoa.length; i++){
+          var linha = aoa[i];
+          var qtdNum = parseFloat(String(linha[0]||'').replace(',', '.'));
+          var unid = String(linha[1]||'').trim().toUpperCase();
+          var descricao = String(linha[2]||'').trim().toUpperCase();
+          if (isNaN(qtdNum) || qtdNum<=0 || !unid || !descricao) continue; // linha incompleta ou cabeçalho - pula
+          itensBrutos.push({ qtd: String(qtdNum).replace('.', ','), unid: unid, descricao: descricao });
+        }
+        setProcessando(false);
+        if (!itensBrutos.length) { setErro('Nenhuma linha válida encontrada. Confira: coluna A = quantidade, B = unidade, C = descrição.'); return; }
+        processarItensBrutos(itensBrutos);
+      } catch(err) {
+        setProcessando(false);
+        setErro('Não foi possível ler o arquivo. Confirme que é um Excel válido (.xlsx ou .xls).');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  var escolherSugestao = function(idx, nomeOficial) {
+    setResultados(function(prev){
+      var novo = prev.slice();
+      novo[idx] = _objectSpread(_objectSpread({}, novo[idx]), {}, {
+        match: { oficial: nomeOficial, viaEnsinado: false, score: 1 },
+        decisao: 'usar', ensinarNaConfirmacao: true
+      });
+      return novo;
+    });
+    setBuscaAberta(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx, false)); });
+  };
+
+  var handleConfirmarFinal = function() {
+    var paraAdicionar = [];
+    (resultados||[]).forEach(function(r){
+      if (r.decisao !== 'usar' || !r.match) return;
+      if (r.ensinarNaConfirmacao) onRegistrarAprendizado(r.descricaoOriginal, r.match.oficial);
+      paraAdicionar.push({ qtd: r.qtd, unid: r.unid, descricao: r.match.oficial });
+    });
+    onConfirmar(paraAdicionar);
+  };
+
+  var reconhecidos = (resultados||[]).filter(function(r){ return r.match; });
+  var naoReconhecidos = (resultados||[]).filter(function(r){ return !r.match; });
+
+  return /*#__PURE__*/React.createElement(Modal, { open: true, onClose: onClose, maxWidth: 640 },
+    /*#__PURE__*/React.createElement('div', { style:{background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'} },
+      /*#__PURE__*/React.createElement('span', { style:{fontWeight:700,fontSize:13} }, '📋 ADICIONAR VÁRIOS ITENS'),
+      /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'none',border:'none',color:'#fff',cursor:'pointer',fontSize:16} }, '✕')
+    ),
+    /*#__PURE__*/React.createElement('div', { style:{padding:14,maxHeight:'70vh',overflowY:'auto'} },
+
+      !resultados && /*#__PURE__*/React.createElement(React.Fragment, null,
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:6,marginBottom:12} },
+          /*#__PURE__*/React.createElement('div', {
+            onClick: function(){ setAba('colar'); setErro(''); },
+            style:{flex:1,textAlign:'center',padding:9,borderRadius:7,fontSize:10.5,fontWeight:700,cursor:'pointer',background:aba==='colar'?'#7c3aed':'#f0eaff',color:aba==='colar'?'#fff':'#7c3aed'}
+          }, '✍️ Colar lista'),
+          /*#__PURE__*/React.createElement('div', {
+            onClick: function(){ setAba('excel'); setErro(''); },
+            style:{flex:1,textAlign:'center',padding:9,borderRadius:7,fontSize:10.5,fontWeight:700,cursor:'pointer',background:aba==='excel'?'#7c3aed':'#f0eaff',color:aba==='excel'?'#fff':'#7c3aed'}
+          }, '📊 Importar Excel')
+        ),
+
+        aba==='colar' && /*#__PURE__*/React.createElement(React.Fragment, null,
+          /*#__PURE__*/React.createElement('textarea', {
+            value: textoColado,
+            onChange: function(e){ setTextoColado(e.target.value); },
+            placeholder: '12, unid, martelo tipo unha\n5, un, tábua de caixaria 4m',
+            style:{width:'100%',minHeight:110,border:'2px dashed #b794f6',borderRadius:8,padding:10,fontSize:11.5,fontFamily:'monospace',color:'#444'}
+          }),
+          /*#__PURE__*/React.createElement('div', { style:{fontSize:9.5,color:'#888',marginTop:4} }, 'Um item por linha: quantidade, unidade, descrição — separados por vírgula, espaço ou ponto e vírgula.'),
+          /*#__PURE__*/React.createElement('button', {
+            onClick: handleVerificarTexto,
+            disabled: processando,
+            style:{background:'#7c3aed',color:'#fff',border:'none',borderRadius:6,padding:'9px 16px',fontSize:11.5,fontWeight:700,marginTop:10,cursor:processando?'default':'pointer',width:'100%',opacity:processando?0.7:1}
+          }, processando ? 'Verificando no catálogo...' : 'VERIFICAR NO CATÁLOGO ➜')
+        ),
+
+        aba==='excel' && /*#__PURE__*/React.createElement(React.Fragment, null,
+          /*#__PURE__*/React.createElement('label', { style:{display:'block',border:'2px dashed #b794f6',borderRadius:8,padding:26,textAlign:'center',color:'#7c3aed',fontSize:11.5,fontWeight:600,cursor:'pointer'} },
+            processando ? 'Lendo planilha...' : '📊 Clique aqui ou arraste o arquivo Excel',
+            /*#__PURE__*/React.createElement('div', { style:{fontSize:9.5,fontWeight:400,color:'#999',marginTop:6} }, 'Colunas: A) Quantidade  B) Unidade  C) Descrição'),
+            /*#__PURE__*/React.createElement('input', { type:'file', accept:'.xlsx,.xls', style:{display:'none'}, onChange:handleArquivoExcel })
+          )
+        ),
+
+        erro && /*#__PURE__*/React.createElement('div', { style:{marginTop:10,background:'#fdeaea',color:'#c0392b',borderRadius:6,padding:'8px 10px',fontSize:10.5} }, erro)
+      ),
+
+      resultados && /*#__PURE__*/React.createElement(React.Fragment, null,
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,marginBottom:12} },
+          /*#__PURE__*/React.createElement('div', { style:{flex:1,textAlign:'center',padding:'8px 12px',borderRadius:8,fontSize:11,fontWeight:700,background:'#eafaf0',color:'#0e7a3f'} }, '🟢 ' + reconhecidos.length + ' reconhecidos'),
+          /*#__PURE__*/React.createElement('div', { style:{flex:1,textAlign:'center',padding:'8px 12px',borderRadius:8,fontSize:11,fontWeight:700,background:'#fff0e0',color:'#b35c00'} }, '🟠 ' + naoReconhecidos.length + ' precisam de atenção')
+        ),
+
+        naoReconhecidos.length > 0 && /*#__PURE__*/React.createElement('div', { style:{fontSize:10.5,color:'#666',marginBottom:10} }, 'Os itens abaixo não vão entrar no mapa até você decidir o que fazer com cada um.'),
+
+        (resultados||[]).map(function(r, idx){
+          if (r.match) return null; // os reconhecidos não precisam de card individual, só contam no resumo
+          var estaAbertoBusca = !!buscaAberta[idx];
+          var termoBusca = textoBusca[idx] || '';
+          var sugestoes = termoBusca.length >= 2
+            ? cadastrosInsumos.filter(function(nome){ return nome.toUpperCase().indexOf(termoBusca.toUpperCase()) >= 0; }).slice(0, 6)
+            : [];
+          return /*#__PURE__*/React.createElement('div', { key: idx, style:{border:'1px solid #f0c090',background:'#fffaf3',borderRadius:8,padding:11,marginBottom:10} },
+            /*#__PURE__*/React.createElement('div', { style:{fontSize:11.5,fontWeight:700,color:'#333'} },
+              /*#__PURE__*/React.createElement('span', { style:{color:'#888',fontWeight:400,fontSize:10} }, r.qtd + ' ' + r.unid + ' · '),
+              r.descricaoOriginal
+            ),
+            /*#__PURE__*/React.createElement('div', { style:{fontSize:9.5,color:'#b35c00',margin:'4px 0 8px'} }, '⚠️ Nada parecido encontrado no catálogo (' + cadastrosInsumos.length + ' insumos)'),
+            !estaAbertoBusca && /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:6} },
+              /*#__PURE__*/React.createElement('div', {
+                onClick: function(){ setBuscaAberta(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx, true)); }); },
+                style:{background:'#eef2ff',color:'#2a5298',padding:'8px 10px',borderRadius:6,fontSize:10.5,cursor:'pointer'}
+              }, '🔗 Este é um insumo que já existe, só escrito diferente — buscar e ensinar'),
+              /*#__PURE__*/React.createElement('div', {
+                style:{background:'#f5f5f5',color:'#777',padding:'8px 10px',borderRadius:6,fontSize:10.5}
+              }, '⏭️ Deixado de fora por enquanto (não entra no mapa)')
+            ),
+            estaAbertoBusca && /*#__PURE__*/React.createElement(React.Fragment, null,
+              /*#__PURE__*/React.createElement('input', {
+                value: termoBusca,
+                autoFocus: true,
+                placeholder: 'Digite pra buscar no catálogo...',
+                onChange: function(e){ setTextoBusca(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx, e.target.value)); }); },
+                style:{width:'100%',marginTop:2,padding:'6px 8px',border:'1px solid #ccc',borderRadius:5,fontSize:10.5}
+              }),
+              sugestoes.map(function(s, si){
+                return /*#__PURE__*/React.createElement('div', {
+                  key: si,
+                  onClick: function(){ escolherSugestao(idx, s); },
+                  style:{fontSize:9.5,padding:'4px 6px',background:'#fff',border:'1px solid #ddd',borderRadius:4,marginTop:3,cursor:'pointer'}
+                }, s);
+              })
+            )
+          );
+        }),
+
+        /*#__PURE__*/React.createElement('button', {
+          onClick: handleConfirmarFinal,
+          disabled: reconhecidos.length === 0 && !(resultados||[]).some(function(r){ return r.decisao==='usar'; }),
+          style:{background:'#0e7a3f',color:'#fff',border:'none',borderRadius:6,padding:11,fontSize:12,fontWeight:800,width:'100%',marginTop:6,cursor:'pointer',opacity:(reconhecidos.length===0 && !(resultados||[]).some(function(r){ return r.decisao==='usar'; }))?0.5:1}
+        }, '✔ ADICIONAR OS ' + (resultados||[]).filter(function(r){ return r.decisao==='usar'; }).length + ' RECONHECIDOS NO MAPA')
+      )
+    )
+  );
+}
+
