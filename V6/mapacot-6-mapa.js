@@ -111,6 +111,12 @@ var _useState27 = useState(init),
   };
   var _useStateEns=useState(false),showEnsinarSistema=_slicedToArray(_useStateEns,2)[0],setShowEnsinarSistema=_slicedToArray(_useStateEns,2)[1];
   var _useStateAV=useState(false),showAdicionarVarios=_slicedToArray(_useStateAV,2)[0],setShowAdicionarVarios=_slicedToArray(_useStateAV,2)[1];
+  // FIX (pedido do Claudio — nome do fornecedor cortado no cabeçalho, ex: "ACREFERRO COMERC...";
+  // já que o campo é um input de digitação, HTML não permite input quebrar em várias linhas —
+  // essa é uma limitação do próprio navegador, não do código): guarda quais fornecedores estão
+  // com o nome sendo editado agora. Quando NÃO está editando, mostra o nome completo como texto
+  // (podendo quebrar linha); ao clicar, vira o campo de edição de sempre.
+  var _useStateFE=useState(function(){ return new Set(); }),fornEditandoNome=_slicedToArray(_useStateFE,2)[0],setFornEditandoNome=_slicedToArray(_useStateFE,2)[1];
   useEffect(function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); },[]);
   useEffect(function(){
     if(mapa && mapa.id){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); }
@@ -928,7 +934,11 @@ var _useState27 = useState(init),
       // resolvendo o desalinhamento relatado ("a última coluna da página 2 fica embaixo da coluna
       // RESUMO da página 1"). FORNECEDOR é SEMPRE 140px, em QUALQUER página, sem exceção — isso já
       // foi testado e confirmado repetidamente hoje e não deve variar entre páginas nunca mais.
-      var LARG_FORN_COL = 140;
+      // FIX (pedido do Claudio — nomes de fornecedor cortados, ex: "ACREFERRO COMERC...";
+      // aprovado por ele um aumento de ~35% depois de ver a comparação lado a lado): largura
+      // aumentada de 140 para 190, dando mais espaço pro nome completo aparecer com menos linhas
+      // de quebra, sem deixar a tabela excessivamente larga com muitos fornecedores.
+      var LARG_FORN_COL = 190;
       var qtdFornAtual = emptyChunk ? 1 : visibleChunk.length;
       var colsFornecedor = emptyChunk
         ? [/*#__PURE__*/React.createElement("col", { key: "colForn_empty", style: { width: LARG_FORN_COL } })]
@@ -945,7 +955,7 @@ var _useState27 = useState(init),
         showOrcamento && /*#__PURE__*/React.createElement("col", { key: "colOrc2", style: { width: 125 } }),
         showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes1", style: { width: 95 } }),
         showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes2", style: { width: 95 } }),
-        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes3", style: { width: 115 } }),
+        showResumo && /*#__PURE__*/React.createElement("col", { key: "colRes3", style: { width: 155 } }),
         colsFornecedor,
         /*#__PURE__*/React.createElement("col", { style: { width: 30 } })
       );
@@ -1069,7 +1079,7 @@ var _useState27 = useState(init),
       // originalmente. A tentativa anterior de colocar os ícones acima (para evitar que o
       // dropdown de sugestões os cobrisse) foi uma decisão unilateral errada: o combinado sempre
       // foi nome em cima, ícones embaixo, e é isso que fica agora.
-      /*#__PURE__*/React.createElement(AutocompleteInput, {
+      fornEditandoNome.has(f.id) ? /*#__PURE__*/React.createElement(AutocompleteInput, {
         value: f.nome,
         onChange: function onChange(v) {
           return updForn(f.id, "nome", v, true);
@@ -1090,10 +1100,15 @@ var _useState27 = useState(init),
             var obsSalva = (cadastros.fornecedorObs || {})[normalize(fn)];
             if (obsSalva) setObsPopupFornecedor({ nome: fn, texto: obsSalva });
           }
+          // FIX (pedido do Claudio — nome cortado): ao terminar de editar (Enter, Tab, ou clicar
+          // fora), volta pro modo "texto com nome completo" — sem essa linha, o campo de edição
+          // ficaria aberto para sempre depois do primeiro clique.
+          setFornEditandoNome(function(prev){ var novo = new Set(prev); novo.delete(f.id); return novo; });
         },
         suggestions: cadastros.fornecedores || [],
         strictMatch: true,
         placeholder: "NOME DO FORNECEDOR",
+        autoFocus: true,
         inputStyle: {
           width: "100%",
           boxSizing: "border-box",
@@ -1111,7 +1126,17 @@ var _useState27 = useState(init),
         xStyle: {
           width: "100%"
         }
-      }),
+      }) : /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ setFornEditandoNome(function(prev){ var novo = new Set(prev); novo.add(f.id); return novo; }); },
+        title: "Clique para editar o nome",
+        style: {
+          width: "100%", boxSizing: "border-box", textAlign: "center", cursor: "pointer",
+          border: "1px solid rgba(255,255,255,0.3)", borderRadius: 3,
+          background: "rgba(255,255,255,0.15)", padding: "3px 4px",
+          fontSize: 11, fontWeight: 700, color: "#fff",
+          whiteSpace: "normal", lineHeight: 1.25, minHeight: 15
+        }
+      }, f.nome || "NOME DO FORNECEDOR"),
       /*#__PURE__*/React.createElement("div", {
         style: { display: "flex", gap: 10, alignItems: "center", justifyContent: "center", position: "relative", zIndex: 60 }
       }, /*#__PURE__*/React.createElement("button", {
@@ -1404,10 +1429,12 @@ var _useState27 = useState(init),
           fontSize: 11,
           background: "#f0f4ff",
           borderRight: "2px solid #b8c8e8",
-          maxWidth: 130,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap"
+          // FIX (pedido do Claudio — nome do fornecedor cortado, ex: "SIDERURGICA NO...";
+          // aprovado depois de ver o layout comparando as opções): antes cortava com "..." numa
+          // linha só; agora quebra em várias linhas, centralizado, mostrando o nome completo.
+          textAlign: "center",
+          whiteSpace: "normal",
+          lineHeight: 1.3
         })
       }, resumo.forn || "")), visibleChunk.map(function (f) {
         var _precos$key;
