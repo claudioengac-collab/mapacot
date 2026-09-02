@@ -494,12 +494,40 @@ var _useState27 = useState(init),
   var arredondarMoeda = function arredondarMoeda(n) {
     return Math.round(n * 100 + 1e-6) / 100;
   };
+  // FIX URGENTE (achado por relato real do Claudio — "1,098652" virava "1,10" ao sair do campo,
+  // perdendo a precisão que ele digitou de propósito): a correção anterior, que fazia "36" virar
+  // "36,00" ao sair do campo, usava "fmtBRL", que sempre força EXATAMENTE 2 casas — isso resolve
+  // o caso de faltar casas, mas também CORTA quando o usuário já digitou mais casas de propósito
+  // (útil para preços unitários muito pequenos, onde a diferença nas casas extras importa muito
+  // ao multiplicar por grandes quantidades). O comportamento original do sistema (antes de
+  // qualquer uma dessas correções) nunca alterava o dado salvo — só a exibição. Esta função
+  // reproduz esse espírito: preenche com zero até ter 2 casas quando FALTAM, mas nunca corta
+  // quando o usuário já tem 2 ou mais. Funciona direto em cima do texto digitado (nunca convertendo
+  // para número e de volta), evitando qualquer risco de imprecisão de cálculo.
+  var garantirMinimoDuasCasas = function garantirMinimoDuasCasas(textoDigitado) {
+    var s = String(textoDigitado || "").trim();
+    if (!s) return s;
+    var partes = s.split(",");
+    var parteInteira = partes[0].replace(/\D/g, "") || "0";
+    var parteDecimal = partes[1] || "";
+    if (parteDecimal.length < 2) {
+      parteDecimal = (parteDecimal + "00").slice(0, 2);
+    }
+    parteInteira = parteInteira.replace(/(\d)(?=(\d{3})+$)/g, "$1.");
+    return parteInteira + "," + parteDecimal;
+  };
   var recalcularPrecoComPct = function recalcularPrecoComPct(iid, fid, baseStr, pctStr) {
     return update(function (m) {
       var key = "".concat(iid, "_").concat(fid);
       var base = parseMoney(baseStr);
       var pct = parseFloat(String(pctStr || "").replace(",", ".")) || 0;
-      var finalStr = base !== null ? fmtBRL(arredondarMoeda(base * (1 + pct / 100))) : "";
+      // FIX URGENTE (continuação do relato do Claudio — "1,098652" virava "1,10"): quando NÃO
+      // há percentual real aplicado (pct === 0), o preço final é simplesmente o preço base, sem
+      // nenhum cálculo — nesse caso, preserva a precisão original digitada em vez de forçar
+      // "fmtBRL" (que sempre corta pra 2 casas). Só quando HÁ um percentual de verdade (pct !== 0)
+      // é que faz sentido arredondar o RESULTADO do cálculo pra 2 casas, já que aí é um novo
+      // valor monetário calculado de verdade.
+      var finalStr = base === null ? "" : (pct !== 0 ? fmtBRL(arredondarMoeda(base * (1 + pct / 100))) : garantirMinimoDuasCasas(baseStr));
       return _objectSpread(_objectSpread({}, m), {}, {
         precosBase: _objectSpread(_objectSpread({}, m.precosBase), {}, _defineProperty({}, key, baseStr)),
         percentuais: _objectSpread(_objectSpread({}, m.percentuais), {}, _defineProperty({}, key, pctStr)),
@@ -523,7 +551,10 @@ var _useState27 = useState(init),
         if (base === null) return; // sem preço base ainda — nada a calcular
         novoPrecosBase[key] = baseAtual;
         novoPercentuais[key] = pctStr;
-        novoPrecos[key] = fmtBRL(arredondarMoeda(base * (1 + pct / 100)));
+        // FIX (mesma correção de recalcularPrecoComPct, por consistência e segurança — mesmo
+        // sendo raro o usuário digitar 0% no prompt de aplicar em massa): preserva a precisão
+        // original quando não há percentual real.
+        novoPrecos[key] = pct !== 0 ? fmtBRL(arredondarMoeda(base * (1 + pct / 100))) : garantirMinimoDuasCasas(baseAtual);
       });
       return _objectSpread(_objectSpread({}, m), {}, {
         precosBase: novoPrecosBase,
@@ -1481,11 +1512,16 @@ var _useState27 = useState(init),
                 // campo novo, criado para caber o preço base + o percentual na mesma célula, não
                 // tinha esse mesmo comportamento. Esta correção reaplica exatamente o mesmo
                 // resultado visual de antes — sem mexer em mais nada além disso.
+                // FIX URGENTE (regressão real relatada pelo Claudio — "1,098652" virava "1,10"
+                // ao sair do campo): trocado "fmtBRL(n)" (que sempre corta pra exatamente 2
+                // casas) por "garantirMinimoDuasCasas(v)" — usa o TEXTO digitado, não o número
+                // convertido, preservando qualquer casa decimal extra que o usuário digitou de
+                // propósito, só completando com zero quando faltam casas (ex: "36" -> "36,00").
                 onBlur: function onBlur(e) {
                   var v = e.target.value.replace(/[^0-9.,]/g, "");
                   var n = parseMoney(v);
                   if (n === null) return;
-                  var formatado = fmtBRL(n);
+                  var formatado = garantirMinimoDuasCasas(v);
                   if (pctAtualNum !== 0) {
                     recalcularPrecoComPct(item.id, f.id, formatado, pctAtualStr);
                   } else {
