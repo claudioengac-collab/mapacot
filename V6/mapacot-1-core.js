@@ -1078,7 +1078,9 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
         }
         for (var j=0; j<i; j++) {
           var dj=rk.preco-rkgs[j].preco, pj=dj/rkgs[j].preco*100;
-          dlts+='<span class="al-dr1">\u25b2 VS '+(j+1)+'\u00ba RANK: + '+fmtR(dj)+' (+'+pj.toFixed(1)+'%)</span>';
+          var djTot=dj*qt; // NOVO: diferenca unitaria multiplicada pela quantidade do item
+          dlts+='<span class="al-dr1">\u25b2 VS '+(j+1)+'\u00ba RANK: + '+fmtR(dj)+'/UN (+'+pj.toFixed(1)+'%)</span>'
+              +'<span class="al-tot">\u21b3 Total: '+fmtR(djTot)+' ('+esc(String(item.qt))+' '+esc(item.unid||'')+')</span>';
         }
         var alt = i%2===0?' alalt':'';
         rows += '<div class="alr'+alt+'">'
@@ -1160,6 +1162,7 @@ var buildAnaliseHTML = function buildAnaliseHTML(mapa, now, orcamentos, associac
     +'.ald{width:270px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;font-size:10px;}'
     +'.al-doec{color:#186818;font-weight:700;} .al-dopj{color:#c0392b;font-weight:700;}'
     +'.al-dr1{color:#888;font-size:9px;font-weight:600;} .al-dr2{color:#b8730a;font-weight:700;}'
+    +'.al-tot{color:#1a5fa5;font-size:9px;font-weight:700;margin-top:-1px;}'
     +'.al-dmen{color:#186818;font-weight:700;} .al-dref{color:#aaa;font-size:9px;}'
     +'</style>';
 
