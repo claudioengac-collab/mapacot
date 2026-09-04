@@ -1276,6 +1276,27 @@ function App() {
         clone.criadoEm = new Date().toISOString();
         clone.atualizadoEm = new Date().toISOString();
         clone.duplicadoDe = mapaOrigem.numero; // identificador discreto
+        var mapaIdAntigoParaNovo = {};
+        (clone.itens||[]).forEach(function(it){
+          var idAntigo = it.id;
+          var idNovo = uid();
+          it.id = idNovo;
+          mapaIdAntigoParaNovo[idAntigo] = idNovo;
+        });
+        function remapChavesComposta(obj){
+          if (!obj) return obj;
+          var novo = {};
+          Object.keys(obj).forEach(function(chave){
+            var idAntigoAchado = Object.keys(mapaIdAntigoParaNovo).find(function(idA){ return chave.indexOf(idA+'_')===0; });
+            var novaChave = idAntigoAchado ? (mapaIdAntigoParaNovo[idAntigoAchado] + chave.slice(idAntigoAchado.length)) : chave;
+            novo[novaChave] = obj[chave];
+          });
+          return novo;
+        }
+        clone.precos = remapChavesComposta(clone.precos);
+        clone.detalhes = remapChavesComposta(clone.detalhes);
+        clone.precosBase = remapChavesComposta(clone.precosBase);
+        clone.percentuais = remapChavesComposta(clone.percentuais);
         logEventoDiag("DUPLICAR: mapa " + mapaOrigem.numero + " \u2192 novo mapa " + nextNum);
         setMapas(function(prev){ return [clone].concat(prev); });
         sbSaveMapa(clone).then(function(novaVersao){
@@ -1286,7 +1307,8 @@ function App() {
         var assocsOrigem = associacoes.filter(function(a){ return a.mapaId === mapaOrigem.id; });
         if (assocsOrigem.length > 0) {
           var novasAssocs = assocsOrigem.map(function(a){
-            return Object.assign({}, a, { id: uid(), mapaId: clone.id, referencia: true });
+            var novoItemMapaId = mapaIdAntigoParaNovo[a.itemMapaId] || a.itemMapaId;
+            return Object.assign({}, a, { id: uid(), mapaId: clone.id, itemMapaId: novoItemMapaId, referencia: true });
           });
           var listaAtual = associacoes.concat(novasAssocs);
           setAssociacoes(listaAtual);
