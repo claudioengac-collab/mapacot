@@ -644,6 +644,13 @@ function TelaPedidos(_ref_tp) {
   var _sF=useState({obra:[],de:'',ate:'',insumo:[],fornecedor:[],status:[]}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
   var _sRM=useState(false),showRelModal=_slicedToArray(_sRM,2)[0],setShowRelModal=_slicedToArray(_sRM,2)[1];
   var _sRF=useState({obra:[],de:'',ate:'',insumo:[],status:[]}),relFiltros=_slicedToArray(_sRF,2)[0],setRelFiltros=_slicedToArray(_sRF,2)[1];
+  // FIX (pedido do Claudio — imprimir vários pedidos completos, filtrados por obra e período,
+  // sem preencher nada = todos os pedidos do sistema): estado próprio, separado do "Relatorio
+  // PDF" que já existia (aquele é um resumo em tabela; este é cada pedido completo, um atrás do
+  // outro, com quebra de página). Obra é um único valor (não multi-seleção), igual pedido pelo
+  // Claudio no layout aprovado.
+  var _sIC=useState(false),showImprimirCompletos=_slicedToArray(_sIC,2)[0],setShowImprimirCompletos=_slicedToArray(_sIC,2)[1];
+  var _sFIC=useState({obra:'',de:'',ate:''}),filtrosImprimirCompletos=_slicedToArray(_sFIC,2)[0],setFiltrosImprimirCompletos=_slicedToArray(_sFIC,2)[1];
 
   var statusCores = { rascunho:{bg:'#f0f0f0',c:'#666'}, emitido:{bg:'#E6F1FB',c:'#185FA5'}, recebido:{bg:'#EAF3DE',c:'#3B6D11'}, cancelado:{bg:'#FCEBEB',c:'#A32D2D'} };
   var statusLabel = { rascunho:'Rascunho', emitido:'Emitido', recebido:'Recebido', cancelado:'Cancelado' };
@@ -788,7 +795,9 @@ function TelaPedidos(_ref_tp) {
           /*#__PURE__*/React.createElement('div', { style:{fontSize:9,opacity:.85,marginTop:2} }, 'Controle completo \u00B7 Por obra \u00B7 Por per\u00EDodo \u00B7 Por insumo')
         ),
         /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,alignItems:'center'} },
-          /*#__PURE__*/React.createElement('button', { onClick:function(){ setRelFiltros({obra:[],de:'',ate:'',insumo:[],status:[]}); setShowRelModal(true); }, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, 'Relatorio PDF'), /*#__PURE__*/React.createElement('button', { onClick:onRefresh, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, '\uD83D\uDD04 Atualizar'),
+          /*#__PURE__*/React.createElement('button', { onClick:function(){ setRelFiltros({obra:[],de:'',ate:'',insumo:[],status:[]}); setShowRelModal(true); }, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, 'Relatorio PDF'),
+          /*#__PURE__*/React.createElement('button', { onClick:function(){ setFiltrosImprimirCompletos({obra:'',de:'',ate:''}); setShowImprimirCompletos(true); }, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, '\uD83D\uDDA8\uFE0F Imprimir Pedidos Completos'),
+          /*#__PURE__*/React.createElement('button', { onClick:onRefresh, style:{background:'rgba(255,255,255,.2)',border:'none',color:'#fff',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer'} }, '\uD83D\uDD04 Atualizar'),
           /*#__PURE__*/React.createElement('span', { onClick:onClose, style:{cursor:'pointer',fontSize:18,opacity:.8} }, '\u2715')
         )
       ),
@@ -951,6 +960,71 @@ function TelaPedidos(_ref_tp) {
           },
           style:{background:'#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor:'pointer',fontWeight:'bold'}
         },'Gerar Relatorio PDF')
+      )
+    )
+  ),
+  // FIX (pedido do Claudio — imprimir vários pedidos completos): modal novo, mais simples que o
+  // "Relatorio PDF" (só obra + período, obra é seleção única). Reaproveita a mesma lógica de
+  // filtro de data (com a correção de fuso horário) já usada no modal de relatório acima.
+  showImprimirCompletos && /*#__PURE__*/React.createElement('div', {
+    style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',padding:12,overscrollBehavior:'none'}
+  },
+    /*#__PURE__*/React.createElement('div', {
+      style:{background:'#fff',borderRadius:8,overflow:'hidden',width:'100%',maxWidth:460,boxShadow:'0 8px 32px rgba(0,0,0,0.3)',maxHeight:'90vh',display:'flex',flexDirection:'column'}
+    },
+      /*#__PURE__*/React.createElement('div', { style:{background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0} },
+        /*#__PURE__*/React.createElement('div', null,
+          /*#__PURE__*/React.createElement('div', { style:{fontWeight:'bold',fontSize:13} }, '\uD83D\uDDA8\uFE0F IMPRIMIR PEDIDOS COMPLETOS'),
+          /*#__PURE__*/React.createElement('div', { style:{fontSize:9,opacity:.85,marginTop:2} }, 'Cada pedido sai por inteiro, um atr\u00e1s do outro')
+        ),
+        /*#__PURE__*/React.createElement('span', { onClick:function(){ setShowImprimirCompletos(false); }, style:{cursor:'pointer',fontSize:18,opacity:.8} }, 'X')
+      ),
+      /*#__PURE__*/React.createElement('div', { style:{padding:16,display:'flex',flexDirection:'column',gap:12,overflowY:'auto',flex:1,overscrollBehavior:'contain'} },
+        /*#__PURE__*/React.createElement('div', { style:{background:'#f0eaff',border:'1px solid #d4b8ff',borderRadius:6,padding:'8px 10px',fontSize:10,color:'#5b21b6'} }, '\uD83D\uDCA1 N\u00e3o preencher nenhum campo abaixo = todos os pedidos do sistema entram.'),
+        /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+          /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Obra (opcional)'),
+          /*#__PURE__*/React.createElement('select', {
+            value: filtrosImprimirCompletos.obra,
+            onChange: function(e){ setFiltrosImprimirCompletos(function(p){ return Object.assign({},p,{obra:e.target.value}); }); },
+            style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:11,width:'100%',minHeight:40}
+          },
+            /*#__PURE__*/React.createElement('option', {value:''}, 'Todas as obras'),
+            obrasComPedido.map(function(o){ return /*#__PURE__*/React.createElement('option', {key:o, value:o}, o); })
+          )
+        ),
+        /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8} },
+          /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+            /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Data inicial (opcional)'),
+            /*#__PURE__*/React.createElement('input', { type:'date',value:filtrosImprimirCompletos.de||'', onChange:function(e){ setFiltrosImprimirCompletos(function(p){ return Object.assign({},p,{de:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:11,width:'100%',minHeight:40} })
+          ),
+          /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:4} },
+            /*#__PURE__*/React.createElement('label', { style:{fontSize:9,color:'#5b21b6',textTransform:'uppercase',fontWeight:'bold'} }, 'Data final (opcional)'),
+            /*#__PURE__*/React.createElement('input', { type:'date',value:filtrosImprimirCompletos.ate||'', onChange:function(e){ setFiltrosImprimirCompletos(function(p){ return Object.assign({},p,{ate:e.target.value}); }); }, style:{padding:'8px 10px',border:'1px solid #d4b8ff',borderRadius:5,fontSize:11,width:'100%',minHeight:40} })
+          )
+        )
+      ),
+      /*#__PURE__*/React.createElement('div', { style:{padding:'12px 16px',borderTop:'1px solid #eee',display:'flex',gap:8,justifyContent:'flex-end',flexShrink:0} },
+        /*#__PURE__*/React.createElement('button', { onClick:function(){ setShowImprimirCompletos(false); }, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} },'Cancelar'),
+        /*#__PURE__*/React.createElement('button', {
+          onClick:function(){
+            var ped=(pedidos||[]).filter(function(po){
+              if(filtrosImprimirCompletos.obra && po.obra !== filtrosImprimirCompletos.obra) return false;
+              if(filtrosImprimirCompletos.de||filtrosImprimirCompletos.ate){
+                // Mesma corre\u00e7\u00e3o de fuso hor\u00e1rio j\u00e1 usada no filtro de "Relatorio PDF" acima
+                var dataBrutaPO = po.data_emissao||po.criado_em||'';
+                var dt=new Date(dataBrutaPO.length===10 ? dataBrutaPO+'T12:00:00' : dataBrutaPO);
+                if(isNaN(dt.getTime())) return false;
+                if(filtrosImprimirCompletos.de && dt<new Date(filtrosImprimirCompletos.de+'T00:00:00')) return false;
+                if(filtrosImprimirCompletos.ate && dt>new Date(filtrosImprimirCompletos.ate+'T23:59:59')) return false;
+              }
+              return true;
+            });
+            setShowImprimirCompletos(false);
+            logEventoDiag("IMPRESS\u00c3O DE PEDIDOS COMPLETOS: " + ped.length + " pedido(s)" + (filtrosImprimirCompletos.obra ? " \u2014 obra: " + filtrosImprimirCompletos.obra : ""));
+            abrirPDF(buildRelatorioPedidosCompletosPDF(ped, filtrosImprimirCompletos));
+          },
+          style:{background:'#0e7a3f',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor:'pointer',fontWeight:'bold'}
+        },'Gerar PDF')
       )
     )
   )
