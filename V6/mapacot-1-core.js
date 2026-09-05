@@ -163,11 +163,106 @@ window.abrirDiagnosticoMapacot = function () {
     + '</div>'
     + '<div id="diagHistorico" style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dde;border-radius:8px;padding:8px;margin-bottom:10px;min-height:20px;max-height:260px;overflow:auto;">\u2014</div>'
     + '</div>'
+    + '<div style="border-top:1px solid #eee;margin:10px 0;padding-top:10px;">'
+    + '<b style="font-size:13px;color:#b45309;">\uD83D\uDD27 REPARAR MAPA COPIADO (ID compartilhado)</b>'
+    + '<div style="font-size:10px;color:#666;margin:6px 0;">Use isso s\u00f3 se um mapa copiado ANTES da corre\u00e7\u00e3o de hoje estiver mostrando "j\u00e1 pedida" de um pedido que n\u00e3o \u00e9 dele. Corrige s\u00f3 o mapa informado abaixo \u2014 n\u00e3o mexe em nenhum pedido nem em outros mapas.</div>'
+    + '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">'
+    + '<span>N\u00famero do mapa (MP N\u00ba):</span>'
+    + '<input type="number" id="diagRepararNumero" style="width:80px;padding:5px;border:1px solid #ccc;border-radius:5px;">'
+    + '<button id="diagRepararVerificar" style="border:none;background:#b45309;color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:bold;">1) VERIFICAR</button>'
+    + '</div>'
+    + '<div id="diagRepararPreview" style="white-space:pre-wrap;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px;margin-bottom:8px;min-height:20px;">\u2014</div>'
+    + '<button id="diagRepararConfirmar" disabled style="border:none;background:#9ca3af;color:#fff;border-radius:6px;padding:9px 12px;cursor:not-allowed;font-weight:bold;width:100%;">2) CONFIRMAR CORRE\u00c7\u00c3O (n\u00e3o pode ser desfeito)</button>'
+    + '</div>'
     + '<div style="margin-bottom:4px;"><b>Eventos desta sess\u00e3o (mais recentes primeiro):</b></div>'
     + '<div style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dde;border-radius:8px;padding:8px;">' + (window.__mapacotLog.length ? window.__mapacotLog.slice().reverse().join("\n") : "(nenhum evento ainda)") + '</div>';
   ov.appendChild(box);
   document.body.appendChild(ov);
   document.getElementById("diagFechar").onclick = function () { ov.remove(); };
+  // ─── Reparar mapa copiado com ID compartilhado (ferramenta manual, uso único por mapa) ───
+  var _repararMapaAlvo = null;
+  document.getElementById("diagRepararVerificar").onclick = function () {
+    var numero = Number(document.getElementById("diagRepararNumero").value);
+    var preview = document.getElementById("diagRepararPreview");
+    var btnConfirmar = document.getElementById("diagRepararConfirmar");
+    btnConfirmar.disabled = true;
+    btnConfirmar.style.background = "#9ca3af";
+    btnConfirmar.style.cursor = "not-allowed";
+    _repararMapaAlvo = null;
+    if (!numero) { preview.textContent = "Digite um número de mapa válido."; return; }
+    preview.textContent = "Buscando mapa " + numero + " no servidor...";
+    sbGetMapas().then(function (mapas) {
+      var candidatos = (mapas || []).filter(function (m) { return Number(m.numero) === numero; });
+      if (candidatos.length === 0) { preview.textContent = "Nenhum mapa encontrado com o número " + numero + "."; return; }
+      if (candidatos.length > 1) { preview.textContent = "⚠ Encontrei " + candidatos.length + " mapas com esse número — não é seguro prosseguir automaticamente. Avise o suporte antes de continuar."; return; }
+      var mapa = candidatos[0];
+      var resumoItens = (mapa.itens || []).map(function (it, i) {
+        return "  " + (i + 1) + ". " + (it.descricao || "(sem descrição)") + (it.detalhe ? " (" + it.detalhe + ")" : "") + " — qt: " + (it.qt || 0) + " " + (it.unid || "");
+      }).join("\n");
+      preview.textContent = "Mapa encontrado:\nObra: " + (mapa.obra || "—") + "\nMP Nº: " + mapa.numero + (mapa.duplicadoDe != null ? " (cópia do MP Nº " + mapa.duplicadoDe + ")" : "") + "\nItens (" + (mapa.itens || []).length + "):\n" + resumoItens
+        + "\n\nAo confirmar: cada item acima recebe uma identidade interna nova. Os preços, fornecedores e quantidades continuam exatamente os mesmos — só o vínculo escondido com pedidos de OUTRO mapa é desfeito. Pedidos que pertencem de verdade a este mapa " + numero + " não existem ainda, então nada se perde.";
+      _repararMapaAlvo = mapa;
+      btnConfirmar.disabled = false;
+      btnConfirmar.style.background = "#c0392b";
+      btnConfirmar.style.cursor = "pointer";
+    }).catch(function (e) {
+      preview.textContent = "Erro ao buscar: " + (e && e.message ? e.message : "falha de conexão. Tente novamente.");
+    });
+  };
+  document.getElementById("diagRepararConfirmar").onclick = function () {
+    if (!_repararMapaAlvo) return;
+    if (!window.confirm("Confirma a correção do mapa " + _repararMapaAlvo.numero + "? Essa ação não pode ser desfeita.")) return;
+    var preview = document.getElementById("diagRepararPreview");
+    var btnConfirmar = document.getElementById("diagRepararConfirmar");
+    var mapa = _repararMapaAlvo;
+    var idAntigoParaNovo = {};
+    (mapa.itens || []).forEach(function (it) {
+      var idAntigo = it.id;
+      var idNovo = uid();
+      it.id = idNovo;
+      idAntigoParaNovo[idAntigo] = idNovo;
+    });
+    function remapChaves(obj) {
+      if (!obj) return obj;
+      var novo = {};
+      Object.keys(obj).forEach(function (chave) {
+        var idAntigoAchado = Object.keys(idAntigoParaNovo).find(function (idA) { return chave.indexOf(idA + "_") === 0; });
+        novo[idAntigoAchado ? (idAntigoParaNovo[idAntigoAchado] + chave.slice(idAntigoAchado.length)) : chave] = obj[chave];
+      });
+      return novo;
+    }
+    mapa.precos = remapChaves(mapa.precos);
+    mapa.detalhes = remapChaves(mapa.detalhes);
+    mapa.precosBase = remapChaves(mapa.precosBase);
+    mapa.percentuais = remapChaves(mapa.percentuais);
+    preview.textContent = "Salvando mapa corrigido...";
+    btnConfirmar.disabled = true;
+    btnConfirmar.style.cursor = "not-allowed";
+    sbSaveMapa(mapa).then(function () {
+      logEventoDiag("REPARO MANUAL: mapa " + mapa.numero + " recebeu IDs novos (ferramenta de diagnóstico)");
+      preview.textContent = "Mapa salvo. Verificando associações de orçamento...";
+      return sbCarregarAssociacoes().then(function (todasAssocs) {
+        var mudou = false;
+        var novasAssocs = (todasAssocs || []).map(function (a) {
+          if (a.mapaId === mapa.id && idAntigoParaNovo[a.itemMapaId]) {
+            mudou = true;
+            return Object.assign({}, a, { itemMapaId: idAntigoParaNovo[a.itemMapaId] });
+          }
+          return a;
+        });
+        if (!mudou) return;
+        return sbSaveAssociacoes(novasAssocs);
+      });
+    }).then(function () {
+      preview.textContent = "✔ Mapa " + mapa.numero + " corrigido com sucesso. Recarregue a página (F5) para ver o resultado.";
+      _repararMapaAlvo = null;
+    }).catch(function (e) {
+      preview.textContent = "✖ ERRO ao corrigir: " + (e && e.message ? e.message : "falha de conexão") + "\n\nTente novamente ou avise o suporte antes de repetir.";
+      btnConfirmar.disabled = false;
+      btnConfirmar.style.background = "#c0392b";
+      btnConfirmar.style.cursor = "pointer";
+    });
+  };
   document.getElementById("diagVerificar").onclick = function () {
     var alvo = document.getElementById("diagServidor");
     alvo.textContent = "Buscando no servidor...";
