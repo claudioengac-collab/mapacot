@@ -466,10 +466,14 @@ function CadastrosModal(_ref11) {
       /*#__PURE__*/React.createElement("input", {
         type: "text",
         value: vendTextoEditando,
-        onChange: function(e){ setVendTextoEditando(e.target.value.slice(0, 200)); },
+        // FIX (pedido do Claudio — consistência com o resto do sistema): todo campo de dado
+        // estruturado (nome, identificador) fica em CAIXA ALTA, igual ao nome de fornecedor,
+        // nome de item, etc. Diferente do campo de Observação (texto livre, mantém como
+        // digitado), Vendedor é um DADO — segue a mesma regra já aplicada em todo o sistema.
+        onChange: function(e){ setVendTextoEditando(e.target.value.toUpperCase().slice(0, 200)); },
         maxLength: 200,
         placeholder: "NOME DO VENDEDOR DESTE FORNECEDOR...",
-        style: { width: "100%", border: "1px solid #b0c8f0", borderRadius: 6, padding: "8px 10px", fontSize: 12.5, fontFamily: "inherit", textTransform: "none", outline: "none" }
+        style: { width: "100%", border: "1px solid #b0c8f0", borderRadius: 6, padding: "8px 10px", fontSize: 12.5, fontFamily: "inherit", textTransform: "uppercase", outline: "none" }
       }),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "#888" } },
         "Preenche automaticamente o campo \"Contato\" quando este fornecedor \xe9 usado num mapa novo — n\xe3o altera mapas j\xe1 existentes."
@@ -510,7 +514,10 @@ function CadastrosModal(_ref11) {
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6 } },
         /*#__PURE__*/React.createElement("input", {
           value: pagNovoTexto,
-          onChange: function(e) { setPagNovoTexto(e.target.value); },
+          // FIX (mesma correção do campo Vendedor — consistência com o resto do sistema):
+          // formas de pagamento são um DADO curto (Pix, Boleto, 30 dias...), não texto livre —
+          // seguem a mesma regra de caixa alta já aplicada em todo o sistema.
+          onChange: function(e) { setPagNovoTexto(e.target.value.toUpperCase()); },
           onKeyDown: function(e) {
             if (e.key === "Enter" && pagNovoTexto.trim()) {
               setPagListaEditando(pagListaEditando.concat([pagNovoTexto.trim()]));
@@ -518,7 +525,7 @@ function CadastrosModal(_ref11) {
             }
           },
           placeholder: "EX: PIX, BOLETO, CHEQUE PR\xc9...",
-          style: { flex: 1, border: "1px solid #ccc", borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: "inherit", textTransform: "none", outline: "none" }
+          style: { flex: 1, border: "1px solid #ccc", borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: "inherit", textTransform: "uppercase", outline: "none" }
         }),
         /*#__PURE__*/React.createElement("button", {
           onClick: function() {
