@@ -781,6 +781,11 @@ var _useState27 = useState(init),
     label: "VALOR LÍQUIDO",
     computed: true
   }, {
+    key: "condicoesPagamento",
+    label: "CONDIÇÕES DE PAGAMENTO",
+    maxLen: 200,
+    formaPagamento: true // flag especial: mostra sugestões vindas do cadastro do fornecedor (ver loop de renderização abaixo)
+  }, {
     key: "contato",
     label: "CONTATO",
     maxLen: 1000
@@ -1130,6 +1135,19 @@ var _useState27 = useState(init),
           if (fn) {
             var obsSalva = (cadastros.fornecedorObs || {})[normalize(fn)];
             if (obsSalva) setObsPopupFornecedor({ nome: fn, texto: obsSalva });
+          }
+          // FIX (pedido do Claudio): ao escolher um fornecedor com vendedor cadastrado,
+          // preenche o campo "Contato" automaticamente — mas só se ele ainda estiver VAZIO
+          // neste mapa (nunca sobrescreve algo que o usuário já digitou manualmente aqui).
+          // O valor é COPIADO para dentro do mapa neste momento (não fica "ligado" ao
+          // cadastro) — editar o vendedor no cadastro depois não muda mapas já preenchidos,
+          // só passa a valer para o próximo fornecedor que for preenchido a partir dali.
+          if (fn) {
+            var vendedorCadastrado = (cadastros.fornecedorVendedor || {})[normalize(fn)];
+            var contatoAtualNesteMapa = (rodape[f.id] || {}).contato;
+            if (vendedorCadastrado && !contatoAtualNesteMapa) {
+              setRodape(f.id, "contato", vendedorCadastrado);
+            }
           }
           // FIX (pedido do Claudio — nome cortado): ao terminar de editar (Enter, Tab, ou clicar
           // fora), volta pro modo "texto com nome completo" — sem essa linha, o campo de edição
@@ -1776,12 +1794,18 @@ var _useState27 = useState(init),
           onChange: function onChange(v) {
             return setRodape(f.id, row.key, row.money ? v.replace(/[^0-9.,]/g, "") : v);
           },
-          placeholder: row.money ? "0,00" : "—",
+          placeholder: row.money ? "0,00" : (row.formaPagamento ? "— TOQUE PARA ESCOLHER —" : "—"),
           align: row.money ? "right" : "left",
           maxLen: row.maxLen,
           numericOnly: row.money,
           moneyDisplay: row.money,
           wrapText: row.money ? false : true,
+          // FIX (pedido do Claudio): a linha "Condições de pagamento" mostra as opções
+          // cadastradas para ESTE fornecedor (Banco de Cadastros > fornecedor > formas de
+          // pagamento) como sugestões — igual ao autocomplete já usado em outras partes do
+          // sistema. Continua editável livremente se o fornecedor não tiver nada cadastrado.
+          suggestions: row.formaPagamento ? ((cadastros.fornecedorFormasPagamento || {})[normalize(f.nome)] || []) : undefined,
+          showOnFocus: row.formaPagamento ? true : undefined,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4"
           })

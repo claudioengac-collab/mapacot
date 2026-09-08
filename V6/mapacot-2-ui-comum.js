@@ -287,6 +287,11 @@ function EC(_ref0) {
     onDetailChange = _ref0.onDetailChange,
     wrapText = _ref0.wrapText,
     guardEdit = _ref0.guardEdit,
+    // FIX (pedido do Claudio — Condições de Pagamento): permite que a lista de sugestões
+    // apareça inteira ao clicar no campo (mesmo vazio), como um "select" — sem essa prop,
+    // o comportamento padrão continua igual a antes (só filtra enquanto digita).
+    _ref0$showOnFocus = _ref0.showOnFocus,
+    showOnFocus = _ref0$showOnFocus === void 0 ? false : _ref0$showOnFocus,
     moneyDisplay = _ref0.moneyDisplay;
   // FIX (pedido do Claudio): campos de dinheiro mostravam o valor "cru" digitado (ex: 1000,00),
   // sem separador de milhar, mesmo fora do modo de edição — diferente do PDF, que já usava
@@ -346,6 +351,7 @@ function EC(_ref0) {
     strictMatch: strictMatch,
     maxLen: maxLen,
     autoFocus: true,
+    showOnFocus: showOnFocus,
     inputStyle: {
       border: "2px solid #f0a500",
       background: "#fffbee",

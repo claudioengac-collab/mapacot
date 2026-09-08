@@ -7,6 +7,8 @@ function CadastrosModal(_ref11) {
     onRemove = _ref11.onRemove,
     onEdit = _ref11.onEdit,
     onSetObs = _ref11.onSetObs || function(){},
+    onSetVendedor = _ref11.onSetVendedor || function(){},
+    onSetFormasPagamento = _ref11.onSetFormasPagamento || function(){},
     onSetSinonimos = _ref11.onSetSinonimos || function(){},
     orcamentos = _ref11.orcamentos || {},
     onImportarOrcamento = _ref11.onImportarOrcamento || null,
@@ -20,6 +22,13 @@ function CadastrosModal(_ref11) {
   // FIX: estado local para o campo livre de observação por fornecedor (até 5000 caracteres)
   var _useStateObs = useState(null), obsAbertaPara = _slicedToArray(_useStateObs, 2)[0], setObsAbertaPara = _slicedToArray(_useStateObs, 2)[1];
   var _useStateObsTxt = useState(""), obsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[0], setObsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[1];
+  // Vendedor cadastrado por fornecedor — MESMO padrão (buffer local) da observação acima.
+  var _useStateVend = useState(null), vendAbertoPara = _slicedToArray(_useStateVend, 2)[0], setVendAbertoPara = _slicedToArray(_useStateVend, 2)[1];
+  var _useStateVendTxt = useState(""), vendTextoEditando = _slicedToArray(_useStateVendTxt, 2)[0], setVendTextoEditando = _slicedToArray(_useStateVendTxt, 2)[1];
+  // Formas de pagamento por fornecedor — MESMO padrão (tags + buffer local) dos sinônimos abaixo.
+  var _useStatePag = useState(null), pagAbertoPara = _slicedToArray(_useStatePag, 2)[0], setPagAbertoPara = _slicedToArray(_useStatePag, 2)[1];
+  var _useStatePagLista = useState([]), pagListaEditando = _slicedToArray(_useStatePagLista, 2)[0], setPagListaEditando = _slicedToArray(_useStatePagLista, 2)[1];
+  var _useStatePagNovo = useState(""), pagNovoTexto = _slicedToArray(_useStatePagNovo, 2)[0], setPagNovoTexto = _slicedToArray(_useStatePagNovo, 2)[1];
   // FIX: estado local para sinônimos por insumo — mesmo padrão da observação do fornecedor
   // acima (buffer local, só salva de verdade quando clica em SALVAR).
   var _useStateSin = useState(null), sinAbertoPara = _slicedToArray(_useStateSin, 2)[0], setSinAbertoPara = _slicedToArray(_useStateSin, 2)[1];
@@ -377,6 +386,38 @@ function CadastrosModal(_ref11) {
         cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center"
       }
     }, "\ud83d\udcdd"),
+    tab === "fornecedores" && /*#__PURE__*/React.createElement("button", {
+      onClick: function() {
+        if (vendAbertoPara === item) { setVendAbertoPara(null); return; }
+        setVendAbertoPara(item);
+        setVendTextoEditando((cadastros.fornecedorVendedor || {})[normalize(item)] || "");
+      },
+      title: (cadastros.fornecedorVendedor || {})[normalize(item)] ? "VENDEDOR: " + (cadastros.fornecedorVendedor || {})[normalize(item)] + " — CLIQUE PARA EDITAR" : "CADASTRAR VENDEDOR",
+      style: {
+        background: (cadastros.fornecedorVendedor || {})[normalize(item)] ? "#e6f0ff" : "#f5f5f5",
+        border: "none", borderRadius: 5, padding: "4px 7px",
+        color: (cadastros.fornecedorVendedor || {})[normalize(item)] ? "#1a56db" : "#999",
+        cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center"
+      }
+    }, "\ud83e\uddd1"),
+    tab === "fornecedores" && (function() {
+      var qtdPag = ((cadastros.fornecedorFormasPagamento || {})[normalize(item)] || []).length;
+      return /*#__PURE__*/React.createElement("button", {
+        onClick: function() {
+          if (pagAbertoPara === item) { setPagAbertoPara(null); return; }
+          setPagAbertoPara(item);
+          setPagListaEditando(((cadastros.fornecedorFormasPagamento || {})[normalize(item)] || []).slice());
+          setPagNovoTexto("");
+        },
+        title: qtdPag ? "TEM " + qtdPag + " FORMA(S) DE PAGAMENTO — CLIQUE PARA VER/EDITAR" : "CADASTRAR FORMAS DE PAGAMENTO",
+        style: {
+          background: qtdPag ? "#e6f4ea" : "#f5f5f5",
+          border: "none", borderRadius: 5, padding: "4px 7px",
+          color: qtdPag ? "#186818" : "#999",
+          cursor: "pointer", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 3, whiteSpace: "nowrap"
+        }
+      }, "\ud83d\udcb3", qtdPag ? " " + qtdPag : "");
+    })(),
     tab === "insumos" && (function() {
       var qtdSin = ((cadastros.insumoSinonimos || {})[normalize(item)] || []).length;
       return /*#__PURE__*/React.createElement("button", {
@@ -417,6 +458,86 @@ function CadastrosModal(_ref11) {
             style: { background: "#e8f5e9", border: "none", borderRadius: 5, padding: "5px 12px", color: "#2e7d32", cursor: "pointer", fontWeight: 700, fontSize: 11 }
           }, "SALVAR OBSERVA\xc7\xc3O")
         )
+      )
+    ),
+    vendAbertoPara === item && /*#__PURE__*/React.createElement("div", {
+      style: { padding: "10px 14px 14px", background: "#f0f6ff", borderBottom: i < lista.length - 1 ? "1px solid #f0f2f6" : undefined, display: "flex", flexDirection: "column", gap: 6 }
+    },
+      /*#__PURE__*/React.createElement("input", {
+        type: "text",
+        value: vendTextoEditando,
+        onChange: function(e){ setVendTextoEditando(e.target.value.slice(0, 200)); },
+        maxLength: 200,
+        placeholder: "NOME DO VENDEDOR DESTE FORNECEDOR...",
+        style: { width: "100%", border: "1px solid #b0c8f0", borderRadius: 6, padding: "8px 10px", fontSize: 12.5, fontFamily: "inherit", textTransform: "none", outline: "none" }
+      }),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "#888" } },
+        "Preenche automaticamente o campo \"Contato\" quando este fornecedor \xe9 usado num mapa novo — n\xe3o altera mapas j\xe1 existentes."
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", gap: 6 } },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function(){ setVendAbertoPara(null); },
+          style: { background: "#f5f5f5", border: "none", borderRadius: 5, padding: "5px 12px", color: "#888", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+        }, "CANCELAR"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function(){ onSetVendedor(item, vendTextoEditando); setVendAbertoPara(null); },
+          style: { background: "#e8f5e9", border: "none", borderRadius: 5, padding: "5px 12px", color: "#2e7d32", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+        }, "SALVAR VENDEDOR")
+      )
+    ),
+    pagAbertoPara === item && /*#__PURE__*/React.createElement("div", {
+      style: { padding: "10px 14px 14px", background: "#f0faf3", borderBottom: i < lista.length - 1 ? "1px solid #f0f2f6" : undefined, display: "flex", flexDirection: "column", gap: 8 }
+    },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 10.5, color: "#888" } },
+        "Formas de pagamento que este fornecedor aceita. Aparecem para escolher no rodap\xe9 do mapa de cota\xe7\xe3o."
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } },
+        pagListaEditando.length === 0
+          ? /*#__PURE__*/React.createElement("span", { style: { fontSize: 11, color: "#bbb" } }, "Nenhuma forma de pagamento cadastrada ainda.")
+          : pagListaEditando.map(function(pg, pi) {
+              return /*#__PURE__*/React.createElement("span", {
+                key: pi,
+                style: { background: "#fff", border: "1px solid #d0e0d0", borderRadius: 20, padding: "5px 8px 5px 12px", fontSize: 11.5, display: "flex", alignItems: "center", gap: 6 }
+              },
+                pg,
+                /*#__PURE__*/React.createElement("button", {
+                  onClick: function() { setPagListaEditando(pagListaEditando.filter(function(_, k) { return k !== pi; })); },
+                  style: { border: "none", background: "#eee", borderRadius: "50%", width: 16, height: 16, fontSize: 9, cursor: "pointer", lineHeight: 1, color: "#888" }
+                }, "\u2715")
+              );
+            })
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6 } },
+        /*#__PURE__*/React.createElement("input", {
+          value: pagNovoTexto,
+          onChange: function(e) { setPagNovoTexto(e.target.value); },
+          onKeyDown: function(e) {
+            if (e.key === "Enter" && pagNovoTexto.trim()) {
+              setPagListaEditando(pagListaEditando.concat([pagNovoTexto.trim()]));
+              setPagNovoTexto("");
+            }
+          },
+          placeholder: "EX: PIX, BOLETO, CHEQUE PR\xc9...",
+          style: { flex: 1, border: "1px solid #ccc", borderRadius: 6, padding: "6px 9px", fontSize: 12, fontFamily: "inherit", textTransform: "none", outline: "none" }
+        }),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function() {
+            if (!pagNovoTexto.trim()) return;
+            setPagListaEditando(pagListaEditando.concat([pagNovoTexto.trim()]));
+            setPagNovoTexto("");
+          },
+          style: { background: "#f5a623", border: "none", borderRadius: 6, padding: "6px 12px", color: "#fff", fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap" }
+        }, "+ ADICIONAR")
+      ),
+      /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", gap: 6 } },
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function(){ setPagAbertoPara(null); },
+          style: { background: "#f5f5f5", border: "none", borderRadius: 5, padding: "5px 12px", color: "#888", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+        }, "CANCELAR"),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: function(){ onSetFormasPagamento(item, pagListaEditando); setPagAbertoPara(null); },
+          style: { background: "#e8f5e9", border: "none", borderRadius: 5, padding: "5px 12px", color: "#2e7d32", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+        }, "SALVAR FORMAS DE PAGAMENTO")
       )
     ),
     sinAbertoPara === item && /*#__PURE__*/React.createElement("div", {

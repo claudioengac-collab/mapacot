@@ -543,10 +543,12 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
     obras: c.obras || [],
     fornecedores: c.fornecedores || [],
     unidades: c.unidades || [],
-    fornecedorObs: c.fornecedorObs || {} // FIX: observações livres por fornecedor — incluído
+    fornecedorObs: c.fornecedorObs || {}, // FIX: observações livres por fornecedor — incluído
     // explicitamente aqui porque esta função só salva os campos citados nesta lista; um
     // campo novo que não apareça aqui seria descartado silenciosamente ao salvar (mesmo
     // tipo de bug já corrigido antes no orçamento).
+    fornecedorVendedor: c.fornecedorVendedor || {}, // vendedor cadastrado por fornecedor (mesmo padrão de fornecedorObs)
+    fornecedorFormasPagamento: c.fornecedorFormasPagamento || {} // lista de formas de pagamento aceitas por fornecedor
   };
   return verificarVersaoAntesDeSalvar("global", c._versaoServidor).then(function(){
     var novaVersao = new Date().toISOString().replace("Z", "+00:00");

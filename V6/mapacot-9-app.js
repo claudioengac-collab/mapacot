@@ -605,9 +605,11 @@ function App() {
                   insumoSinonimos: {}, // FIX: placeholder — preenchido de verdade junto com a lista de insumos, no carregamento em segundo plano (case 8)
                   unidades: cad.unidades || DEFAULT_UNIDADES,
                   fornecedores: cad.fornecedores || [],
-                  fornecedorObs: cad.fornecedorObs || {} // FIX: mesmo bug de sbSaveCadastros — o
+                  fornecedorObs: cad.fornecedorObs || {}, // FIX: mesmo bug de sbSaveCadastros — o
                   // carregamento também reconstruía o objeto só com campos citados aqui,
                   // descartando fornecedorObs vindo do servidor
+                  fornecedorVendedor: cad.fornecedorVendedor || {}, // vendedor cadastrado por fornecedor
+                  fornecedorFormasPagamento: cad.fornecedorFormasPagamento || {} // formas de pagamento por fornecedor
                 };
               });
               versaoCadastrosRef.current = cad._versaoServidor; // FIX: guarda a versão no ref (ver declaração)
@@ -767,6 +769,18 @@ function App() {
         delete novoObs[normalize(valor)];
         updated.fornecedorObs = novoObs;
       }
+      // Mesmo cuidado, agora para o vendedor cadastrado do fornecedor excluído.
+      if (tipo === 'fornecedores' && prev.fornecedorVendedor && prev.fornecedorVendedor[normalize(valor)]) {
+        var novoVend = _objectSpread({}, prev.fornecedorVendedor);
+        delete novoVend[normalize(valor)];
+        updated.fornecedorVendedor = novoVend;
+      }
+      // Mesmo cuidado, agora para as formas de pagamento cadastradas do fornecedor excluído.
+      if (tipo === 'fornecedores' && prev.fornecedorFormasPagamento && prev.fornecedorFormasPagamento[normalize(valor)]) {
+        var novoPag = _objectSpread({}, prev.fornecedorFormasPagamento);
+        delete novoPag[normalize(valor)];
+        updated.fornecedorFormasPagamento = novoPag;
+      }
       // FIX: mesmo cuidado, agora para sinônimos — ao excluir um INSUMO, remove também os
       // sinônimos salvos dele, senão ficam órfãos no banco (nenhum insumo visível pra editá-los).
       if (tipo === 'insumos' && prev.insumoSinonimos && prev.insumoSinonimos[normalize(valor)]) {
@@ -806,6 +820,20 @@ function App() {
         novoObs[vNew] = novoObs[vOld];
         delete novoObs[vOld];
         updated.fornecedorObs = novoObs;
+      }
+      // Mesmo cuidado, agora para o vendedor cadastrado — migra do nome antigo para o novo.
+      if (tipo === 'fornecedores' && prev.fornecedorVendedor && prev.fornecedorVendedor[vOld]) {
+        var novoVend = _objectSpread({}, prev.fornecedorVendedor);
+        novoVend[vNew] = novoVend[vOld];
+        delete novoVend[vOld];
+        updated.fornecedorVendedor = novoVend;
+      }
+      // Mesmo cuidado, agora para as formas de pagamento — migra do nome antigo para o novo.
+      if (tipo === 'fornecedores' && prev.fornecedorFormasPagamento && prev.fornecedorFormasPagamento[vOld]) {
+        var novoPag = _objectSpread({}, prev.fornecedorFormasPagamento);
+        novoPag[vNew] = novoPag[vOld];
+        delete novoPag[vOld];
+        updated.fornecedorFormasPagamento = novoPag;
       }
       // FIX: mesmo cuidado, agora para sinônimos — ao renomear um INSUMO, migra os sinônimos
       // salvos do nome antigo para o novo, senão ficariam "presos" no nome antigo, inacessíveis.
@@ -876,6 +904,52 @@ function App() {
       }).catch(function(e){
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar a observação. Verifique sua conexão.');
+      });
+      return updated;
+    });
+  }, []);
+  // Vendedor cadastrado por fornecedor — MESMO padrão de setObsFornecedor acima (texto único,
+  // salvo na linha "global" via sbSaveCadastros). Usado para preencher automaticamente o campo
+  // "Contato" do mapa quando o fornecedor é selecionado (ver mapacot-6-mapa.js).
+  var setVendedorFornecedor = useCallback(function (nomeFornecedor, texto) {
+    var nome = normalize(nomeFornecedor);
+    if (!nome) return;
+    var textoLimitado = String(texto || '').trim().slice(0, 200);
+    setCadastros(function (prev) {
+      var vendAtual = prev.fornecedorVendedor || {};
+      var novoVend = _objectSpread({}, vendAtual);
+      if (textoLimitado) novoVend[nome] = textoLimitado;
+      else delete novoVend[nome]; // texto vazio remove o vendedor, não deixa lixo salvo
+      var updated = _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: novoVend });
+      sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
+        versaoCadastrosRef.current = novaVersao;
+      }).catch(function(e){
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar o vendedor. Verifique sua conexão.');
+      });
+      return updated;
+    });
+  }, []);
+  // Formas de pagamento aceitas por fornecedor — MESMO padrão de lista (tags) de
+  // setSinonimosInsumo, mas salvas na linha "global" via sbSaveCadastros (é um dado do
+  // fornecedor, não do insumo). Recebe a lista COMPLETA (substitui a anterior por inteiro).
+  var setFormasPagamentoFornecedor = useCallback(function (nomeFornecedor, listaFormas) {
+    var nome = normalize(nomeFornecedor);
+    if (!nome) return;
+    var limpas = (listaFormas || [])
+      .map(function (s) { return String(s || '').trim().slice(0, 60); })
+      .filter(function (s) { return s.length > 0; });
+    setCadastros(function (prev) {
+      var pagAtual = prev.fornecedorFormasPagamento || {};
+      var novoPag = _objectSpread({}, pagAtual);
+      if (limpas.length) novoPag[nome] = limpas;
+      else delete novoPag[nome]; // lista vazia remove a entrada, não deixa lixo salvo
+      var updated = _objectSpread(_objectSpread({}, prev), {}, { fornecedorFormasPagamento: novoPag });
+      sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
+        versaoCadastrosRef.current = novaVersao;
+      }).catch(function(e){
+        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar as formas de pagamento. Verifique sua conexão.');
       });
       return updated;
     });
@@ -1366,6 +1440,8 @@ function App() {
     onRemove: removeCadastro,
     onEdit: editCadastro,
     onSetObs: setObsFornecedor,
+    onSetVendedor: setVendedorFornecedor,
+    onSetFormasPagamento: setFormasPagamentoFornecedor,
     onSetSinonimos: setSinonimosInsumo,
     mapas: mapas,
     orcamentos: orcamentos,
