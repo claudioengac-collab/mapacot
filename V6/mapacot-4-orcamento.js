@@ -1,3 +1,5 @@
+// parseNumCelula está definida em mapacot-1-core.js (função utilitária global, compartilhada
+// também por mapacot-8-ia-excel.js — mesmo cenário de ler células de planilha Excel).
 function ModalGerenciarOrcamento(_ref_ger) {
   var open = _ref_ger.open, onClose = _ref_ger.onClose, obra = _ref_ger.obra,
     orcamentoAtual = _ref_ger.orcamentoAtual, associacoes = _ref_ger.associacoes, onSalvar = _ref_ger.onSalvar, mapas = _ref_ger.mapas || [];
@@ -239,8 +241,8 @@ function ModalImportarOrcamento(_ref_orc) {
             codigo: cc>=0 ? String(r[cc]||"").trim() : String(j),
             descricao: desc,
             unidade: cu>=0 ? String(r[cu]||"UN").trim().toUpperCase() : "UN",
-            quantidade: parseFloat(String(r[cq]||"0").replace(",","."))||0,
-            valorUnitario: parseFloat(String(r[cv]||"0").replace(",","."))||0,
+            quantidade: parseNumCelula(r[cq]),
+            valorUnitario: parseNumCelula(r[cv]),
             consumido: 0
           });
         }

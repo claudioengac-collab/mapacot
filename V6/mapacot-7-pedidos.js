@@ -21,7 +21,7 @@ function ModalPedidoStep1(_ref_po1) {
     var posdoItem = (pedidos||[]).filter(function(po){
       return (po.itens||[]).some(function(it){ return it.item_id===item.id; }) && po.status!=='cancelado';
     });
-    var qtTotal = Number(item.qt)||0;
+    var qtTotal = parseNumBR(item.qt)||0;
     var qtPedida = 0;
     var qtAtendida = 0;
     posdoItem.forEach(function(po){
@@ -147,7 +147,7 @@ function ModalPedidoStep1(_ref_po1) {
                 grupo.itens.map(function(item){
                   var ps = poStatus[item.id]||{};
                   var sel = itensSelecionados.indexOf(item.id)>=0;
-                  var qtPend = Math.max(0,(Number(item.qt)||0) - (ps.qtPedida||0));
+                  var qtPend = Math.max(0,(parseNumBR(item.qt)||0) - (ps.qtPedida||0));
                   return /*#__PURE__*/React.createElement('tr', { key:item.id, style:{background:sel?'#f5f0ff':'transparent'} },
                     /*#__PURE__*/React.createElement('td', {
                       style:{textAlign:'center',padding:'8px 4px',borderBottom:'1px solid #eee'}
@@ -294,7 +294,7 @@ function ModalPedidoStep2(_ref_po2) {
   // Calcular poStatus por item
   var poStatus = {};
   (itens||[]).forEach(function(item){
-    var qtTotal = Number(item.qt)||0;
+    var qtTotal = parseNumBR(item.qt)||0;
     var qtPedida = 0;
     var qtAtendida = 0;
     // FIX (mesma causa raiz corrigida em ModalPedidoStep1 e no "cadeado" da tela do mapa —

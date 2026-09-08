@@ -504,8 +504,8 @@ var calcConsumidoGer = function(idx, assocs, mpas, orcItens) {
     var _it=null; var _its=_m.itens||[];
     for(var _k=0;_k<_its.length;_k++){ if(_its[_k].id===_a.itemMapaId){ _it=_its[_k]; break; } }
     if(!_it||!_it.comprado) continue;
-    var _qS=parseFloat(String(_a.qtCompra).replace(",","."))||0;
-    var _qM=parseFloat(String(_it.qt).replace(",","."))||0;
+    var _qS=parseNumBR(_a.qtCompra)||0;
+    var _qM=parseNumBR(_it.qt)||0;
     var _qA=(_qS>0&&_qS<_qM)?_qS:(_qM||_qS);
     total+=_qA*(parseFloat(_a.fator)||1);
   }

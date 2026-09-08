@@ -482,8 +482,8 @@ var calcOrcComConsumo = function(orc, obra, assocs, mpas) {
       var _itm=null; var _its=_m.itens||[];
       for(var _l=0;_l<_its.length;_l++){ if(_its[_l].id===_a.itemMapaId){ _itm=_its[_l]; break; } }
       if(!_itm||!_itm.comprado) continue;
-      var _qS=parseFloat(String(_a.qtCompra).replace(",","."))||0;
-      var _qM=parseFloat(String(_itm.qt).replace(",","."))||0;
+      var _qS=parseNumBR(_a.qtCompra)||0;
+      var _qM=parseNumBR(_itm.qt)||0;
       var _qA=(_qS>0&&_qS<_qM)?_qS:(_qM||_qS);
       _total+=_qA*(parseFloat(_a.fator)||1);
     }

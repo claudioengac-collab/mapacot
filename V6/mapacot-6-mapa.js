@@ -520,7 +520,7 @@ var _useState27 = useState(init),
     return update(function (m) {
       var key = "".concat(iid, "_").concat(fid);
       var base = parseMoney(baseStr);
-      var pct = parseFloat(String(pctStr || "").replace(",", ".")) || 0;
+      var pct = parseNumBR(pctStr || "") || 0;
       // FIX URGENTE (continuação do relato do Claudio — "1,098652" virava "1,10"): quando NÃO
       // há percentual real aplicado (pct === 0), o preço final é simplesmente o preço base, sem
       // nenhum cálculo — nesse caso, preserva a precisão original digitada em vez de forçar
@@ -543,7 +543,7 @@ var _useState27 = useState(init),
       var novoPrecosBase = _objectSpread({}, m.precosBase);
       var novoPercentuais = _objectSpread({}, m.percentuais);
       var novoPrecos = _objectSpread({}, m.precos);
-      var pct = parseFloat(String(pctStr || "").replace(",", ".")) || 0;
+      var pct = parseNumBR(pctStr || "") || 0;
       (itensAtivos || []).forEach(function (item) {
         var key = "".concat(item.id, "_").concat(fid);
         var baseAtual = novoPrecosBase[key] !== undefined ? novoPrecosBase[key] : m.precos[key];
@@ -608,7 +608,7 @@ var _useState27 = useState(init),
     var res = calcResumo(item, mapa.fornecedores, mapa.precos);
     if (res.vlUnit === null) return null;
     var diff = vlo - res.vlUnit;
-    var qt = parseFloat(String(item.qt).replace(",","."))||0;
+    var qt = parseNumBR(item.qt)||0;
     return { diff: diff, pct: (diff/vlo)*100, lucro: diff>=0, total: diff*qt };
   };
   var abrirAssoc = function(item) {
@@ -636,7 +636,7 @@ var _useState27 = useState(init),
       if (!orcItem) return;
       var sel = assocSelecionados[idxStr];
       var fator = parseFloat(sel.fator)||1;
-      var qt = parseFloat(String(sel.qt).replace(",","."))||0;
+      var qt = parseNumBR(sel.qt)||0;
       if (qt <= 0) return;
       novasAssocs.push({
         id: uid(), mapaId: mapa.id, itemMapaId: itemAssociando.id,
@@ -695,7 +695,7 @@ var _useState27 = useState(init),
   // Usa mapa.itens (lista completa) em vez de itensAtivos (filtra ocultos/excluídos)
   var _itensParaAtend = (mapa && mapa.itens)||[];
   _itensParaAtend.forEach(function(item){
-    var qtTotal = Number(item.qt)||0;
+    var qtTotal = parseNumBR(item.qt)||0;
     var qtPedida = 0;
     var pedidosVinculados = [];
     // FIX (mesma causa raiz já corrigida em ModalPedidoStep1 — achado ao testar mais um
@@ -723,7 +723,7 @@ var _useState27 = useState(init),
   var totalBruto = function totalBruto(fid) {
     return itensAtivos.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
-      var qt = parseFloat(String(item.qt).replace(",", "."));
+      var qt = parseNumBR(item.qt);
       return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
     }, 0);
   };
@@ -802,7 +802,7 @@ var _useState27 = useState(init),
      var orcList = orcItens || obraOrcItens;
      var res = calcResumo(item, fornecedoresVisiveis, mapa.precos);
      if (res.vlUnit === null) return null;
-     var qtItem = parseFloat(String(item.qt).replace(",","."))||0;
+     var qtItem = parseNumBR(item.qt)||0;
      if (qtItem <= 0) return null;
      // CORRECAO: usa qtItem x fator (igual ao PDF)
      // CORRECAO 2: busca por CODIGO (igual ao PDF) — mais confiavel que indice
@@ -825,7 +825,7 @@ var _useState27 = useState(init),
        }
        if (!oi) oi = orcList.find(function(it){ return it.codigo===a.orcItemCodigo; });
        if (!oi) return ac;
-       var qtSalva = parseFloat(String(a.qtCompra).replace(",",".")) || 0;
+       var qtSalva = parseNumBR(a.qtCompra) || 0;
        var fator = parseFloat(a.fator) || 1;
        var qtAtual = (qtSalva > 0 && qtSalva < qtItem) ? qtSalva : (qtItem || qtSalva);
        return ac + (parseFloat(oi.valorUnitario||oi.vl_unitario)||0) * qtAtual * fator;
@@ -1198,9 +1198,9 @@ var _useState27 = useState(init),
         onClick: function(){
           var valor = window.prompt("Aplicar quantos % em TODOS os itens de \"" + (f.nome||"este fornecedor") + "\"?\n\n(Só é aplicado nos itens que já têm um preço digitado.)", "");
           if (valor === null) return; // cancelou
-          var pctNum = parseFloat(String(valor).replace(",", "."));
+          var pctNum = parseNumBR(valor);
           if (isNaN(pctNum)) { alert("Digite um número válido."); return; }
-          aplicarPctEmMassa(f.id, valor.replace(",", "."));
+          aplicarPctEmMassa(f.id, valor);
         },
         title: "Aplicar percentual em todos os itens deste fornecedor",
         style: { cursor:"pointer", fontSize:11, userSelect:"none", display:"inline-flex", alignItems:"center", background:"rgba(255,255,255,0.2)", borderRadius:3, padding:"2px 4px", fontWeight:700 }
@@ -1411,7 +1411,7 @@ var _useState27 = useState(init),
                 var aesR = getAssocItens(item.id);
         var assocR = aesR.length > 0 ? aesR[0] : null;
         var res = aesR.length > 0 ? calcResMulti(item, aesR, obraOrcItens) : null;
-        var vloExib = res ? res.vloMedio : (aesR.length > 0 ? (function(){ var tot=0,qtTot=0; aesR.forEach(function(a){ var oi=obraOrcItens[a.orcItemIndex]; if(!oi)return; var fator=parseFloat(a.fator)||1; var qt=parseFloat(String(a.qtCompra).replace(",","."))||0; tot+=(parseFloat(oi.valorUnitario)||0)*fator*qt; qtTot+=qt; }); return qtTot>0?tot/qtTot:null; })() : null);
+        var vloExib = res ? res.vloMedio : (aesR.length > 0 ? (function(){ var tot=0,qtTot=0; aesR.forEach(function(a){ var oi=obraOrcItens[a.orcItemIndex]; if(!oi)return; var fator=parseFloat(a.fator)||1; var qt=parseNumBR(a.qtCompra)||0; tot+=(parseFloat(oi.valorUnitario)||0)*fator*qt; qtTot+=qt; }); return qtTot>0?tot/qtTot:null; })() : null);
         return /*#__PURE__*/React.createElement(React.Fragment, null,
           /*#__PURE__*/React.createElement("td", {
             onClick: function(){ abrirAssoc(item); },
@@ -1478,7 +1478,7 @@ var _useState27 = useState(init),
         // sem cálculo nenhum) + campo de percentual — igual ao layout já aprovado com ele.
         var baseAtualStr = (precosBase && precosBase[key] !== undefined) ? precosBase[key] : ((_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "");
         var pctAtualStr = (percentuais && percentuais[key] !== undefined) ? percentuais[key] : "";
-        var pctAtualNum = parseFloat(String(pctAtualStr || "").replace(",", ".")) || 0;
+        var pctAtualNum = parseNumBR(pctAtualStr || "") || 0;
         var cellBg = fornOcultos.has(f.id) ? bg : (isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg);
         var cellColor = fornOcultos.has(f.id) ? "#bbb" : (isMin ? "#1a6a1a" : isRank2 ? "#a05000" : isRank3 ? "#a01010" : undefined);
         return _isAtendido
@@ -1797,7 +1797,7 @@ var _useState27 = useState(init),
       }));
     }))); })()), isLast && function () {
       var totalQt = itens.reduce(function (acc, it) {
-        var v = parseFloat(String(it.qt).replace(",", "."));
+        var v = parseNumBR(it.qt);
         return acc + (isNaN(v) ? 0 : v);
       }, 0);
       return /*#__PURE__*/React.createElement("div", {
@@ -2404,7 +2404,7 @@ var _useState27 = useState(init),
               detalhe: item.detalhe||'',
               unid: item.unid||'',
               qt_pedida: qtN,
-              qt_total: Number(item.qt)||0,
+              qt_total: parseNumBR(item.qt)||0,
               vl_unit: vlUnit,
               vl_total: vlUnit * qtN,
               // FIX (implementação alinhada com layout aprovado): grava de qual mapa este item
@@ -2632,7 +2632,7 @@ var _useState27 = useState(init),
               detalhe: item.detalhe||'',
               unid: item.unid||'',
               qt_pedida: qtN,
-              qt_total: Number(item.qt)||0,
+              qt_total: parseNumBR(item.qt)||0,
               vl_unit: vlUnit,
               vl_total: vlTot,
               // FIX (mesma correção do bloco acima): este item foi encontrado dentro de

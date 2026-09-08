@@ -234,42 +234,10 @@ window.abrirDiagnosticoMapacot = function () {
     mapa.detalhes = remapChaves(mapa.detalhes);
     mapa.precosBase = remapChaves(mapa.precosBase);
     mapa.percentuais = remapChaves(mapa.percentuais);
-    
-    // DEBUG: mostrar o que foi feito
-    console.log('🔧 REPARO DEBUG INFO:');
-    console.log('   IDs antigos → novos:', idAntigoParaNovo);
-    console.log('   Preços após remap:', Object.keys(mapa.precos));
-    console.log('   Mapa.itens[0].id agora:', (mapa.itens || [])[0]?.id);
-    
-    // Mostrar também NA TELA (para quem está em tablet)
-    var debugVisual = '🔧 REPARO INICIADO\n\nIDs que serão alterados:\n';
-    Object.keys(idAntigoParaNovo).forEach(function(idAntigo) {
-      debugVisual += '  ' + idAntigo.slice(0, 30) + '...\n    → ' + idAntigoParaNovo[idAntigo].slice(0, 30) + '...\n';
-    });
-    debugVisual += '\nNovas chaves de preço:\n';
-    var precoKeys = Object.keys(mapa.precos || {});
-    precoKeys.slice(0, 5).forEach(function(chave) {
-      debugVisual += '  ' + chave.slice(0, 50) + '...\n';
-    });
-    if (precoKeys.length > 5) debugVisual += '  ... e mais ' + (precoKeys.length - 5) + '\n';
-    debugVisual += '\n⏳ Salvando no servidor...';
-    preview.textContent = debugVisual;
     preview.textContent = "Salvando mapa corrigido...";
     btnConfirmar.disabled = true;
     btnConfirmar.style.cursor = "not-allowed";
     sbSaveMapa(mapa).then(function () {
-      console.log('✅ MAPA SALVO NO SERVIDOR');
-      console.log('   Mapa ID:', mapa.id);
-      console.log('   Item IDs:', (mapa.itens || []).map(i => i.id));
-      console.log('   Preço keys:', Object.keys(mapa.precos || {}));
-      
-      // Mostrar resultado na tela
-      preview.textContent = '✅ SALVO NO SERVIDOR!\n\n' +
-        'Mapa: ' + mapa.id + '\n' +
-        'Itens com novo ID: ' + (mapa.itens || []).length + '\n' +
-        'Preços remapeados: ' + Object.keys(mapa.precos || {}).length + '\n\n' +
-        '⏳ Verificando associações...';
-      
       logEventoDiag("REPARO MANUAL: mapa " + mapa.numero + " recebeu IDs novos (ferramenta de diagnóstico)");
       preview.textContent = "Mapa salvo. Verificando associações...";
       return sbCarregarAssociacoes().then(function (todasAssocs) {
@@ -285,7 +253,7 @@ window.abrirDiagnosticoMapacot = function () {
         return sbSaveAssociacoes(novasAssocs);
       });
     }).then(function () {
-      preview.textContent = "✔ Mapa " + mapa.numero + " corrigido!\n\nRESULTADO:\n✓ IDs dos itens alterados\n✓ Preços remapeados\n✓ Dados salvos\n\nRECARREGANDO em 2 segundos...\n(Sincronizando IDs com preços)";
+      preview.textContent = "✔ Mapa " + mapa.numero + " corrigido!\n\nRECARREGANDO em 2 segundos...\n(IDs dos itens serão sincronizados com preços)";
       btnConfirmar.disabled = true;
       _repararMapaAlvo = null;
       setTimeout(function() { window.location.reload(); }, 2000);
@@ -664,7 +632,7 @@ var orcSaldoDisponivel = function(item, associacoes, obraOrcItens) {
       var indexOk = (a.orcItemIndex != null && a.orcItemIndex >= 0) ? a.orcItemIndex === idxItem : true;
       return codOk && indexOk;
     }).reduce(function(ac, a) {
-      return ac + (parseFloat(String(a.qtCompra).replace(",","."))||0) * (parseFloat(a.fator)||1);
+      return ac + (parseNumBR(a.qtCompra)||0) * (parseFloat(a.fator)||1);
     }, 0);
     return Math.max(0, previsto - consumido);
   }
@@ -899,6 +867,33 @@ var parseMoney = function parseMoney(s) {
   var n = parseFloat(String(s).replace(/\./g, "").replace(",", "."));
   return isNaN(n) ? null : n;
 };
+// FIX CRÍTICO (varredura geral, mesma causa raiz do bug de preço zerado em pedidos): campos de
+// QUANTIDADE (item.qt, qtCompra, etc.) usavam parseFloat(String(x).replace(",",".")) em dezenas
+// de lugares do sistema — igual ao bug já corrigido para preços, essa fórmula só troca vírgula
+// por ponto, SEM remover o ponto de MILHAR primeiro. Uma quantidade digitada como "1.500" (mil e
+// quinhentos) virava 1.5 em qualquer cálculo (total do mapa, saldo de orçamento, pedidos, PDFs),
+// silenciosamente — confirmado em teste real: qt "1.500" com preço R$10 gerava total R$15,00 em
+// vez de R$15.000,00. Esta função aplica a MESMA lógica correta do parseMoney (remove pontos de
+// milhar, troca vírgula por decimal), mas devolve NaN em vez de null quando inválido — preservando
+// o comportamento exato que cada ponto de uso já espera (a maioria já trata isso com "||0" ou
+// isNaN() logo em seguida, exatamente como fazia com o parseFloat original).
+var parseNumBR = function parseNumBR(s) {
+  if (s === null || s === undefined || s === "") return NaN;
+  return parseFloat(String(s).replace(/\./g, "").replace(",", "."));
+};
+// FIX (varredura geral — mesma causa raiz, cenário de importação de planilha): células de Excel
+// podem chegar como NÚMERO NATIVO do JS (sempre com ponto decimal, nunca separador de milhar —
+// ex: 1500.5) ou como TEXTO da célula (nesse caso, é uma pessoa no Brasil preenchendo a
+// planilha, então o formato esperado é sempre o brasileiro — ex: "1.500" para mil e quinhentos,
+// "1.500,50" com decimal). Tentar adivinhar "decimal puro" a partir de um texto como "1.500" é
+// ambíguo (poderia ser 1500 OU 1,5) — a forma seguramente correta é: número nativo nunca tem
+// separador de milhar (usar direto), texto sempre segue o padrão brasileiro (remover pontos de
+// milhar, trocar vírgula por decimal).
+var parseNumCelula = function parseNumCelula(v) {
+  if (typeof v === "number") return v;
+  var n = parseNumBR(v);
+  return isNaN(n) ? 0 : n;
+};
 // FIX (pedido do Claudio — adicionar vários itens de uma vez no mapa, reconhecendo contra o
 // catálogo de insumos): estas duas funções ("normalizar" e "wordScore") já existiam antes, mas
 // estavam presas dentro de um único componente ("Ler com IA"), sem poder ser usadas em nenhum
@@ -1060,7 +1055,7 @@ var calcResumo = function calcResumo(item, fns, precos) {
       minFornId = f.id;
     }
   });
-  var qt = parseFloat(String(item.qt).replace(",", "."));
+  var qt = parseNumBR(item.qt);
   return {
     vlUnit: minVal,
     vlTotal: minVal !== null && !isNaN(qt) && qt > 0 ? minVal * qt : null,
@@ -1332,7 +1327,7 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
   var itensMapById = {};
   var itensMapByDesc = {};
   (itensDoMapa||[]).forEach(function(item){
-    var qtN = Number(item.qt)||0;
+    var qtN = parseNumBR(item.qt)||0;
     var data = { qtTotal: qtN, unid: item.unid||'' };
     if(item.id) itensMapById[item.id] = data;
     var dk = String(item.descricao||'').trim().toUpperCase()+'|||'+String(item.detalhe||'').trim().toUpperCase();
@@ -1633,7 +1628,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var totalBruto = function totalBruto(fid) {
     return itens.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
-      var qt = parseFloat(String(item.qt).replace(",", "."));
+      var qt = parseNumBR(item.qt);
       return acc + (v !== null && !isNaN(qt) && qt > 0 ? v * qt : 0);
     }, 0);
   };
@@ -1722,7 +1717,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         if (!oi) oi = obraOrcItens.find(function(o){ return o.codigo===a.orcItemCodigo; });
         if(!oi) return s;
         // qtCompra já em unidades do orçamento — correto para fator 3M, 6M ou N associações
-        var qtC=parseFloat(String(a.qtCompra).replace(",","."))||0;
+        var qtC=parseNumBR(a.qtCompra)||0;
         return s+(parseFloat(oi.valorUnitario||oi.vl_unitario)||0)*qtC;
       },0);
       return ac+(vlOrc>0?vlOrc-vt:0);
@@ -1962,8 +1957,8 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
     var consumidoCalc = assocItem.reduce(function(ac,a){
       var mapa = mapasFiltrados.find(function(m){ return m.id === a.mapaId; });
       var itemMapa = mapa ? (mapa.itens||[]).find(function(it){ return it.id === a.itemMapaId; }) : null;
-      var qtMapa = itemMapa ? (parseFloat(String(itemMapa.qt).replace(",","."))||0) : 0;
-      var qtSalva = parseFloat(String(a.qtCompra).replace(",","."))||0;
+      var qtMapa = itemMapa ? (parseNumBR(itemMapa.qt)||0) : 0;
+      var qtSalva = parseNumBR(a.qtCompra)||0;
       var qtAtual = (qtSalva > 0 && qtSalva < qtMapa) ? qtSalva : (qtMapa || qtSalva);
       return ac + qtAtual * (parseFloat(a.fator)||1);
     }, 0);
@@ -1983,8 +1978,8 @@ var gerarRelatorioOrcamento = function gerarRelatorioOrcamento(mapasComCurrent, 
       if (r.vlUnit !== null) {
         var fator = parseFloat(a.fator)||1;
         vlCotado = r.vlUnit / fator;
-        var qtCompraAssoc = parseFloat(String(a.qtCompra).replace(",","."))||0;
-        var qtMapa = parseFloat(String(item.qt).replace(",","."))||0;
+        var qtCompraAssoc = parseNumBR(a.qtCompra)||0;
+        var qtMapa = parseNumBR(item.qt)||0;
         var qtUsar = (qtCompraAssoc > 0 && qtCompraAssoc < qtMapa) ? qtCompraAssoc : qtMapa;
         vlTotalCotado += (r.vlUnit / fator) * qtUsar * fator;
       }

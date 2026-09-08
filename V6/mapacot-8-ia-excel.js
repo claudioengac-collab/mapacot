@@ -67,7 +67,7 @@ function ModalCasarInsumos(_ref_cas) {
               if (prevUnit4&&prevUnit4>0) {
                 var validado=false;
                 for(var k=i+1;k<j;k++){
-                  var vq=parseFloat((textos[k]||"").trim().replace(",","."));
+                  var vq=parseNumBR((textos[k]||"").trim());
                   if(vq>0&&Math.abs(vq*prevUnit4-tot)/Math.max(tot,1)<0.03){
                     descTotais.push({desc:t.toUpperCase(),total:prevUnit4,idx:i}); validado=true; break;
                   }
@@ -1571,8 +1571,7 @@ function ModalImportarExcelMapa(_ref_imp) {
           var r = rows[i];
           var descRaw = String((r[2]!==undefined && r[2]!==null) ? r[2] : "").trim();
           if(!descRaw) continue; // FIX: pula linha em branco (sem descrição = sem item)
-          var qtRaw = String((r[0]!==undefined && r[0]!==null) ? r[0] : "0").replace(",", ".");
-          var qt = parseFloat(qtRaw) || 0; // FIX: vírgula decimal tratada, texto inválido vira 0
+          var qt = parseNumCelula((r[0]!==undefined && r[0]!==null) ? r[0] : "0") || 0; // FIX: célula pode vir como número nativo OU texto formatado BR
           var unidBruto = (r[1]!==undefined && r[1]!==null) ? String(r[1]).trim() : "";
           var unidRaw = (unidBruto || "UN").toUpperCase(); // FIX: célula vazia também cai no padrão "UN"
           linhasBrutas.push({ linhaOriginal: i+1, qt: qt, unid: unidRaw, descricaoRaw: descRaw.toUpperCase() });
