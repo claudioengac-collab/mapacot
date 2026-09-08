@@ -1461,30 +1461,21 @@ var fmtBRL = function fmtBRL(v) {
   return parts[0] + ',' + parts[1];
 };
 var parsePOVal = function(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
-var buildPedidoPDF = function buildPedidoPDF(po) {
+// FIX (pedido do Claudio — restaurar "Imprimir Pedidos Completos", que foi perdido numa
+// sincronização de código de dias atrás, sem relação com as mudanças mais recentes): extraído
+// de dentro de "buildPedidoPDF" para uma função própria, reutilizável — o conteúdo específico
+// de UM pedido (cabeçalho colorido, tabela de itens, financeiro, assinatura), sem o envelope
+// HTML/CSS ao redor. Isso permite montar VÁRIOS pedidos completos, um atrás do outro, sem
+// duplicar o CSS pra cada um. Nenhuma linha de lógica foi alterada nesta extração — a função
+// buildPedidoPDF individual (mais abaixo) usa esta mesma função, garantindo que o PDF de um
+// pedido só e o PDF de "vários pedidos completos" fiquem SEMPRE idênticos entre si.
+var montarCorpoPedidoHTML = function montarCorpoPedidoHTML(po) {
   // FIX 1: esc() local para evitar XSS/layout quebrado no PDF
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var num = 'PO-' + String(po.numero).padStart(3,'0');
   var dtRaw = po.data_emissao || po.criado_em;
   var dtObj = dtRaw ? new Date(dtRaw) : new Date();
   var dt = isNaN(dtObj.getTime()) ? new Date().toLocaleDateString('pt-BR') : dtObj.toLocaleDateString('pt-BR');
-  var css = '<style>*{font-family:Arial,sans-serif;font-size:11px;box-sizing:border-box;}'
-    + 'body{margin:24px;} h2{margin:0;font-size:16px;} '
-    + '.hdr{background:#7c3aed;color:#fff;padding:14px 18px;border-radius:6px 6px 0 0;}'
-    + '.body{padding:14px 18px;border:1px solid #ddd;border-top:none;border-radius:0 0 6px 6px;}'
-    + '.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}'
-    + '.box{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px 10px;}'
-    + '.box label{font-size:8px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px;}'
-    + '.box span{font-size:11px;font-weight:bold;}'
-    + 'table{width:100%;border-collapse:collapse;margin-bottom:12px;}'
-    + 'th{background:#7c3aed;color:#fff;padding:7px 9px;font-size:9px;text-align:left;}'
-    + 'td{padding:7px 9px;font-size:10px;border-bottom:1px solid #eee;}'
-    + '.tr{background:#f0eaff;font-weight:bold;color:#7c3aed;}'
-    + '.obs{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px 10px;font-size:9px;color:#555;margin-bottom:14px;}'
-    + '.sign{display:flex;justify-content:space-between;padding-top:14px;border-top:1px solid #eee;margin-top:12px;}'
-    + '.sbox{text-align:center;} .sline{border-top:1px solid #333;margin-top:32px;padding-top:4px;font-size:9px;color:#888;min-width:160px;}'
-    + '.rodape{text-align:center;font-size:8px;color:#bbb;margin-top:16px;}'
-    + '</style>';
   // FIX (implementação alinhada com layout aprovado — situação 2, opção B): coluna extra
   // mostrando de qual mapa cada item veio. Só aparece quando o pedido REALMENTE envolve mais de
   // um mapa — para pedidos de um só mapa (o caso mais comum), o PDF continua idêntico a antes,
@@ -1537,8 +1528,7 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
   var totalFmt = fR(po.total||0);
   var obsHTML = po.observacao ? '<div class="obs"><strong>Observações:</strong> ' + po.observacao + '</div>' : '';
   var mpLabel = mapasEnvolvidosNoPedido.length ? ('MP N' + String.fromCharCode(186) + ' ' + mapasEnvolvidosNoPedido.slice().sort(function(a,b){return a-b;}).join(', ') + ' &nbsp;' + String.fromCharCode(183) + '&nbsp; ') : '';
-  return '<!DOCTYPE html><html><head><meta charset="UTF-8">' + css + '</head><body>'
-    + '<div class="hdr">'
+  return '<div class="hdr">'
     + '<h2>🛒 PEDIDO DE COMPRA &nbsp; ' + num + '</h2>'
     + '<p style="margin:3px 0 0;font-size:9px;opacity:.85;">' + mpLabel + esc(po.obra||'') + ' &nbsp;·&nbsp; Emitido em ' + dt + '</p>'
     + '</div>'
@@ -1561,7 +1551,78 @@ var buildPedidoPDF = function buildPedidoPDF(po) {
     + '<div style="text-align:center;font-size:8px;color:#bbb;align-self:flex-end;">MAPACOT V6 CSS &nbsp;·&nbsp; ' + dt + '</div>'
     + '<div class="sbox"><div class="sline">Aprovação / Visto</div></div>'
     + '</div>'
-    + '</div>'
+    + '</div>';
+};
+var buildPedidoPDF = function buildPedidoPDF(po) {
+  var css = '<style>*{font-family:Arial,sans-serif;font-size:11px;box-sizing:border-box;}'
+    + 'body{margin:24px;} h2{margin:0;font-size:16px;} '
+    + '.hdr{background:#7c3aed;color:#fff;padding:14px 18px;border-radius:6px 6px 0 0;}'
+    + '.body{padding:14px 18px;border:1px solid #ddd;border-top:none;border-radius:0 0 6px 6px;}'
+    + '.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}'
+    + '.box{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px 10px;}'
+    + '.box label{font-size:8px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px;}'
+    + '.box span{font-size:11px;font-weight:bold;}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:12px;}'
+    + 'th{background:#7c3aed;color:#fff;padding:7px 9px;font-size:9px;text-align:left;}'
+    + 'td{padding:7px 9px;font-size:10px;border-bottom:1px solid #eee;}'
+    + '.tr{background:#f0eaff;font-weight:bold;color:#7c3aed;}'
+    + '.obs{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px 10px;font-size:9px;color:#555;margin-bottom:14px;}'
+    + '.sign{display:flex;justify-content:space-between;padding-top:14px;border-top:1px solid #eee;margin-top:12px;}'
+    + '.sbox{text-align:center;} .sline{border-top:1px solid #333;margin-top:32px;padding-top:4px;font-size:9px;color:#888;min-width:160px;}'
+    + '.rodape{text-align:center;font-size:8px;color:#bbb;margin-top:16px;}'
+    + '</style>';
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8">' + css + '</head><body>'
+    + montarCorpoPedidoHTML(po)
+    + '</body></html>';
+};
+// FIX (pedido do Claudio — imprimir vários pedidos completos de uma vez, filtrados por obra e
+// período; se nenhum filtro for preenchido, entram todos os pedidos do sistema): reaproveita
+// "montarCorpoPedidoHTML" (extraída logo acima) pra montar cada pedido, exatamente igual ao PDF
+// individual — incluindo a parte de assinar no final — um atrás do outro, com quebra de página
+// entre cada um. Como usa a MESMA função de miolo que o PDF individual, qualquer correção futura
+// feita em "montarCorpoPedidoHTML" vale automaticamente para os dois — nunca podem divergir.
+var buildRelatorioPedidosCompletosPDF = function buildRelatorioPedidosCompletosPDF(pedidosFiltrados, filtrosAplicados) {
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function fD(s){ if(!s) return '-'; var d=new Date(s.length===10?s+'T12:00:00':s); return isNaN(d.getTime())?'-':d.toLocaleDateString('pt-BR'); }
+  var css = '<style>*{font-family:Arial,sans-serif;font-size:11px;box-sizing:border-box;}'
+    + 'body{margin:24px;} h2{margin:0;font-size:16px;} '
+    + '.hdr{background:#7c3aed;color:#fff;padding:14px 18px;border-radius:6px 6px 0 0;}'
+    + '.body{padding:14px 18px;border:1px solid #ddd;border-top:none;border-radius:0 0 6px 6px;}'
+    + '.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}'
+    + '.box{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px 10px;}'
+    + '.box label{font-size:8px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px;}'
+    + '.box span{font-size:11px;font-weight:bold;}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:12px;}'
+    + 'th{background:#7c3aed;color:#fff;padding:7px 9px;font-size:9px;text-align:left;}'
+    + 'td{padding:7px 9px;font-size:10px;border-bottom:1px solid #eee;}'
+    + '.tr{background:#f0eaff;font-weight:bold;color:#7c3aed;}'
+    + '.obs{background:#f9f9f9;border:1px solid #eee;border-radius:4px;padding:8px 10px;font-size:9px;color:#555;margin-bottom:14px;}'
+    + '.sign{display:flex;justify-content:space-between;padding-top:14px;border-top:1px solid #eee;margin-top:12px;}'
+    + '.sbox{text-align:center;} .sline{border-top:1px solid #333;margin-top:32px;padding-top:4px;font-size:9px;color:#888;min-width:160px;}'
+    + '.folha-pedido{page-break-after:always;}'
+    + '.folha-pedido:last-child{page-break-after:auto;}'
+    + '.capa{background:#f0eaff;border:1px solid #d4b8ff;border-radius:6px;padding:14px 18px;margin-bottom:18px;font-size:11px;color:#5b21b6;}'
+    + '</style>';
+  var rf = filtrosAplicados || {};
+  var descricaoFiltros = [];
+  if (rf.obra) descricaoFiltros.push('Obra: <b>' + esc(rf.obra) + '</b>');
+  if (rf.de) descricaoFiltros.push('De: <b>' + fD(rf.de) + '</b>');
+  if (rf.ate) descricaoFiltros.push('Até: <b>' + fD(rf.ate) + '</b>');
+  if (!descricaoFiltros.length) descricaoFiltros.push('<b>Todos os pedidos do sistema (nenhum filtro aplicado)</b>');
+  var capaHTML = '<div class="capa">📋 <b>PEDIDOS SELECIONADOS</b> — ' + descricaoFiltros.join(' &nbsp;·&nbsp; ')
+    + '<br><b>' + pedidosFiltrados.length + ' pedido' + (pedidosFiltrados.length===1?'':'s') + ' encontrado' + (pedidosFiltrados.length===1?'':'s') + '</b></div>';
+  if (!pedidosFiltrados.length) {
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8">' + css + '</head><body>'
+      + capaHTML
+      + '<div style="text-align:center;color:#888;padding:40px;">Nenhum pedido encontrado com os filtros aplicados.</div>'
+      + '</body></html>';
+  }
+  var corpoTodos = pedidosFiltrados.map(function(po){
+    return '<div class="folha-pedido">' + montarCorpoPedidoHTML(po) + '</div>';
+  }).join('');
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8">' + css + '</head><body>'
+    + capaHTML
+    + corpoTodos
     + '</body></html>';
 };
 // ──────────────────────────────────────────────────────────────────────────────
