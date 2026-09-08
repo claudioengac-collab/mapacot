@@ -746,12 +746,12 @@ function App() {
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar o insumo. Verifique sua conexão.');
       });
-      else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
-        versaoCadastrosRef.current = novaVersao;
-      }).catch(function (e) {
-        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
-        else window.avisarErroSalvamento('Não foi possível salvar o cadastro no servidor. Verifique sua conexão e tente novamente.');
-      });
+      // FIX (bug real encontrado — causa raiz do "salva na tela mas não persiste de verdade"):
+      // existe um useEffect genérico ("Persist cadastros", mais abaixo) que já salva
+      // automaticamente TODA mudança deste estado. Chamar sbSaveCadastros aqui TAMBÉM criava uma
+      // corrida entre as duas chamadas — ambas comparam a versão do servidor ao mesmo tempo, e
+      // uma delas frequentemente detecta um "conflito" falso e aborta silenciosamente, sem erro
+      // visível. sbSaveInsumos acima continua igual (tabela separada, sem esse conflito).
       return updated;
     });
   }, []);
@@ -794,12 +794,8 @@ function App() {
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.');
       });
-      else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
-        versaoCadastrosRef.current = novaVersao;
-      }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
-        else window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.');
-      });
+      // FIX (mesma causa raiz corrigida em addCadastro acima): removida a chamada duplicada de
+      // sbSaveCadastros — o useEffect genérico de "Persist cadastros" já salva sozinho.
       return updated;
     });
   }, [mapas]);
@@ -849,12 +845,8 @@ function App() {
         if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
         else window.avisarErroSalvamento('Não foi possível salvar os insumos. Verifique sua conexão.');
       });
-      else sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
-        versaoCadastrosRef.current = novaVersao;
-      }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
-        else window.avisarErroSalvamento('Não foi possível salvar o cadastro. Verifique sua conexão.');
-      });
+      // FIX (mesma causa raiz corrigida em addCadastro/removeCadastro acima): removida a
+      // chamada duplicada de sbSaveCadastros — o useEffect genérico já salva sozinho.
       return updated;
     });
   }, [mapas]);
@@ -899,34 +891,37 @@ function App() {
       if (textoLimitado.trim()) novoObs[nome] = textoLimitado;
       else delete novoObs[nome]; // texto vazio remove a observação, não deixa lixo salvo
       var updated = _objectSpread(_objectSpread({}, prev), {}, { fornecedorObs: novoObs });
-      sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
-        versaoCadastrosRef.current = novaVersao;
-      }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
-        else window.avisarErroSalvamento('Não foi possível salvar a observação. Verifique sua conexão.');
-      });
+      // FIX (bug real encontrado — causa raiz do "salva na tela mas não persiste de verdade",
+      // já relatado pelo Claudio para Vendedor e Formas de Pagamento): existe um useEffect
+      // genérico ("Persist cadastros", mais abaixo) que já salva automaticamente TODA mudança
+      // deste estado. Chamar sbSaveCadastros aqui TAMBÉM criava uma corrida entre as duas
+      // chamadas — ambas comparam a versão do servidor ao mesmo tempo, e uma delas
+      // frequentemente detecta um "conflito" falso (com a outra) e aborta silenciosamente, sem
+      // erro visível. A correção é deixar SÓ o useEffect genérico salvar — setCadastros abaixo
+      // já é suficiente para dispará-lo.
       return updated;
     });
   }, []);
-  // Vendedor cadastrado por fornecedor — MESMO padrão de setObsFornecedor acima (texto único,
-  // salvo na linha "global" via sbSaveCadastros). Usado para preencher automaticamente o campo
-  // "Contato" do mapa quando o fornecedor é selecionado (ver mapacot-6-mapa.js).
-  var setVendedorFornecedor = useCallback(function (nomeFornecedor, texto) {
+  // Vendedor(es) cadastrado(s) por fornecedor — AGORA uma LISTA (pedido do Claudio: mais de um
+  // vendedor por fornecedor, escolhido no mapa quando houver mais de um). MESMO padrão de lista
+  // (tags) de setFormasPagamentoFornecedor logo abaixo. Recebe a lista COMPLETA (substitui a
+  // anterior por inteiro). Usado em mapacot-6-mapa.js: com 1 só vendedor, preenche sozinho o
+  // "Contato"; com mais de 1, mostra como sugestão para escolher manualmente.
+  var setVendedorFornecedor = useCallback(function (nomeFornecedor, listaVendedores) {
     var nome = normalize(nomeFornecedor);
     if (!nome) return;
-    var textoLimitado = String(texto || '').trim().slice(0, 200);
+    var limpos = (listaVendedores || [])
+      .map(function (s) { return String(s || '').trim().slice(0, 200); })
+      .filter(function (s) { return s.length > 0; });
     setCadastros(function (prev) {
       var vendAtual = prev.fornecedorVendedor || {};
       var novoVend = _objectSpread({}, vendAtual);
-      if (textoLimitado) novoVend[nome] = textoLimitado;
-      else delete novoVend[nome]; // texto vazio remove o vendedor, não deixa lixo salvo
+      if (limpos.length) novoVend[nome] = limpos;
+      else delete novoVend[nome]; // lista vazia remove a entrada, não deixa lixo salvo
       var updated = _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: novoVend });
-      sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
-        versaoCadastrosRef.current = novaVersao;
-      }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
-        else window.avisarErroSalvamento('Não foi possível salvar o vendedor. Verifique sua conexão.');
-      });
+      // FIX (mesma causa raiz corrigida em setObsFornecedor acima — condição de corrida com o
+      // useEffect genérico de "Persist cadastros"): removida a chamada duplicada de
+      // sbSaveCadastros. O useEffect genérico já salva sozinho assim que este setCadastros roda.
       return updated;
     });
   }, []);
@@ -945,12 +940,8 @@ function App() {
       if (limpas.length) novoPag[nome] = limpas;
       else delete novoPag[nome]; // lista vazia remove a entrada, não deixa lixo salvo
       var updated = _objectSpread(_objectSpread({}, prev), {}, { fornecedorFormasPagamento: novoPag });
-      sbSaveCadastros(Object.assign({}, updated, { _versaoServidor: versaoCadastrosRef.current })).then(function(novaVersao){
-        versaoCadastrosRef.current = novaVersao;
-      }).catch(function(e){
-        if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
-        else window.avisarErroSalvamento('Não foi possível salvar as formas de pagamento. Verifique sua conexão.');
-      });
+      // FIX (mesma causa raiz corrigida acima — condição de corrida com o useEffect genérico de
+      // "Persist cadastros"): removida a chamada duplicada de sbSaveCadastros.
       return updated;
     });
   }, []);
@@ -1068,6 +1059,11 @@ function App() {
     removeCadastro: removeCadastro,
     editCadastro: editCadastro,
     setObsFornecedor: setObsFornecedor,
+    // FIX (mesma correção do CadastrosModal dentro do mapa): estas duas funções já existiam,
+    // mas nunca tinham sido propagadas até o componente do mapa — sem elas chegarem aqui, não
+    // havia como repassá-las pro modal de cadastros aberto de dentro do mapa (ver mapacot-6-mapa.js).
+    setVendedorFornecedor: setVendedorFornecedor,
+    setFormasPagamentoFornecedor: setFormasPagamentoFornecedor,
     orcamentos: orcamentos,
     associacoes: associacoes,
     onSaveOrcamento: saveOrcamento,

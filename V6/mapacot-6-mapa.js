@@ -1,3 +1,12 @@
+// FIX (pedido do Claudio — Vendedor agora é uma LISTA, escolhida no mapa como as formas de
+// pagamento): dados salvos ANTES desta mudança guardam um texto único (ex: "FRANCISCO"), não uma
+// lista. Esta função lê os dois formatos sem diferença — nada do que já foi cadastrado se perde.
+// Mesma função duplicada em mapacot-3-cadastros.js (sem sistema de módulos entre os arquivos).
+function normalizeVendedorLista(valor) {
+  if (Array.isArray(valor)) return valor;
+  if (valor) return [valor];
+  return [];
+}
 function MapEditor(_ref15) {
   var init = _ref15.mapa,
     onBack = _ref15.onBack,
@@ -7,6 +16,10 @@ function MapEditor(_ref15) {
     removeCadastro = _ref15.removeCadastro,
     editCadastro = _ref15.editCadastro,
     setObsFornecedor = _ref15.setObsFornecedor || function(){},
+    // FIX (mesma correção — sem desestruturar aqui, essas props chegariam como "undefined" e
+    // cairiam no mesmo substituto vazio, mesmo já vindo corretas de mapacot-9-app.js):
+    setVendedorFornecedor = _ref15.setVendedorFornecedor || function(){},
+    setFormasPagamentoFornecedor = _ref15.setFormasPagamentoFornecedor || function(){},
     orcamentos = _ref15.orcamentos || {},
     associacoes = _ref15.associacoes || [],
     onSaveOrcamento = _ref15.onSaveOrcamento || null,
@@ -788,7 +801,8 @@ var _useState27 = useState(init),
   }, {
     key: "contato",
     label: "CONTATO",
-    maxLen: 1000
+    maxLen: 1000,
+    mostrarVendedorSugestoes: true // FIX (pedido do Claudio — vários vendedores por fornecedor): mostra os vendedores cadastrados como sugestão, igual à linha de condições de pagamento
   }, {
     key: "observacao",
     label: "OBSERVAÇÕES",
@@ -1142,11 +1156,15 @@ var _useState27 = useState(init),
           // O valor é COPIADO para dentro do mapa neste momento (não fica "ligado" ao
           // cadastro) — editar o vendedor no cadastro depois não muda mapas já preenchidos,
           // só passa a valer para o próximo fornecedor que for preenchido a partir dali.
+          // FIX (pedido do Claudio — vários vendedores por fornecedor): com exatamente 1
+          // vendedor cadastrado, continua preenchendo sozinho (comportamento de sempre); com
+          // mais de 1, NÃO escolhe por conta própria — fica para o usuário escolher no campo
+          // Contato (que agora mostra essas opções como sugestão, ver RODAPE_ROWS abaixo).
           if (fn) {
-            var vendedorCadastrado = (cadastros.fornecedorVendedor || {})[normalize(fn)];
+            var listaVendedoresFn = normalizeVendedorLista((cadastros.fornecedorVendedor || {})[normalize(fn)]);
             var contatoAtualNesteMapa = (rodape[f.id] || {}).contato;
-            if (vendedorCadastrado && !contatoAtualNesteMapa) {
-              setRodape(f.id, "contato", vendedorCadastrado);
+            if (listaVendedoresFn.length === 1 && !contatoAtualNesteMapa) {
+              setRodape(f.id, "contato", listaVendedoresFn[0]);
             }
           }
           // FIX (pedido do Claudio — nome cortado): ao terminar de editar (Enter, Tab, ou clicar
@@ -1788,13 +1806,16 @@ var _useState27 = useState(init),
             })
           }, vl > 0 ? fmtMoney(vl) : "—");
         }
+        // FIX (pedido do Claudio — vários vendedores por fornecedor): calcula a lista de
+        // vendedores cadastrados para ESTE fornecedor, só quando a linha for "Contato".
+        var listaVendedoresLinha = row.mostrarVendedorSugestoes ? normalizeVendedorLista((cadastros.fornecedorVendedor || {})[normalize(f.nome)]) : [];
         return /*#__PURE__*/React.createElement(EC, {
           key: "r_".concat(f.id, "_").concat(row.key),
           value: (_r2$row$key = r2[row.key]) !== null && _r2$row$key !== void 0 ? _r2$row$key : "",
           onChange: function onChange(v) {
             return setRodape(f.id, row.key, row.money ? v.replace(/[^0-9.,]/g, "") : v);
           },
-          placeholder: row.money ? "0,00" : (row.formaPagamento ? "— TOQUE PARA ESCOLHER —" : "—"),
+          placeholder: row.money ? "0,00" : ((row.formaPagamento || (row.mostrarVendedorSugestoes && listaVendedoresLinha.length > 0)) ? "— TOQUE PARA ESCOLHER —" : "—"),
           align: row.money ? "right" : "left",
           maxLen: row.maxLen,
           numericOnly: row.money,
@@ -1804,8 +1825,10 @@ var _useState27 = useState(init),
           // cadastradas para ESTE fornecedor (Banco de Cadastros > fornecedor > formas de
           // pagamento) como sugestões — igual ao autocomplete já usado em outras partes do
           // sistema. Continua editável livremente se o fornecedor não tiver nada cadastrado.
-          suggestions: row.formaPagamento ? ((cadastros.fornecedorFormasPagamento || {})[normalize(f.nome)] || []) : undefined,
-          showOnFocus: row.formaPagamento ? true : undefined,
+          // A linha "Contato" agora faz o mesmo com os vendedores cadastrados (com mais de 1,
+          // fica para o usuário escolher; com só 1, já vem auto-preenchido mas pode trocar).
+          suggestions: row.formaPagamento ? ((cadastros.fornecedorFormasPagamento || {})[normalize(f.nome)] || []) : (row.mostrarVendedorSugestoes ? listaVendedoresLinha : undefined),
+          showOnFocus: (row.formaPagamento || row.mostrarVendedorSugestoes) ? true : undefined,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4"
           })
@@ -2307,6 +2330,15 @@ var _useState27 = useState(init),
     onRemove: removeCadastro || function(){},
     onEdit: editCadastro || function(){},
     onSetObs: setObsFornecedor,
+    // FIX (bug real encontrado — Claudio relatou que Vendedor/Formas de Pagamento não salvavam
+    // ao abrir o Banco de Cadastros de DENTRO de um mapa aberto): este é um SEGUNDO local que
+    // abre o mesmo CadastrosModal, separado da listagem principal. As duas props abaixo já
+    // existiam na listagem principal (mapacot-9-app.js), mas foram esquecidas aqui — sem elas,
+    // o modal caía no substituto vazio (função que não faz nada), então o clique em "SALVAR
+    // VENDEDOR"/"SALVAR FORMAS DE PAGAMENTO" fechava o painel sem persistir nada, sem erro
+    // nenhum aparecer. Mesmas funções já usadas no outro local, só propagadas até aqui também.
+    onSetVendedor: setVendedorFornecedor,
+    onSetFormasPagamento: setFormasPagamentoFornecedor,
     mapas: mapas,
     orcamentos: orcamentos,
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
