@@ -356,7 +356,15 @@ function ModalPedidoStep2(_ref_po2) {
         var forn = ((mapaDoItem && mapaDoItem.fornecedores)||[]).find(function(f){ return f.id===val; });
         if (forn && item) {
           var preco = ((mapaDoItem && mapaDoItem.precos)||{})[item.id+'_'+val] || '';
-          var vlUnit = preco ? Number(String(preco).replace(',','.')) : 0;
+          // FIX CRÍTICO: usar parseMoney() — a MESMA função que a tela do mapa usa pra ler
+          // esse preço — em vez da lógica manual anterior (Number(String(preco).replace(',','.'))).
+          // A lógica antiga só trocava vírgula por ponto, sem remover o ponto de MILHAR. Preços
+          // acima de R$ 999 são salvos no formato brasileiro "2.029,04" (ponto=milhar,
+          // vírgula=decimal); a troca ingênua transformava isso em "2.029.04" — dois pontos, que
+          // o Number() do JavaScript não consegue interpretar (retorna NaN). Como todo cálculo
+          // seguinte usa "Number(vlUnit)||0", o NaN silenciosamente virava 0, e o pedido inteiro
+          // saía com subtotal e total final R$ 0,00 mesmo com o fornecedor e a quantidade corretos.
+          var vlUnit = parseMoney(preco) || 0;
           n[itemId][idx] = Object.assign({}, n[itemId][idx], { fornNome: forn.nome, vlUnit: vlUnit, fornId: val });
         }
       }
@@ -532,7 +540,9 @@ function ModalPedidoStep2(_ref_po2) {
           var vlFrete  = Math.max(0, freteMode==='%' ? subtotal*freteVal/100 : freteVal);
           var vlImp    = Math.max(0, impMode==='%'  ? baseImp*impVal/100   : impVal);
           var totalFin = baseImp + vlImp + vlFrete;
-          function parseVal(v){ var s=String(v||'').trim().replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; }
+          // FIX: mesma causa raiz do bug do vlUnit acima — usa parseMoney() em vez de um
+          // replace manual que não removia o ponto de milhar (quebrava com valores ≥ 1.000).
+          function parseVal(v){ var n = parseMoney(v); return n === null ? 0 : n; }
           function updateFin(field, val){
             onFinanceiro(function(prev){
               var n = Object.assign({}, prev);
