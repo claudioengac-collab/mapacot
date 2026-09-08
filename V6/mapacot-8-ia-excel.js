@@ -1783,7 +1783,11 @@ function ModalLerComIA(_ref_ia) {
   var _sMD=useState({}),matchDesc=_slicedToArray(_sMD,2)[0],setMatchDesc=_slicedToArray(_sMD,2)[1];
   var _sSA=useState(null),seletorAberto=_slicedToArray(_sSA,2)[0],setSeletorAberto=_slicedToArray(_sSA,2)[1];
   var _sSB=useState(""),seletorBusca=_slicedToArray(_sSB,2)[0],setSeletorBusca=_slicedToArray(_sSB,2)[1];
-  var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); return f?(f.descricao||""):""; };
+  // FIX (pedido do Claudio): mostrar também o campo "detalhe" do insumo junto da descrição,
+  // pra ajudar a distinguir insumos com nome parecido mas especificações diferentes (ex: dois
+  // "AVENTAL - DE PLASTICO" com tamanhos distintos). Puramente de EXIBIÇÃO — não mexe em nada
+  // da lógica de casamento (fazerMatchs continua comparando só descricao, como sempre fez).
+  var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); if(!f) return ""; return f.detalhe ? (f.descricao||"")+" — "+f.detalhe : (f.descricao||""); };
   var forns=mapa.fornecedores||[];
   // FIX: (1) a versão anterior removia letras acentuadas (Ç,Ã,Õ etc.) transformando-as em ESPAÇO,
   // o que quebrava palavras portuguesas ao meio (ex: "AÇO" virava "A O", "TUBULAÇÃO" virava "TUBULA
@@ -2622,7 +2626,12 @@ function ModalLerComIA(_ref_ia) {
             style:{padding:"14px 16px",borderBottom:"1px solid #222",color:"#888",fontSize:12,cursor:"pointer"}
           },"\u2014 n\xE3o usar \u2014"),
           (itens||[]).filter(function(mi){
-            return !seletorBusca||normalizar(mi.descricao).indexOf(normalizar(seletorBusca))>=0;
+            // FIX (pedido do Claudio): busca agora também considera o campo "detalhe" do
+            // insumo, não só a descrição — ajuda a achar o item certo digitando parte da
+            // especificação (ex: "0,60" acha um item pelo tamanho, não só pelo nome).
+            if(!seletorBusca) return true;
+            var alvo = normalizar(seletorBusca);
+            return normalizar(mi.descricao).indexOf(alvo)>=0 || (mi.detalhe && normalizar(mi.detalhe).indexOf(alvo)>=0);
           }).map(function(mi){
             var isSelected=seletorAberto!==null&&matchs[seletorAberto]===mi.id;
             return CE("div",{
@@ -2637,7 +2646,13 @@ function ModalLerComIA(_ref_ia) {
                 color:isSelected?"#3ECF8E":"#fff",fontSize:12,cursor:"pointer",
                 background:isSelected?"rgba(62,207,142,0.1)":"transparent"
               }
-            },mi.descricao);
+            },
+              // FIX (pedido do Claudio): mostra o "detalhe" do insumo (quando existe) numa
+              // segunda linha, em cinza claro — MESMO padrão visual já usado na tabela do mapa
+              // (mapacot-6-mapa.js) para descrição+detalhe, mantendo a UI consistente.
+              CE("div",null,mi.descricao),
+              mi.detalhe && CE("div",{style:{fontSize:10,color:isSelected?"#8fd9b8":"#888",marginTop:2}},mi.detalhe)
+            );
           })
         )
       )
