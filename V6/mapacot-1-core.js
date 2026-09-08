@@ -234,10 +234,42 @@ window.abrirDiagnosticoMapacot = function () {
     mapa.detalhes = remapChaves(mapa.detalhes);
     mapa.precosBase = remapChaves(mapa.precosBase);
     mapa.percentuais = remapChaves(mapa.percentuais);
+    
+    // DEBUG: mostrar o que foi feito
+    console.log('🔧 REPARO DEBUG INFO:');
+    console.log('   IDs antigos → novos:', idAntigoParaNovo);
+    console.log('   Preços após remap:', Object.keys(mapa.precos));
+    console.log('   Mapa.itens[0].id agora:', (mapa.itens || [])[0]?.id);
+    
+    // Mostrar também NA TELA (para quem está em tablet)
+    var debugVisual = '🔧 REPARO INICIADO\n\nIDs que serão alterados:\n';
+    Object.keys(idAntigoParaNovo).forEach(function(idAntigo) {
+      debugVisual += '  ' + idAntigo.slice(0, 30) + '...\n    → ' + idAntigoParaNovo[idAntigo].slice(0, 30) + '...\n';
+    });
+    debugVisual += '\nNovas chaves de preço:\n';
+    var precoKeys = Object.keys(mapa.precos || {});
+    precoKeys.slice(0, 5).forEach(function(chave) {
+      debugVisual += '  ' + chave.slice(0, 50) + '...\n';
+    });
+    if (precoKeys.length > 5) debugVisual += '  ... e mais ' + (precoKeys.length - 5) + '\n';
+    debugVisual += '\n⏳ Salvando no servidor...';
+    preview.textContent = debugVisual;
     preview.textContent = "Salvando mapa corrigido...";
     btnConfirmar.disabled = true;
     btnConfirmar.style.cursor = "not-allowed";
     sbSaveMapa(mapa).then(function () {
+      console.log('✅ MAPA SALVO NO SERVIDOR');
+      console.log('   Mapa ID:', mapa.id);
+      console.log('   Item IDs:', (mapa.itens || []).map(i => i.id));
+      console.log('   Preço keys:', Object.keys(mapa.precos || {}));
+      
+      // Mostrar resultado na tela
+      preview.textContent = '✅ SALVO NO SERVIDOR!\n\n' +
+        'Mapa: ' + mapa.id + '\n' +
+        'Itens com novo ID: ' + (mapa.itens || []).length + '\n' +
+        'Preços remapeados: ' + Object.keys(mapa.precos || {}).length + '\n\n' +
+        '⏳ Verificando associações...';
+      
       logEventoDiag("REPARO MANUAL: mapa " + mapa.numero + " recebeu IDs novos (ferramenta de diagnóstico)");
       preview.textContent = "Mapa salvo. Verificando associações...";
       return sbCarregarAssociacoes().then(function (todasAssocs) {
@@ -253,7 +285,7 @@ window.abrirDiagnosticoMapacot = function () {
         return sbSaveAssociacoes(novasAssocs);
       });
     }).then(function () {
-      preview.textContent = "✔ Mapa " + mapa.numero + " corrigido!\n\nRECARREGANDO em 2 segundos...\n(IDs dos itens serão sincronizados com preços)";
+      preview.textContent = "✔ Mapa " + mapa.numero + " corrigido!\n\nRESULTADO:\n✓ IDs dos itens alterados\n✓ Preços remapeados\n✓ Dados salvos\n\nRECARREGANDO em 2 segundos...\n(Sincronizando IDs com preços)";
       btnConfirmar.disabled = true;
       _repararMapaAlvo = null;
       setTimeout(function() { window.location.reload(); }, 2000);
