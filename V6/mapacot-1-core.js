@@ -162,7 +162,6 @@ window.abrirDiagnosticoMapacot = function () {
     + '<button id="diagGerarPDF" style="border:none;background:#c0392b;color:#fff;border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:bold;">\uD83D\uDCC4 GERAR PDF</button>'
     + '</div>'
     + '<div id="diagHistorico" style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dde;border-radius:8px;padding:8px;margin-bottom:10px;min-height:20px;max-height:260px;overflow:auto;">\u2014</div>'
-    + '</div>'
     + '<div style="border-top:1px solid #eee;margin:10px 0;padding-top:10px;">'
     + '<b style="font-size:13px;color:#b45309;">\uD83D\uDD27 REPARAR MAPA COPIADO (ID compartilhado)</b>'
     + '<div style="font-size:10px;color:#666;margin:6px 0;">Use isso s\u00f3 se um mapa copiado ANTES da corre\u00e7\u00e3o de hoje estiver mostrando "j\u00e1 pedida" de um pedido que n\u00e3o \u00e9 dele. Corrige s\u00f3 o mapa informado abaixo \u2014 n\u00e3o mexe em nenhum pedido nem em outros mapas.</div>'
@@ -179,7 +178,7 @@ window.abrirDiagnosticoMapacot = function () {
   ov.appendChild(box);
   document.body.appendChild(ov);
   document.getElementById("diagFechar").onclick = function () { ov.remove(); };
-  // ─── Reparar mapa copiado com ID compartilhado (ferramenta manual, uso único por mapa) ───
+  // ─── Reparar mapa copiado com ID compartilhado (ferramenta manual) ───
   var _repararMapaAlvo = null;
   document.getElementById("diagRepararVerificar").onclick = function () {
     var numero = Number(document.getElementById("diagRepararNumero").value);
@@ -240,7 +239,7 @@ window.abrirDiagnosticoMapacot = function () {
     btnConfirmar.style.cursor = "not-allowed";
     sbSaveMapa(mapa).then(function () {
       logEventoDiag("REPARO MANUAL: mapa " + mapa.numero + " recebeu IDs novos (ferramenta de diagnóstico)");
-      preview.textContent = "Mapa salvo. Verificando associações de orçamento...";
+      preview.textContent = "Mapa salvo. Verificando associações...";
       return sbCarregarAssociacoes().then(function (todasAssocs) {
         var mudou = false;
         var novasAssocs = (todasAssocs || []).map(function (a) {
@@ -254,15 +253,18 @@ window.abrirDiagnosticoMapacot = function () {
         return sbSaveAssociacoes(novasAssocs);
       });
     }).then(function () {
-      preview.textContent = "✔ Mapa " + mapa.numero + " corrigido com sucesso. Recarregue a página (F5) para ver o resultado.";
+      preview.textContent = "✔ Mapa " + mapa.numero + " corrigido!\n\nRECARREGANDO em 2 segundos...\n(IDs dos itens serão sincronizados com preços)";
+      btnConfirmar.disabled = true;
       _repararMapaAlvo = null;
+      setTimeout(function() { window.location.reload(); }, 2000);
     }).catch(function (e) {
-      preview.textContent = "✖ ERRO ao corrigir: " + (e && e.message ? e.message : "falha de conexão") + "\n\nTente novamente ou avise o suporte antes de repetir.";
+      preview.textContent = "✖ ERRO: " + (e && e.message ? e.message : "falha de conexão") + "\n\nTente novamente ou avise o suporte.";
       btnConfirmar.disabled = false;
       btnConfirmar.style.background = "#c0392b";
       btnConfirmar.style.cursor = "pointer";
     });
   };
+
   document.getElementById("diagVerificar").onclick = function () {
     var alvo = document.getElementById("diagServidor");
     alvo.textContent = "Buscando no servidor...";
