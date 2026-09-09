@@ -511,6 +511,18 @@ function App() {
   // criando um ciclo (salva → atualiza versão → dispara salvar de novo → ...). Um ref atualiza
   // sem re-render nem disparar efeitos, evitando esse problema.
   var versaoCadastrosRef = useRef(null);
+  // FIX (causa raiz do bug real relatado pelo Claudio — vendedor/formas de pagamento
+  // "sumindo" ao trocar de mapa): o useEffect de "Persist cadastros" (mais abaixo) salva
+  // TODA VEZ que "cadastros" muda — inclusive quando a mudança é só o CARREGAMENTO inicial
+  // dos dados (sem nenhuma edição real do usuário). Esse "salvamento fantasma" consome uma
+  // versão no servidor logo após abrir o sistema; se o usuário editar algo rápido em seguida
+  // (ex: cadastrar um vendedor logo depois de abrir), o salvamento REAL da edição usa uma
+  // versão já desatualizada e é recusado pela proteção contra conflito — silenciosamente (só
+  // um aviso discreto que some sozinho). A tela mostra "salvo" (atualização otimista local),
+  // mas nada persiste de verdade. Este ref marca as duas vezes em que "cadastros" muda por
+  // CARREGAMENTO (dado inicial, depois insumos em segundo plano) — o efeito de salvar ignora
+  // essas duas vezes, e só salva de verdade a partir da PRIMEIRA mudança feita pelo usuário.
+  var cadastrosMudouPorCarregamentoRef = useRef(0);
   // FIX: mesma proteção contra múltiplas abas, agora para Insumos (que usa uma função de
   // salvamento separada, sbSaveInsumos, diferente da usada por obras/fornecedores/unidades)
   var versaoInsumosRef = useRef(null);
@@ -598,6 +610,10 @@ function App() {
           case 4:
             cad = _context8.v;
             if (cad) {
+              // FIX (ver declaração do ref acima): marca que a PRÓXIMA mudança de "cadastros"
+              // vem do carregamento inicial, não de uma edição do usuário — o efeito de salvar
+              // deve ignorá-la, senão consome uma versão e cria a condição de corrida.
+              cadastrosMudouPorCarregamentoRef.current++;
               setCadastros(function (prev) {
                 return {
                   obras: cad.obras || [],
@@ -629,12 +645,17 @@ function App() {
           case 8:
             insumos = _context8.v;
             versaoInsumosRef.current = insumos.versao; // FIX: guarda a versão para o controle de múltiplas abas
-            if (insumos.lista.length) setCadastros(function (prev) {
-              return _objectSpread(_objectSpread({}, prev), {}, {
-                insumos: insumos.lista,
-                insumoSinonimos: insumos.sinonimos || {}
+            if (insumos.lista.length) {
+              // FIX (ver declaração do ref no início do componente): mesmo cuidado do
+              // carregamento principal — isto também é CARREGAMENTO, não edição do usuário.
+              cadastrosMudouPorCarregamentoRef.current++;
+              setCadastros(function (prev) {
+                return _objectSpread(_objectSpread({}, prev), {}, {
+                  insumos: insumos.lista,
+                  insumoSinonimos: insumos.sinonimos || {}
+                });
               });
-            });
+            }
             _context8.n = 10;
             break;
           case 9:
@@ -665,6 +686,15 @@ function App() {
 
   // Persist cadastros
   useEffect(function () {
+    // FIX (ver declaração do ref no início do componente — causa raiz do bug real relatado
+    // pelo Claudio): se esta mudança de "cadastros" veio do CARREGAMENTO (não de uma edição
+    // real do usuário), pula o salvamento — evita o "salvamento fantasma" que consumia uma
+    // versão no servidor e fazia edições rápidas logo após abrir o sistema falharem em
+    // silêncio por conflito de versão.
+    if (cadastrosMudouPorCarregamentoRef.current > 0) {
+      cadastrosMudouPorCarregamentoRef.current--;
+      return;
+    }
     if (!loading && cadastrosOk) {
       sbSaveCadastros(Object.assign({}, cadastros, { _versaoServidor: versaoCadastrosRef.current }))
         .then(function(novaVersao){ versaoCadastrosRef.current = novaVersao; }) // FIX: atualiza via

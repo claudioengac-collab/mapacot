@@ -538,6 +538,17 @@ var sbGetInsumos = /*#__PURE__*/function () {
     return _ref5.apply(this, arguments);
   };
 }();
+// FIX (causa raiz do bug real relatado pelo Claudio — vendedor/formas de pagamento cadastrados
+// rápido em sequência, um logo depois do outro, "sumindo"): esta função não tinha proteção
+// contra chamadas em PARALELO — se o usuário cadastra o Vendedor e, antes desse salvamento
+// terminar, já cadastra as Formas de Pagamento, os DOIS salvamentos verificam a versão ao mesmo
+// tempo, usando a MESMA versão "conhecida" desatualizada; quando o primeiro termina e avança a
+// versão no servidor, o segundo é recusado por conflito — silenciosamente, sem o usuário notar.
+// MESMA proteção de fila já comprovada em sbSaveMapa (linha ~390 acima): as chamadas ficam
+// numa fila que só processa uma de cada vez, e cada uma usa a versão mais recente conhecida
+// DENTRO da fila (atualizada pela chamada anterior), não a versão desatualizada que o
+// componente React ainda tinha no momento em que foi chamada.
+var estadoSalvamentoCadastros = { fila: Promise.resolve(), ultimaVersaoConhecida: null };
 var sbSaveCadastros = function sbSaveCadastros(c) {
   var main = {
     obras: c.obras || [],
@@ -550,21 +561,32 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
     fornecedorVendedor: c.fornecedorVendedor || {}, // vendedor cadastrado por fornecedor (mesmo padrão de fornecedorObs)
     fornecedorFormasPagamento: c.fornecedorFormasPagamento || {} // lista de formas de pagamento aceitas por fornecedor
   };
-  return verificarVersaoAntesDeSalvar("global", c._versaoServidor).then(function(){
-    var novaVersao = new Date().toISOString().replace("Z", "+00:00");
-    return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
-      method: "POST",
-      headers: SB,
-      body: JSON.stringify({
-        id: "global",
-        dados: main,
-        atualizado_em: novaVersao
-      })
-    }).then(function(r){
-      if(!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar cadastros ('+r.status+'): '+t); });
-      return novaVersao;
+  var estado = estadoSalvamentoCadastros;
+  // Só na PRIMEIRA chamada desta sessão a fila ainda não tem uma versão conhecida — usa a que
+  // veio do componente. Nas chamadas seguintes, a fila já sabe a versão mais recente de verdade.
+  if (estado.ultimaVersaoConhecida === null) estado.ultimaVersaoConhecida = c._versaoServidor;
+
+  estado.fila = estado.fila.catch(function(){}).then(function(){
+    var versaoParaVerificar = estado.ultimaVersaoConhecida;
+    return verificarVersaoAntesDeSalvar("global", versaoParaVerificar).then(function(){
+      var novaVersao = new Date().toISOString().replace("Z", "+00:00");
+      return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
+        method: "POST",
+        headers: SB,
+        body: JSON.stringify({
+          id: "global",
+          dados: main,
+          atualizado_em: novaVersao
+        })
+      }).then(function(r){
+        if(!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar cadastros ('+r.status+'): '+t); });
+        estado.ultimaVersaoConhecida = novaVersao; // propaga para a próxima save da fila usar
+        return novaVersao;
+      });
     });
   });
+
+  return estado.fila;
 }
 var sbSaveInsumos = function sbSaveInsumos(insumos, sinonimos, versaoConhecida) {
   // FIX: adiciona "sinonimos" como parâmetro EXPLÍCITO (não opcional no final) — de propósito,
