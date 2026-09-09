@@ -696,9 +696,19 @@ function App() {
       return;
     }
     if (!loading && cadastrosOk) {
+      // FIX (pedido do Claudio — rastreabilidade real, depois do bug da condição de corrida):
+      // até aqui só existia log de sucesso para MAPAS ("✔ SALVO mapa..."); cadastros (que
+      // inclui vendedor e formas de pagamento) só logavam quando davam ERRO, nunca quando davam
+      // certo — por isso não dava pra confirmar, olhando o diagnóstico, se um salvamento de
+      // vendedor realmente chegou ao servidor. Agora fica registrado dos dois lados.
+      var qtdVend = Object.keys(cadastros.fornecedorVendedor || {}).length;
+      var qtdPag = Object.keys(cadastros.fornecedorFormasPagamento || {}).length;
+      logEventoDiag("SALVANDO CADASTROS (" + qtdVend + " fornecedor(es) com vendedor, " + qtdPag + " com forma de pagamento)");
       sbSaveCadastros(Object.assign({}, cadastros, { _versaoServidor: versaoCadastrosRef.current }))
-        .then(function(novaVersao){ versaoCadastrosRef.current = novaVersao; }) // FIX: atualiza via
-        // ref (não state) para não disparar este mesmo useEffect de novo — evita loop
+        .then(function(novaVersao){
+          versaoCadastrosRef.current = novaVersao; // FIX: atualiza via ref (não state) para não disparar este mesmo useEffect de novo — evita loop
+          logEventoDiag("✔ SALVOU CADASTROS — nova versão " + novaVersao);
+        })
         .catch(function(e){
           if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
           else window.avisarErroSalvamento('Não foi possível salvar os cadastros. Verifique sua conexão.');
@@ -943,6 +953,11 @@ function App() {
     var limpos = (listaVendedores || [])
       .map(function (s) { return String(s || '').trim().slice(0, 200); })
       .filter(function (s) { return s.length > 0; });
+    // FIX (pedido do Claudio — rastreabilidade real): registra a AÇÃO no diagnóstico assim que
+    // o usuário confirma. O sucesso/erro REAL do salvamento (se de fato chegou ao servidor)
+    // aparece logo em seguida, no log do useEffect "Persist cadastros" — procure por "SALVOU
+    // CADASTROS" ou "ERRO DE SALVAMENTO" nos segundos seguintes a esta linha.
+    logEventoDiag("VENDEDOR alterado: \"" + nome + "\" = [" + limpos.join(", ") + "]");
     setCadastros(function (prev) {
       var vendAtual = prev.fornecedorVendedor || {};
       var novoVend = _objectSpread({}, vendAtual);
@@ -964,6 +979,8 @@ function App() {
     var limpas = (listaFormas || [])
       .map(function (s) { return String(s || '').trim().slice(0, 60); })
       .filter(function (s) { return s.length > 0; });
+    // FIX (mesmo motivo do log acima): registra a ação de formas de pagamento também.
+    logEventoDiag("FORMAS DE PAGAMENTO alteradas: \"" + nome + "\" = [" + limpas.join(", ") + "]");
     setCadastros(function (prev) {
       var pagAtual = prev.fornecedorFormasPagamento || {};
       var novoPag = _objectSpread({}, pagAtual);
