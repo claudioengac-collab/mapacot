@@ -19,6 +19,7 @@ function MapEditor(_ref15) {
     // FIX (mesma correção — sem desestruturar aqui, essas props chegariam como "undefined" e
     // cairiam no mesmo substituto vazio, mesmo já vindo corretas de mapacot-9-app.js):
     setVendedorFornecedor = _ref15.setVendedorFornecedor || function(){},
+    setVendedorEFormasPagamentoEmLote = _ref15.setVendedorEFormasPagamentoEmLote || function(){},
     setFormasPagamentoFornecedor = _ref15.setFormasPagamentoFornecedor || function(){},
     orcamentos = _ref15.orcamentos || {},
     associacoes = _ref15.associacoes || [],
@@ -2338,6 +2339,7 @@ var _useState27 = useState(init),
     // VENDEDOR"/"SALVAR FORMAS DE PAGAMENTO" fechava o painel sem persistir nada, sem erro
     // nenhum aparecer. Mesmas funções já usadas no outro local, só propagadas até aqui também.
     onSetVendedor: setVendedorFornecedor,
+    onSetVendedorEFormasPagamentoEmLote: setVendedorEFormasPagamentoEmLote,
     onSetFormasPagamento: setFormasPagamentoFornecedor,
     mapas: mapas,
     orcamentos: orcamentos,

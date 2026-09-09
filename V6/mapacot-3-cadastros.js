@@ -6,6 +6,127 @@ function normalizeVendedorLista(valor) {
   if (valor) return [valor];
   return [];
 }
+// FIX (pedido do Claudio — cadastro em lote de vendedor/pagamento, depois da perda de dados pelo
+// bug da condição de corrida): cola uma lista (fornecedor, vendedor(es), forma(s) de pagamento)
+// e cadastra vários fornecedores de uma vez. O fornecedor precisa JÁ EXISTIR no cadastro — este
+// modal casa o nome digitado com a lista existente (sem diferenciar maiúscula/acento), nunca
+// cria fornecedor novo por engano a partir de um nome digitado errado.
+function ModalLoteVendedorPagamento(_ref_lote) {
+  var fornecedoresExistentes = _ref_lote.fornecedoresExistentes || [],
+    onClose = _ref_lote.onClose,
+    onConfirmar = _ref_lote.onConfirmar;
+  var _sT = useState(""), textoColado = _slicedToArray(_sT, 2)[0], setTextoColado = _slicedToArray(_sT, 2)[1];
+  var _sR = useState(null), resultados = _slicedToArray(_sR, 2)[0], setResultados = _slicedToArray(_sR, 2)[1];
+
+  // FIX: match exato (via normalize, igual ao resto do sistema) primeiro; nomes de fornecedor
+  // reais variam muito em pontuação ("LTDA" vs "LTDA.", vírgulas, espaços duplos) — alguém
+  // recadastrando de memória (como o Claudio, depois da perda de dados) facilmente digita sem
+  // essas pequenas diferenças. Por isso, se o match exato falhar, tenta uma comparação mais
+  // tolerante (sem pontuação/espaços extras) antes de desistir — só usa o resultado se houver
+  // EXATAMENTE UM candidato, nunca escolhe entre vários por conta própria.
+  var mapaNormalizado = {}; // normalize(nome digitado) -> nome oficial já cadastrado
+  var chaveTolerante = function(s) { return normalize(s).replace(/[.,;\-]/g, "").replace(/\s+/g, " ").trim(); };
+  var mapaTolerante = {}; // versão sem pontuação -> lista de nomes oficiais que batem
+  fornecedoresExistentes.forEach(function(f) {
+    mapaNormalizado[normalize(f)] = f;
+    var chave = chaveTolerante(f);
+    if (!mapaTolerante[chave]) mapaTolerante[chave] = [];
+    mapaTolerante[chave].push(f);
+  });
+
+  var handleVerificar = function() {
+    var linhas = textoColado.split("\n").map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+    var processados = linhas.map(function(linha) {
+      // Aceita TAB (colar do Excel) ou ; (digitar manualmente) como separador de coluna.
+      var colunas = linha.indexOf("\t") >= 0 ? linha.split("\t") : linha.split(";");
+      var nomeDigitado = (colunas[0] || "").trim();
+      // FIX: mesma regra de caixa alta já aplicada em TODO o resto do sistema para vendedor e
+      // forma de pagamento (campo de dado, não texto livre) — sem isso, o cadastro em lote
+      // ficaria inconsistente com o cadastro individual, que já força maiúscula.
+      var vendedores = (colunas[1] || "").split(",").map(function(s) { return s.trim().toUpperCase(); }).filter(function(s) { return s.length > 0; });
+      var formasPagamento = (colunas[2] || "").split(",").map(function(s) { return s.trim().toUpperCase(); }).filter(function(s) { return s.length > 0; });
+      var nomeOficial = mapaNormalizado[normalize(nomeDigitado)] || null;
+      var matchAproximado = false;
+      if (!nomeOficial) {
+        var candidatos = mapaTolerante[chaveTolerante(nomeDigitado)] || [];
+        if (candidatos.length === 1) { nomeOficial = candidatos[0]; matchAproximado = true; }
+      }
+      return { linhaOriginal: linha, nomeDigitado: nomeDigitado, nomeOficial: nomeOficial, matchAproximado: matchAproximado, vendedores: vendedores, formasPagamento: formasPagamento };
+    });
+    setResultados(processados);
+  };
+
+  var reconhecidos = (resultados || []).filter(function(r) { return r.nomeOficial; });
+  var naoReconhecidos = (resultados || []).filter(function(r) { return !r.nomeOficial; });
+
+  var handleConfirmar = function() {
+    var itens = reconhecidos.map(function(r) { return { nomeFornecedor: r.nomeOficial, vendedores: r.vendedores, formasPagamento: r.formasPagamento }; });
+    onConfirmar(itens);
+  };
+
+  return /*#__PURE__*/React.createElement(Modal, { open: true, onClose: onClose, maxWidth: 620 },
+    /*#__PURE__*/React.createElement("div", { style: { background: "#e65100", color: "#fff", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" } },
+      /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 13 } }, "\ud83d\udccb CADASTRAR VENDEDOR/PAGAMENTO EM LOTE"),
+      /*#__PURE__*/React.createElement("button", { onClick: onClose, style: { background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 16 } }, "\u2715")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { padding: 14, maxHeight: "70vh", overflowY: "auto" } },
+
+      !resultados && /*#__PURE__*/React.createElement(React.Fragment, null,
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 10.5, color: "#666", marginBottom: 8 } },
+          "Um fornecedor por linha: ", /*#__PURE__*/React.createElement("b", null, "nome do fornecedor"), " ; ", /*#__PURE__*/React.createElement("b", null, "vendedor(es)"), " ; ", /*#__PURE__*/React.createElement("b", null, "forma(s) de pagamento"),
+          ". Vários vendedores ou formas na mesma coluna? Separe por vírgula. O fornecedor já precisa estar cadastrado — isto não cria fornecedor novo."
+        ),
+        /*#__PURE__*/React.createElement("textarea", {
+          value: textoColado,
+          onChange: function(e) { setTextoColado(e.target.value); },
+          placeholder: "REMOLO JARUDE E CIA LTDA; Marcelo Jarude; Pix, Boleto 30 dias\nAGRO BOI; Ana Paula; Depósito\nCOSTA REPRESENTAÇÕES E COMERCIO LTDA.; Roberto Costa; Pix",
+          style: { width: "100%", minHeight: 140, border: "2px dashed #ffb74d", borderRadius: 8, padding: 10, fontSize: 11.5, fontFamily: "monospace", color: "#444" }
+        }),
+        /*#__PURE__*/React.createElement("button", {
+          onClick: handleVerificar,
+          disabled: !textoColado.trim(),
+          style: { background: "#e65100", color: "#fff", border: "none", borderRadius: 6, padding: "9px 16px", fontSize: 11.5, fontWeight: 700, marginTop: 10, cursor: textoColado.trim() ? "pointer" : "default", width: "100%", opacity: textoColado.trim() ? 1 : 0.5 }
+        }, "VERIFICAR \u27a4")
+      ),
+
+      resultados && /*#__PURE__*/React.createElement(React.Fragment, null,
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+          /*#__PURE__*/React.createElement("div", { style: { flex: 1, textAlign: "center", padding: "8px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, background: "#eafaf0", color: "#0e7a3f" } }, "\ud83d\udfe2 " + reconhecidos.length + " reconhecidos"),
+          /*#__PURE__*/React.createElement("div", { style: { flex: 1, textAlign: "center", padding: "8px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, background: "#fff0e0", color: "#b35c00" } }, "\ud83d\udfe0 " + naoReconhecidos.length + " não encontrados")
+        ),
+
+        naoReconhecidos.length > 0 && /*#__PURE__*/React.createElement("div", { style: { background: "#fffaf3", border: "1px solid #f0c090", borderRadius: 8, padding: 10, marginBottom: 12 } },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 10.5, color: "#b35c00", marginBottom: 6, fontWeight: 700 } }, "Estes nomes não bateram com nenhum fornecedor já cadastrado — confira a grafia e cole de novo:"),
+          naoReconhecidos.map(function(r, i) {
+            return /*#__PURE__*/React.createElement("div", { key: i, style: { fontSize: 10.5, color: "#914d00", padding: "2px 0" } }, "\u2022 \"" + r.nomeDigitado + "\"");
+          })
+        ),
+
+        reconhecidos.length > 0 && /*#__PURE__*/React.createElement("div", { style: { marginBottom: 12 } },
+          reconhecidos.map(function(r, i) {
+            return /*#__PURE__*/React.createElement("div", { key: i, style: { border: "1px solid #c8e6c9", background: "#f4fbf5", borderRadius: 8, padding: "8px 10px", marginBottom: 6, fontSize: 11 } },
+              /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, color: "#1b5e20" } }, r.nomeOficial),
+              r.matchAproximado && /*#__PURE__*/React.createElement("div", { style: { fontSize: 9.5, color: "#b35c00", fontStyle: "italic" } }, "\u26a0 nome parecido — voc\xea digitou \"" + r.nomeDigitado + "\", confira se \xe9 o fornecedor certo"),
+              /*#__PURE__*/React.createElement("div", { style: { color: "#555", fontSize: 10 } }, "\ud83e\uddd1 " + (r.vendedores.join(", ") || "(nenhum)") + "  \u00b7  \ud83d\udcb3 " + (r.formasPagamento.join(", ") || "(nenhuma)"))
+            );
+          })
+        ),
+
+        /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8 } },
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function() { setResultados(null); },
+            style: { flex: 1, background: "#f5f5f5", border: "none", borderRadius: 6, padding: "9px 12px", color: "#666", cursor: "pointer", fontWeight: 700, fontSize: 11 }
+          }, "\u2190 VOLTAR E CORRIGIR"),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: handleConfirmar,
+            disabled: reconhecidos.length === 0,
+            style: { flex: 2, background: "#2e7d32", border: "none", borderRadius: 6, padding: "9px 12px", color: "#fff", cursor: reconhecidos.length ? "pointer" : "default", fontWeight: 700, fontSize: 11, opacity: reconhecidos.length ? 1 : 0.5 }
+          }, "CADASTRAR " + reconhecidos.length + " FORNECEDOR(ES)")
+        )
+      )
+    )
+  );
+}
 function CadastrosModal(_ref11) {
   var _tabs$find;
   var open = _ref11.open,
@@ -16,6 +137,7 @@ function CadastrosModal(_ref11) {
     onEdit = _ref11.onEdit,
     onSetObs = _ref11.onSetObs || function(){},
     onSetVendedor = _ref11.onSetVendedor || function(){},
+    onSetVendedorEFormasPagamentoEmLote = _ref11.onSetVendedorEFormasPagamentoEmLote || function(){},
     onSetFormasPagamento = _ref11.onSetFormasPagamento || function(){},
     onSetSinonimos = _ref11.onSetSinonimos || function(){},
     orcamentos = _ref11.orcamentos || {},
@@ -27,6 +149,9 @@ function CadastrosModal(_ref11) {
     _useState0 = _slicedToArray(_useState9, 2),
     tab = _useState0[0],
     setTab = _useState0[1];
+  // FIX (pedido do Claudio — cadastro em lote de vendedor/pagamento, depois da perda de dados
+  // pelo bug da condição de corrida): controla se o modal de "colar lista" está aberto.
+  var _useStateLote = useState(false), showLoteVendPag = _slicedToArray(_useStateLote, 2)[0], setShowLoteVendPag = _slicedToArray(_useStateLote, 2)[1];
   // FIX: estado local para o campo livre de observação por fornecedor (até 5000 caracteres)
   var _useStateObs = useState(null), obsAbertaPara = _slicedToArray(_useStateObs, 2)[0], setObsAbertaPara = _slicedToArray(_useStateObs, 2)[1];
   var _useStateObsTxt = useState(""), obsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[0], setObsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[1];
@@ -123,7 +248,8 @@ function CadastrosModal(_ref11) {
     onAdd(tab, v);
     setNovo("");
   };
-  return /*#__PURE__*/React.createElement(Modal, {
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+  /*#__PURE__*/React.createElement(Modal, {
     open: open,
     onClose: onClose,
     maxWidth: 560
@@ -212,7 +338,14 @@ function CadastrosModal(_ref11) {
     })
   }, /*#__PURE__*/React.createElement(IcoPlus, {
     w: 14
-  }))), /*#__PURE__*/React.createElement("div", {
+  })),
+  // FIX (pedido do Claudio — cadastro em lote de vendedor/pagamento, depois da perda de dados
+  // pelo bug da condição de corrida): botão só na aba Fornecedores, abre o modal de "colar lista".
+  tab === "fornecedores" && /*#__PURE__*/React.createElement("button", {
+    onClick: function(){ setShowLoteVendPag(true); },
+    title: "Cadastrar vendedor e forma de pagamento de vários fornecedores de uma vez, colando uma lista",
+    style: { background: "#fff3e0", border: "1px solid #ffcc80", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#e65100", cursor: "pointer", whiteSpace: "nowrap" }
+  }, "\ud83d\udccb EM LOTE")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -653,7 +786,13 @@ function CadastrosModal(_ref11) {
       color: "#aaa",
       textAlign: "right"
     }
-  }, (cadastros[tab] || []).length, " CADASTRO(S) NO TOTAL")));
+  }, (cadastros[tab] || []).length, " CADASTRO(S) NO TOTAL"))),
+  showLoteVendPag && /*#__PURE__*/React.createElement(ModalLoteVendedorPagamento, {
+    fornecedoresExistentes: cadastros.fornecedores || [],
+    onClose: function(){ setShowLoteVendPag(false); },
+    onConfirmar: function(itens){ onSetVendedorEFormasPagamentoEmLote(itens); setShowLoteVendPag(false); }
+  })
+  );
 }
 
 

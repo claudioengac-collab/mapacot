@@ -992,6 +992,30 @@ function App() {
       return updated;
     });
   }, []);
+  // FIX (pedido do Claudio — depois da perda de dados pelo bug da condição de corrida, ele
+  // precisa recadastrar vários fornecedores de uma vez): cadastro em LOTE de vendedor e forma
+  // de pagamento, colando uma lista. Recebe um array de { nomeFornecedor, vendedores,
+  // formasPagamento } já CASADOS com fornecedores existentes (o casamento acontece na tela,
+  // antes de chamar isto). Atualiza TUDO num único setCadastros — dispara UM salvamento no
+  // final, não um por fornecedor (mais rápido e evita qualquer chance de saves em sequência
+  // rápida colidirem entre si, mesmo já protegido pela fila em sbSaveCadastros).
+  var setVendedorEFormasPagamentoEmLote = useCallback(function (itens) {
+    var lista = (itens || []).filter(function (it) { return it && normalize(it.nomeFornecedor); });
+    if (!lista.length) return;
+    logEventoDiag("CADASTRO EM LOTE: vendedor/pagamento para " + lista.length + " fornecedor(es) — " + lista.map(function(it){ return normalize(it.nomeFornecedor); }).join(", "));
+    setCadastros(function (prev) {
+      var novoVend = _objectSpread({}, prev.fornecedorVendedor || {});
+      var novoPag = _objectSpread({}, prev.fornecedorFormasPagamento || {});
+      lista.forEach(function (it) {
+        var nome = normalize(it.nomeFornecedor);
+        var vends = (it.vendedores || []).map(function(s){ return String(s||'').trim().slice(0,200); }).filter(function(s){ return s.length>0; });
+        var pags = (it.formasPagamento || []).map(function(s){ return String(s||'').trim().slice(0,60); }).filter(function(s){ return s.length>0; });
+        if (vends.length) novoVend[nome] = vends; else delete novoVend[nome];
+        if (pags.length) novoPag[nome] = pags; else delete novoPag[nome];
+      });
+      return _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: novoVend, fornecedorFormasPagamento: novoPag });
+    });
+  }, []);
   var handleCreate = /*#__PURE__*/function () {
     var _ref20 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(m) {
       return _regenerator().w(function (_context9) {
@@ -1110,6 +1134,7 @@ function App() {
     // mas nunca tinham sido propagadas até o componente do mapa — sem elas chegarem aqui, não
     // havia como repassá-las pro modal de cadastros aberto de dentro do mapa (ver mapacot-6-mapa.js).
     setVendedorFornecedor: setVendedorFornecedor,
+    setVendedorEFormasPagamentoEmLote: setVendedorEFormasPagamentoEmLote,
     setFormasPagamentoFornecedor: setFormasPagamentoFornecedor,
     orcamentos: orcamentos,
     associacoes: associacoes,
@@ -1484,6 +1509,7 @@ function App() {
     onEdit: editCadastro,
     onSetObs: setObsFornecedor,
     onSetVendedor: setVendedorFornecedor,
+    onSetVendedorEFormasPagamentoEmLote: setVendedorEFormasPagamentoEmLote,
     onSetFormasPagamento: setFormasPagamentoFornecedor,
     onSetSinonimos: setSinonimosInsumo,
     mapas: mapas,
