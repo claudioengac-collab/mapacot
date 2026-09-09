@@ -1819,6 +1819,13 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td>'
         +'<td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'text-align:right;font-weight:700;color:#1a56b0;">'+(vlLiq0>0?'R$ '+fmtMoney(vlLiq0):'\u2014')+'</td>'
         +'<td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
+      // FIX (pedido do Claudio — revisão do PDF do mapa): faltava esta linha aqui, na página de
+      // resumo consolidado (mostrada quando há muitos fornecedores). Mesmo padrão estrutural da
+      // linha CONTATO logo abaixo, só trocando a chave lida (rSum0.condicoesPagamento) e o rótulo.
+      +'<tr style="background:#f7f9fc;"><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">CONDI\u00c7\u00d5ES DE PAGAMENTO</td>'
+        +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
+        +'<td colspan="3" style="border:1px solid #ccc;'+reS0+'font-size:9px;">'+(rSum0.condicoesPagamento||'\u2014')+'</td></tr>'
       +'<tr><td colspan="4" style="border:1px solid #ccc;font-weight:700;font-size:10px;">CONTATO</td>'
         +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
         +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
@@ -1882,6 +1889,14 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     key: "valorLiquido",
     label: "VALOR LÍQUIDO",
     computed: true
+  }, {
+    // FIX (pedido do Claudio — revisão do PDF do mapa): faltava esta linha aqui. O PDF usa uma
+    // lista de linhas PRÓPRIA e separada da usada na tela (mapacot-6-mapa.js) — quando a linha
+    // "Condições de Pagamento" foi criada, só a lista da tela foi atualizada; esta, usada só
+    // para gerar o PDF, ficou desatualizada. Mesma posição já combinada: antes de "Contato".
+    key: "condicoesPagamento",
+    label: "CONDIÇÕES DE PAGAMENTO",
+    maxLen: 200
   }, {
     key: "contato",
     label: "CONTATO",
