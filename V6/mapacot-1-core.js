@@ -581,7 +581,26 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
       }).then(function(r){
         if(!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar cadastros ('+r.status+'): '+t); });
         estado.ultimaVersaoConhecida = novaVersao; // propaga para a próxima save da fila usar
-        return novaVersao;
+        // FIX (pedido do Claudio — "o sistema disse que salvou, mas não salvou de verdade"): até
+        // aqui, um POST sem erro HTTP era tratado como garantia de que os dados realmente
+        // persistiram. Isso nem sempre é verdade — pode haver alguma diferença entre o que o
+        // servidor aceitou e o que realmente gravou, sem gerar um erro visível no POST em si.
+        // Esta confirmação relê DIRETO do servidor logo em seguida e compara com o que foi
+        // enviado; se algo não bater, o usuário é avisado NA HORA, com uma mensagem que diz
+        // exatamente isso — em vez de descobrir só depois, sem explicação, que os dados sumiram.
+        return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados"), { headers: SB, cache: "no-store" })
+          .then(function(rConf){ return rConf.ok ? rConf.json() : []; })
+          .then(function(rows){
+            var gravado = rows[0] && rows[0].dados;
+            var confereVend = gravado && JSON.stringify(gravado.fornecedorVendedor||{}) === JSON.stringify(main.fornecedorVendedor);
+            var conferePag = gravado && JSON.stringify(gravado.fornecedorFormasPagamento||{}) === JSON.stringify(main.fornecedorFormasPagamento);
+            if (!gravado || !confereVend || !conferePag) {
+              logEventoDiag("\u2716\u2716\u2716 ALERTA: o servidor confirmou o salvamento, mas a releitura mostra dados DIFERENTES do que foi enviado — vendedor/pagamento podem não ter persistido de verdade.");
+              window.avisarErroSalvamento('O sistema salvou, mas ao conferir de volta os dados não batem. Isso pode indicar um problema no servidor — não confie neste salvamento, tente novamente e avise o suporte se repetir.');
+            }
+            return novaVersao;
+          })
+          .catch(function(){ return novaVersao; }); // falha na CONFERÊNCIA em si (ex: sem internet no instante seguinte) não deve mascarar o sucesso do salvamento original
       });
     });
   });
