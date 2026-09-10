@@ -184,10 +184,18 @@ function ReportsModal(_ref12) {
       }
       if (tab === "obra") {
         if (!obra.trim()) {
-          alert("INFORME A OBRA.");
-          return;
+          // FIX (pedido do Claudio): campo vazio agora é permitido — gera um PDF com TODOS os
+          // mapas de TODAS as obras, um por página, em vez de bloquear com "INFORME A OBRA."
+          // Como isso pode virar um documento muito grande (proporcional ao total de mapas do
+          // sistema), confirma explicitamente antes, mostrando quantos mapas vão entrar — para
+          // não gerar isso sem querer por só ter esquecido de preencher o campo.
+          var totalTodosMapas = mapasComCurrent.length;
+          var confirmouTodasObras = window.confirm(
+            "NENHUMA OBRA SELECIONADA.\n\nIsso vai gerar um PDF com TODOS os " + totalTodosMapas + " MAPA(S) do sistema, um por página. Pode ser um arquivo grande e demorar para carregar.\n\nDeseja continuar mesmo assim?"
+          );
+          if (!confirmouTodasObras) return;
         }
-        logEventoDiag("RELAT\u00d3RIO gerado: por OBRA (" + obra + ")");
+        logEventoDiag("RELAT\u00d3RIO gerado: por OBRA (" + (obra.trim() || "TODAS AS OBRAS") + ")");
         gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes);
       }
       if (tab === "orcamento") {
