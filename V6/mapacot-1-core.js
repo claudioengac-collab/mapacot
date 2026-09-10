@@ -1717,7 +1717,11 @@ buildInsumosHTML = function buildInsumosHTML(obraName, now, itens) {
       + '<td style="width:40px;text-align:center;">'+(idx+1)+'</td>'
       + '<td>'+esc((item.descricao||'').toUpperCase())+(item.detalhe?'<div style="font-size:9px;color:#4a6888;margin-top:2px;word-break:break-word;">\u21b3 '+esc(item.detalhe)+'</div>':'')+'</td>'
       + '<td style="width:80px;text-align:right;">'+(item.qt||'')+'</td>'
-      + '<td style="width:60px;text-align:center;">'+(item.unidade||item.und||'UN')+'</td>'
+      // FIX (pedido do Claudio — unidade saindo errada no PDF de Insumos): o campo real que
+      // guarda a unidade de cada item, em todo o resto do sistema, é "unid" (ex: item.unid) —
+      // aqui buscava "unidade" e "und", nomes que não existem nos itens do mapa, então sempre
+      // caía no valor padrão "UN", não importa a unidade real do item (M, KG, SC, etc.).
+      + '<td style="width:60px;text-align:center;">'+(item.unid||'UN')+'</td>'
       + '</tr>';
   }).join('');
   return '<!DOCTYPE html><html><head><meta charset="UTF-8">'+css+'</head><body>'
