@@ -1570,8 +1570,12 @@ var _useState27 = useState(init),
                   if (e.key === "Enter" || e.key === "Tab") { e.target.blur(); }
                 },
                 style: {
+                  // FIX (pedido do Claudio — campo de VL. UNIT. baixo demais, difícil de tocar/
+                  // ler): aumentado só o padding VERTICAL (2px → 8px), deixando o campo bem mais
+                  // alto. O padding horizontal e o resto do estilo continuam os mesmos — o campo
+                  // de % ao lado não foi tocado, só este de preço.
                   width: "100%", textAlign: "right", fontSize: 11, border: "1px solid #ddd",
-                  borderRadius: 3, padding: "2px 4px", color: cellColor, fontWeight: isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400,
+                  borderRadius: 3, padding: "8px 4px", color: cellColor, fontWeight: isMin ? 700 : isRank2 ? 600 : isRank3 ? 600 : 400,
                   background: "#fff"
                 }
               }),
