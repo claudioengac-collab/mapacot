@@ -25,7 +25,14 @@ function ModalLoteVendedorPagamento(_ref_lote) {
   // tolerante (sem pontuação/espaços extras) antes de desistir — só usa o resultado se houver
   // EXATAMENTE UM candidato, nunca escolhe entre vários por conta própria.
   var mapaNormalizado = {}; // normalize(nome digitado) -> nome oficial já cadastrado
-  var chaveTolerante = function(s) { return normalize(s).replace(/[.,;\-]/g, "").replace(/\s+/g, " ").trim(); };
+  // FIX (pedido do Claudio — nomes reais têm parênteses, barra, "&", e MUITO acento em
+  // português): a versão anterior só tolerava ponto/vírgula/ponto-e-vírgula/hífen, e usava
+  // "normalize" (só maiúscula) — vulnerável a diferenças de como o texto foi colado (às vezes
+  // o MESMO texto visualmente pode ter uma codificação Unicode ligeiramente diferente depois
+  // de passar por outro app/teclado, mesmo copiado e colado sem querer mudar nada). Agora usa
+  // "normalizeBusca" (já usada em buscas no resto do sistema — remove acento de forma robusta,
+  // não depende de como o acento foi codificado) e tolera parênteses, barra e "&" como ruído.
+  var chaveTolerante = function(s) { return normalizeBusca(s).replace(/[.,;\-()/&]/g, "").replace(/\s+/g, " ").trim(); };
   var mapaTolerante = {}; // versão sem pontuação -> lista de nomes oficiais que batem
   fornecedoresExistentes.forEach(function(f) {
     mapaNormalizado[normalize(f)] = f;
@@ -152,6 +159,46 @@ function CadastrosModal(_ref11) {
   // FIX (pedido do Claudio — cadastro em lote de vendedor/pagamento, depois da perda de dados
   // pelo bug da condição de corrida): controla se o modal de "colar lista" está aberto.
   var _useStateLote = useState(false), showLoteVendPag = _slicedToArray(_useStateLote, 2)[0], setShowLoteVendPag = _slicedToArray(_useStateLote, 2)[1];
+  // FIX (pedido do Claudio — "não tem uma forma de acompanhar se está funcionando?"): estado do
+  // botão "VERIFICAR TUDO", que relê o servidor sob demanda e compara com o que está na tela,
+  // sem precisar editar nada primeiro. "verificando" controla o texto do botão enquanto checa;
+  // "resultadoVerificacao" guarda o relatório pra mostrar (null = nenhuma verificação feita ainda).
+  var _useStateVerif = useState(false), verificando = _slicedToArray(_useStateVerif, 2)[0], setVerificando = _slicedToArray(_useStateVerif, 2)[1];
+  var _useStateResVerif = useState(null), resultadoVerificacao = _slicedToArray(_useStateResVerif, 2)[0], setResultadoVerificacao = _slicedToArray(_useStateResVerif, 2)[1];
+  // FIX (pedido do Claudio — acompanhar se está funcionando certo): relê o servidor AGORA (sem
+  // precisar editar nada primeiro) e compara vendedor/forma de pagamento de CADA fornecedor com
+  // o que está na tela. Mostra um relatório claro: quantos conferem, e — se algum não conferir —
+  // exatamente quais, para investigar pontualmente em vez de reconferir tudo um por um.
+  var handleVerificarTudo = function() {
+    setVerificando(true);
+    setResultadoVerificacao(null);
+    fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados"), { headers: SB, cache: "no-store" })
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(rows){
+        var gravado = (rows[0] && rows[0].dados) || {};
+        var vendGravado = gravado.fornecedorVendedor || {};
+        var pagGravado = gravado.fornecedorFormasPagamento || {};
+        var vendTela = cadastros.fornecedorVendedor || {};
+        var pagTela = cadastros.fornecedorFormasPagamento || {};
+        var todosNomes = Array.from(new Set([].concat(Object.keys(vendTela), Object.keys(pagTela), Object.keys(vendGravado), Object.keys(pagGravado))));
+        var divergentes = [];
+        todosNomes.forEach(function(nome) {
+          var vendOk = mesmoConteudoMapaDeListas({ x: vendTela[nome] || [] }, { x: vendGravado[nome] || [] });
+          var pagOk = mesmoConteudoMapaDeListas({ x: pagTela[nome] || [] }, { x: pagGravado[nome] || [] });
+          if (!vendOk || !pagOk) divergentes.push(nome);
+        });
+        setResultadoVerificacao({
+          horario: new Date().toLocaleTimeString('pt-BR'),
+          totalComVendedorOuPagamento: todosNomes.length,
+          divergentes: divergentes
+        });
+        setVerificando(false);
+      })
+      .catch(function(){
+        setResultadoVerificacao({ erro: true, horario: new Date().toLocaleTimeString('pt-BR') });
+        setVerificando(false);
+      });
+  };
   // FIX: estado local para o campo livre de observação por fornecedor (até 5000 caracteres)
   var _useStateObs = useState(null), obsAbertaPara = _slicedToArray(_useStateObs, 2)[0], setObsAbertaPara = _slicedToArray(_useStateObs, 2)[1];
   var _useStateObsTxt = useState(""), obsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[0], setObsTextoEditando = _slicedToArray(_useStateObsTxt, 2)[1];
@@ -345,7 +392,16 @@ function CadastrosModal(_ref11) {
     onClick: function(){ setShowLoteVendPag(true); },
     title: "Cadastrar vendedor e forma de pagamento de vários fornecedores de uma vez, colando uma lista",
     style: { background: "#fff3e0", border: "1px solid #ffcc80", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#e65100", cursor: "pointer", whiteSpace: "nowrap" }
-  }, "\ud83d\udccb EM LOTE")), /*#__PURE__*/React.createElement("div", {
+  }, "\ud83d\udccb EM LOTE"),
+  // FIX (pedido do Claudio — "não tem uma forma de acompanhar se está funcionando?"): botão que
+  // relê o servidor AGORA e compara com a tela, sem precisar editar nada primeiro — dá uma
+  // resposta objetiva a qualquer momento, em vez de precisar confiar ou testar manualmente.
+  tab === "fornecedores" && /*#__PURE__*/React.createElement("button", {
+    onClick: handleVerificarTudo,
+    disabled: verificando,
+    title: "Reler o servidor agora e conferir se todo vendedor/forma de pagamento cadastrado bate com o que está salvo",
+    style: { background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#1565c0", cursor: verificando ? "default" : "pointer", whiteSpace: "nowrap", opacity: verificando ? 0.6 : 1 }
+  }, verificando ? "\u23f3 VERIFICANDO..." : "\ud83d\udd0d VERIFICAR TUDO")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -383,7 +439,25 @@ function CadastrosModal(_ref11) {
       color: "#aaa",
       display: "flex"
     }
-  }, /*#__PURE__*/React.createElement(IcoClose, null))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(IcoClose, null))),
+  // FIX (pedido do Claudio): mostra o relatório da última verificação, só na aba Fornecedores.
+  tab === "fornecedores" && resultadoVerificacao && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "10px 0",
+      padding: "10px 12px",
+      borderRadius: 8,
+      fontSize: 11.5,
+      background: resultadoVerificacao.erro ? "#fff3e0" : (resultadoVerificacao.divergentes && resultadoVerificacao.divergentes.length ? "#fff3e0" : "#eafaf0"),
+      border: "1px solid " + (resultadoVerificacao.erro ? "#ffcc80" : (resultadoVerificacao.divergentes && resultadoVerificacao.divergentes.length ? "#ffcc80" : "#a5d6a7")),
+      color: resultadoVerificacao.erro ? "#b35c00" : (resultadoVerificacao.divergentes && resultadoVerificacao.divergentes.length ? "#b35c00" : "#0e7a3f")
+    }
+  },
+    resultadoVerificacao.erro
+      ? "\u26a0 Não foi possível verificar agora (sem conexão?). Tente de novo em instantes. (" + resultadoVerificacao.horario + ")"
+      : (resultadoVerificacao.divergentes.length === 0
+          ? "\u2714 Verificado às " + resultadoVerificacao.horario + " — " + resultadoVerificacao.totalComVendedorOuPagamento + " fornecedor(es) com vendedor/pagamento, todos conferem com o servidor."
+          : "\u26a0 Verificado às " + resultadoVerificacao.horario + " — " + resultadoVerificacao.divergentes.length + " de " + resultadoVerificacao.totalComVendedorOuPagamento + " NÃO conferem: " + resultadoVerificacao.divergentes.join(", "))
+  ), /*#__PURE__*/React.createElement("div", {
     style: {
       maxHeight: 320,
       overflowY: "auto",
