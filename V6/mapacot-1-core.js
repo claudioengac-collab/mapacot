@@ -387,6 +387,25 @@ function mesmaVersaoTs(a, b) {
   var ta = Date.parse(a), tb = Date.parse(b);
   return isFinite(ta) && isFinite(tb) && ta === tb;
 }
+// FIX (causa raiz do aviso falso "dados não batem" na verificação pós-salvamento de cadastros):
+// compara dois objetos no formato { "NOME DO FORNECEDOR": ["item1", "item2"] } pelo CONTEÚDO —
+// mesma chave, mesmo conjunto de itens em cada lista — ignorando completamente a ORDEM das
+// chaves do objeto e a ordem dos itens dentro de cada lista. Bancos de dados não garantem
+// preservar essa ordem ao gravar e reler um campo JSON; comparar como texto (JSON.stringify)
+// acusa diferença só por causa da ordem, mesmo quando o conteúdo real é idêntico.
+function mesmoConteudoMapaDeListas(a, b) {
+  a = a || {}; b = b || {};
+  var chavesA = Object.keys(a).sort(), chavesB = Object.keys(b).sort();
+  if (chavesA.length !== chavesB.length) return false;
+  for (var i = 0; i < chavesA.length; i++) if (chavesA[i] !== chavesB[i]) return false;
+  for (var j = 0; j < chavesA.length; j++) {
+    var k = chavesA[j];
+    var listaA = (a[k] || []).slice().sort(), listaB = (b[k] || []).slice().sort();
+    if (listaA.length !== listaB.length) return false;
+    for (var m = 0; m < listaA.length; m++) if (listaA[m] !== listaB[m]) return false;
+  }
+  return true;
+}
 var estadoSalvamentoMapa = {};
 var sbSaveMapa = function sbSaveMapa(m) {
   var idMapa = m.id;
@@ -592,8 +611,17 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
           .then(function(rConf){ return rConf.ok ? rConf.json() : []; })
           .then(function(rows){
             var gravado = rows[0] && rows[0].dados;
-            var confereVend = gravado && JSON.stringify(gravado.fornecedorVendedor||{}) === JSON.stringify(main.fornecedorVendedor);
-            var conferePag = gravado && JSON.stringify(gravado.fornecedorFormasPagamento||{}) === JSON.stringify(main.fornecedorFormasPagamento);
+            // FIX (causa raiz real do aviso falso "dados não batem" — confirmado com o Claudio:
+            // ele testou e os dados estavam SEMPRE lá de verdade, o aviso é que estava errado):
+            // a comparação anterior usava JSON.stringify(a) === JSON.stringify(b), que depende
+            // da ORDEM das chaves dentro do objeto E dos itens dentro de cada lista. Bancos como
+            // o Postgres/Supabase não garantem preservar essa ordem ao gravar e reler um campo
+            // JSON — o CONTEÚDO volta idêntico, só a ordem interna pode mudar — e isso sozinho já
+            // fazia o texto comparado ficar diferente, mesmo com os dados corretos. A comparação
+            // agora ignora ordem completamente: mesma chave e mesmo conjunto de valores por
+            // chave, na ordem que for, conta como igual.
+            var confereVend = mesmoConteudoMapaDeListas(gravado && gravado.fornecedorVendedor, main.fornecedorVendedor);
+            var conferePag = mesmoConteudoMapaDeListas(gravado && gravado.fornecedorFormasPagamento, main.fornecedorFormasPagamento);
             if (!gravado || !confereVend || !conferePag) {
               logEventoDiag("\u2716\u2716\u2716 ALERTA: o servidor confirmou o salvamento, mas a releitura mostra dados DIFERENTES do que foi enviado — vendedor/pagamento podem não ter persistido de verdade.");
               window.avisarErroSalvamento('O sistema salvou, mas ao conferir de volta os dados não batem. Isso pode indicar um problema no servidor — não confie neste salvamento, tente novamente e avise o suporte se repetir.');
