@@ -1450,23 +1450,15 @@ var _useState27 = useState(init),
         onChange: function(e){ return updItem(item.id, "comprado", e.target.checked); },
         style: { width:15, height:15, cursor:"pointer", accentColor:"#2a5298" },
         title: item.comprado ? "Compra efetivada" : "Marcar como compra"
-      }),
-      // FIX (pedido do Claudio — mesmo problema do cabeçalho do fornecedor, agora aqui): os 3
-      // ícones desta célula (marcar compra, ocultar item, excluir item) tinham "display: block"
-      // forçado nos dois últimos, o que os empurrava para baixo do checkbox, empilhados. Ao
-      // rolar, cada um saía de vista num instante diferente, gerando o mesmo efeito de "ícone
-      // sozinho, sem contexto" já corrigido no cabeçalho. Removido o "display: block" forçado —
-      // sem ele, os 3 voltam ao comportamento padrão (lado a lado, sem quebrar linha sozinhos),
-      // então sempre aparecem e somem juntos ao rolar.
-      /*#__PURE__*/React.createElement("span", {
+      }), /*#__PURE__*/React.createElement("span", {
         onClick: function(){ return toggleOculto(item.id); },
         title: _isOculto ? "Clique para mostrar este item" : "Clique para ocultar este item",
-        style: { cursor:"pointer", fontSize:13, marginLeft:4, userSelect:"none" }
+        style: { cursor:"pointer", fontSize:13, marginLeft:4, userSelect:"none", display:"block" }
       }, _isOculto ? "\uD83D\uDEAB" : "\uD83D\uDC41"),
       /*#__PURE__*/React.createElement("span", {
         onClick: function(){ return toggleExcluido(item.id); },
         title: _isExcluido ? "Restaurar item ao mapa" : "Excluir permanentemente do mapa",
-        style: { cursor:"pointer", fontSize:13, marginLeft:2, userSelect:"none", color: _isExcluido ? "#c0392b" : "#bbb" }
+        style: { cursor:"pointer", fontSize:13, marginLeft:2, userSelect:"none", display:"block", color: _isExcluido ? "#c0392b" : "#bbb" }
       }, _isExcluido ? "\uD83D\uDD12" : "\u2702")), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           textAlign: "center",
