@@ -145,6 +145,10 @@ function CadastrosModal(_ref11) {
     onSetObs = _ref11.onSetObs || function(){},
     onSetVendedor = _ref11.onSetVendedor || function(){},
     onSetVendedorEFormasPagamentoEmLote = _ref11.onSetVendedorEFormasPagamentoEmLote || function(){},
+    onListarBackups = _ref11.onListarBackups || function(){ return Promise.resolve([]); },
+    onRestaurarBackup = _ref11.onRestaurarBackup || function(){ return Promise.resolve({ ok: false, motivo: 'Indisponível.' }); },
+    onListarBackupsInsumos = _ref11.onListarBackupsInsumos || function(){ return Promise.resolve([]); },
+    onRestaurarBackupInsumos = _ref11.onRestaurarBackupInsumos || function(){ return Promise.resolve({ ok: false, motivo: 'Indisponível.' }); },
     onSetFormasPagamento = _ref11.onSetFormasPagamento || function(){},
     onSetSinonimos = _ref11.onSetSinonimos || function(){},
     orcamentos = _ref11.orcamentos || {},
@@ -165,6 +169,49 @@ function CadastrosModal(_ref11) {
   // "resultadoVerificacao" guarda o relatório pra mostrar (null = nenhuma verificação feita ainda).
   var _useStateVerif = useState(false), verificando = _slicedToArray(_useStateVerif, 2)[0], setVerificando = _slicedToArray(_useStateVerif, 2)[1];
   var _useStateResVerif = useState(null), resultadoVerificacao = _slicedToArray(_useStateResVerif, 2)[0], setResultadoVerificacao = _slicedToArray(_useStateResVerif, 2)[1];
+  // FIX (pedido do Claudio — poder restaurar um backup): estados do painel de backups.
+  // "showBackups" controla se o painel está aberto; "listaBackups" guarda os 5 backups (ou
+  // menos, se ainda não completou 5) já carregados; "restaurando" trava os botões enquanto uma
+  // restauração está em andamento (evita clique duplo); "resultadoRestauracao" guarda a última
+  // mensagem de resultado, para mostrar embaixo da lista.
+  var _useStateShowBk = useState(false), showBackups = _slicedToArray(_useStateShowBk, 2)[0], setShowBackups = _slicedToArray(_useStateShowBk, 2)[1];
+  var _useStateListaBk = useState(null), listaBackups = _slicedToArray(_useStateListaBk, 2)[0], setListaBackups = _slicedToArray(_useStateListaBk, 2)[1];
+  var _useStateCarregBk = useState(false), carregandoBackups = _slicedToArray(_useStateCarregBk, 2)[0], setCarregandoBackups = _slicedToArray(_useStateCarregBk, 2)[1];
+  var _useStateRestBk = useState(false), restaurando = _slicedToArray(_useStateRestBk, 2)[0], setRestaurando = _slicedToArray(_useStateRestBk, 2)[1];
+  var _useStateResRestBk = useState(null), resultadoRestauracao = _slicedToArray(_useStateResRestBk, 2)[0], setResultadoRestauracao = _slicedToArray(_useStateResRestBk, 2)[1];
+  // FIX (pedido do Claudio — estender backup para insumos também): o mesmo painel agora serve
+  // para os dois tipos — "tipoBackupAtual" guarda qual foi aberto ('cadastros' ou 'insumos'),
+  // para saber que funções chamar e como mostrar o resumo de cada cópia.
+  var _useStateTipoBk = useState('cadastros'), tipoBackupAtual = _slicedToArray(_useStateTipoBk, 2)[0], setTipoBackupAtual = _slicedToArray(_useStateTipoBk, 2)[1];
+  var handleAbrirBackups = function(tipo) {
+    setTipoBackupAtual(tipo);
+    setShowBackups(true);
+    setResultadoRestauracao(null);
+    setCarregandoBackups(true);
+    var listarFn = tipo === 'insumos' ? onListarBackupsInsumos : onListarBackups;
+    listarFn().then(function(lista){
+      setListaBackups(lista);
+      setCarregandoBackups(false);
+    });
+  };
+  var handleRestaurar = function(idBackup) {
+    var mensagem = tipoBackupAtual === 'insumos'
+      ? "Isso vai trazer de volta os insumos e sinônimos salvos nesse backup, adicionando os que estiverem faltando na lista atual (sem duplicar os que já existem).\n\nUma cópia do que está na tela AGORA também é guardada antes, então dá para desfazer se precisar.\n\nConfirma a restauração?"
+      : "Isso vai trazer de volta o vendedor/forma de pagamento salvos nesse backup, para os fornecedores que ainda existem hoje. O que está preenchido agora para esses fornecedores será substituído.\n\nUma cópia do que está na tela AGORA também é guardada antes, então dá para desfazer se precisar.\n\nConfirma a restauração?";
+    var confirmou = window.confirm(mensagem);
+    if (!confirmou) return;
+    setRestaurando(true);
+    setResultadoRestauracao(null);
+    var restaurarFn = tipoBackupAtual === 'insumos' ? onRestaurarBackupInsumos : onRestaurarBackup;
+    var listarFn = tipoBackupAtual === 'insumos' ? onListarBackupsInsumos : onListarBackups;
+    restaurarFn(idBackup).then(function(resultado){
+      setRestaurando(false);
+      setResultadoRestauracao(resultado);
+      if (resultado && resultado.ok) {
+        listarFn().then(function(lista){ setListaBackups(lista); });
+      }
+    });
+  };
   // FIX (pedido do Claudio — acompanhar se está funcionando certo): relê o servidor AGORA (sem
   // precisar editar nada primeiro) e compara vendedor/forma de pagamento de CADA fornecedor com
   // o que está na tela. Mostra um relatório claro: quantos conferem, e — se algum não conferir —
@@ -401,7 +448,23 @@ function CadastrosModal(_ref11) {
     disabled: verificando,
     title: "Reler o servidor agora e conferir se todo vendedor/forma de pagamento cadastrado bate com o que está salvo",
     style: { background: "#e3f2fd", border: "1px solid #90caf9", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#1565c0", cursor: verificando ? "default" : "pointer", whiteSpace: "nowrap", opacity: verificando ? 0.6 : 1 }
-  }, verificando ? "\u23f3 VERIFICANDO..." : "\ud83d\udd0d VERIFICAR TUDO")), /*#__PURE__*/React.createElement("div", {
+  }, verificando ? "\u23f3 VERIFICANDO..." : "\ud83d\udd0d VERIFICAR TUDO"),
+  // FIX (pedido do Claudio — backup automático e poder restaurar, sem precisar de mim): botão
+  // que abre a lista das cópias de segurança guardadas automaticamente (a cada salvamento, ao
+  // sair da aba, e a cada 10 minutos), com opção de restaurar qualquer uma delas.
+  tab === "fornecedores" && /*#__PURE__*/React.createElement("button", {
+    onClick: function(){ handleAbrirBackups('cadastros'); },
+    title: "Ver as cópias de segurança guardadas automaticamente e restaurar alguma se precisar",
+    style: { background: "#f3e8ff", border: "1px solid #c9a6f5", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#6b21a8", cursor: "pointer", whiteSpace: "nowrap" }
+  }, "\ud83d\udd52 BACKUPS"),
+  // FIX (pedido do Claudio — estender o backup automático para insumos): mesmo botão, mesmo
+  // painel, agora também na aba Insumos — protege a lista de descrições padronizadas e os
+  // sinônimos que o "Ler com IA" usa para casar preços automaticamente.
+  tab === "insumos" && /*#__PURE__*/React.createElement("button", {
+    onClick: function(){ handleAbrirBackups('insumos'); },
+    title: "Ver as cópias de segurança dos insumos guardadas automaticamente e restaurar alguma se precisar",
+    style: { background: "#f3e8ff", border: "1px solid #c9a6f5", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#6b21a8", cursor: "pointer", whiteSpace: "nowrap" }
+  }, "\ud83d\udd52 BACKUPS")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       alignItems: "center",
@@ -865,7 +928,60 @@ function CadastrosModal(_ref11) {
     fornecedoresExistentes: cadastros.fornecedores || [],
     onClose: function(){ setShowLoteVendPag(false); },
     onConfirmar: function(itens){ onSetVendedorEFormasPagamentoEmLote(itens); setShowLoteVendPag(false); }
-  })
+  }),
+  // FIX (pedido do Claudio — poder restaurar um backup, sem precisar de mim): painel simples
+  // com a lista das cópias guardadas automaticamente, cada uma com um botão de restaurar.
+  showBackups && /*#__PURE__*/React.createElement("div", {
+    style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
+    onClick: function(e){ if (e.target === e.currentTarget) setShowBackups(false); }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: "#fff", borderRadius: 12, maxWidth: 560, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.3)" }
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { background: "#6b21a8", color: "#fff", padding: "14px 18px", borderRadius: "12px 12px 0 0", display: "flex", justifyContent: "space-between", alignItems: "center" }
+    },
+      /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 14 } }, "\ud83d\udd52 C\u00d3PIAS DE SEGURAN\u00c7A" + (tipoBackupAtual === 'insumos' ? " \u2014 INSUMOS" : " \u2014 FORNECEDORES")),
+      /*#__PURE__*/React.createElement("span", { onClick: function(){ setShowBackups(false); }, style: { cursor: "pointer", fontSize: 18 } }, "\u2715")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { padding: 18 } },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: "#666", marginBottom: 14 } },
+        "Guardadas automaticamente a cada salvamento, ao sair da aba, e a cada 10 minutos. Sempre as 5 mais recentes."
+      ),
+      carregandoBackups && /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 20, color: "#999", fontSize: 12 } }, "Carregando..."),
+      !carregandoBackups && listaBackups && listaBackups.length === 0 && /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 20, color: "#999", fontSize: 12 } }, "Nenhuma c\u00f3pia ainda \u2014 ser\u00e1 criada automaticamente conforme voc\u00ea usa o sistema."),
+      !carregandoBackups && listaBackups && listaBackups.map(function(bk){
+        var dataFormatada = new Date(bk.atualizado_em).toLocaleString('pt-BR');
+        var resumo = tipoBackupAtual === 'insumos'
+          ? ("\ud83d\udce6 " + bk.qtdInsumos + " insumo(s) \u00b7 \ud83d\udd17 " + bk.qtdSinonimos + " com sin\u00f4nimo(s)")
+          : ("\ud83e\uddd1 " + bk.qtdVendedor + " com vendedor \u00b7 \ud83d\udcb3 " + bk.qtdPagamento + " com pagamento");
+        return /*#__PURE__*/React.createElement("div", {
+          key: bk.id,
+          style: { border: "1px solid #e4d5f7", borderRadius: 8, padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }
+        },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 12 } },
+            /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, color: "#333" } }, dataFormatada),
+            /*#__PURE__*/React.createElement("div", { style: { color: "#777", marginTop: 2 } }, resumo)
+          ),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function(){ handleRestaurar(bk.id); },
+            disabled: restaurando,
+            style: { background: "#6b21a8", color: "#fff", border: "none", borderRadius: 6, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: restaurando ? "default" : "pointer", opacity: restaurando ? 0.6 : 1, whiteSpace: "nowrap" }
+          }, restaurando ? "\u23f3..." : "RESTAURAR")
+        );
+      }),
+      resultadoRestauracao && /*#__PURE__*/React.createElement("div", {
+        style: { marginTop: 12, padding: "10px 12px", borderRadius: 8, fontSize: 11.5,
+          background: resultadoRestauracao.ok ? "#eafaf0" : "#fff3e0",
+          border: "1px solid " + (resultadoRestauracao.ok ? "#a5d6a7" : "#ffcc80"),
+          color: resultadoRestauracao.ok ? "#0e7a3f" : "#b35c00" }
+      }, resultadoRestauracao.ok
+          ? (tipoBackupAtual === 'insumos'
+              ? ("\u2714 Restaurado: " + resultadoRestauracao.adicionados + " insumo(s) trazido(s) de volta, " + resultadoRestauracao.sinonimosRestaurados + " com sin\u00f4nimo(s) restaurado(s).")
+              : ("\u2714 Restaurado: " + resultadoRestauracao.restaurados + " fornecedor(es) trazido(s) de volta" + (resultadoRestauracao.ignorados ? " (" + resultadoRestauracao.ignorados + " ignorado(s), n\u00e3o existem mais na lista atual)" : "") + "."))
+          : ("\u26a0 " + (resultadoRestauracao.motivo || "N\u00e3o foi poss\u00edvel restaurar."))
+      )
+    )
+  ))
   );
 }
 

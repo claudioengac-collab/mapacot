@@ -523,6 +523,12 @@ function App() {
   // CARREGAMENTO (dado inicial, depois insumos em segundo plano) — o efeito de salvar ignora
   // essas duas vezes, e só salva de verdade a partir da PRIMEIRA mudança feita pelo usuário.
   var cadastrosMudouPorCarregamentoRef = useRef(0);
+  // FIX (pedido do Claudio — backup ao sair da aba): guarda sempre o valor MAIS ATUAL de
+  // "cadastros", para o listener de visibilitychange (registrado uma única vez, mais abaixo)
+  // conseguir ler o estado de agora, não uma versão "congelada" de quando o listener foi criado
+  // — problema clássico de closure desatualizada em React.
+  var cadastrosAtuaisRef = useRef(cadastros);
+  useEffect(function () { cadastrosAtuaisRef.current = cadastros; }, [cadastros]);
   // FIX: mesma proteção contra múltiplas abas, agora para Insumos (que usa uma função de
   // salvamento separada, sbSaveInsumos, diferente da usada por obras/fornecedores/unidades)
   var versaoInsumosRef = useRef(null);
@@ -708,6 +714,10 @@ function App() {
         .then(function(novaVersao){
           versaoCadastrosRef.current = novaVersao; // FIX: atualiza via ref (não state) para não disparar este mesmo useEffect de novo — evita loop
           logEventoDiag("✔ SALVOU CADASTROS — nova versão " + novaVersao);
+          // FIX (pedido do Claudio — backup automático, sem precisar fazer nada manualmente):
+          // depois de CADA salvamento de cadastros confirmado com sucesso, guarda uma cópia extra
+          // rotativa (até 5). Roda em paralelo, sem atrasar nem bloquear o uso normal do sistema.
+          sbBackupCadastros(cadastros);
         })
         .catch(function(e){
           if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('cadastros', e.message);
@@ -715,6 +725,42 @@ function App() {
         });
     }
   }, [cadastros, loading, cadastrosOk]);
+
+  // FIX (pedido do Claudio — "backup geral automático quando parar de operar com o sistema"):
+  // além do backup a cada salvamento (acima), também faz uma cópia extra sempre que a aba sai de
+  // foco — trocar de aba, minimizar, ir para outro app, ou fechar. Usa "visibilitychange" (não
+  // "beforeunload"): o evento de fechar aba tem restrições do navegador que podem cortar a
+  // requisição de rede antes de completar; "visibilitychange" para "hidden" dispara de forma
+  // confiável e ainda dá tempo da requisição terminar normalmente. Roda só se os cadastros já
+  // carregaram de verdade (evita disparar com dado incompleto logo na abertura do sistema).
+  useEffect(function () {
+    var aoSairDaAba = function () {
+      if (document.visibilityState !== "hidden") return;
+      if (loading || !cadastrosOk) return;
+      sbBackupCadastros(cadastrosAtuaisRef.current);
+      // FIX (pedido do Claudio — estender para insumos): mesmo gatilho, mesma ref (insumos vive
+      // dentro do mesmo objeto "cadastros" — ver sbGetInsumos/sbSaveInsumos).
+      sbBackupInsumos(cadastrosAtuaisRef.current.insumos, cadastrosAtuaisRef.current.insumoSinonimos);
+    };
+    document.addEventListener("visibilitychange", aoSairDaAba);
+    return function () { document.removeEventListener("visibilitychange", aoSairDaAba); };
+  }, [loading, cadastrosOk]);
+
+  // FIX (pedido do Claudio — "sistemas que fazem essas cópias a partir de tantos minutos"):
+  // camada extra de proteção, além das duas acima (a cada salvamento real, e ao sair da aba).
+  // Enquanto o sistema estiver aberto, faz uma cópia de segurança a cada 10 minutos, mesmo que
+  // o usuário não saia da aba nem edite nada nesse meio tempo — cobre o caso de uma sessão longa
+  // (a aba nunca perde o foco) onde os outros dois gatilhos nunca disparariam sozinhos. A duração
+  // real é uma constante nomeada logo abaixo — sozinha, sem depender de nada externo.
+  useEffect(function () {
+    if (loading || !cadastrosOk) return;
+    var INTERVALO_BACKUP_PERIODICO_MS = (typeof window !== "undefined" && window.__INTERVALO_BACKUP_TESTE_MS) || (10 * 60 * 1000); // 10 minutos
+    var timer = setInterval(function () {
+      sbBackupCadastros(cadastrosAtuaisRef.current);
+      sbBackupInsumos(cadastrosAtuaisRef.current.insumos, cadastrosAtuaisRef.current.insumoSinonimos);
+    }, INTERVALO_BACKUP_PERIODICO_MS);
+    return function () { clearInterval(timer); };
+  }, [loading, cadastrosOk]);
 
   // ── Funções de orçamento ──────────────────────────────────────────────────
   var saveOrcamento = React.useCallback(function(obraId, dados) {
@@ -1016,6 +1062,85 @@ function App() {
       return _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: novoVend, fornecedorFormasPagamento: novoPag });
     });
   }, []);
+  // FIX (pedido do Claudio — poder restaurar um backup): aplica de volta o vendedor/forma de
+  // pagamento de um backup específico. Antes de qualquer coisa, faz uma cópia do estado ATUAL
+  // (mesmo que esteja "errado"/incompleto) — assim, se a restauração não for o que a pessoa
+  // queria, dá pra voltar atrás também. Depois MESCLA (não substitui tudo): só aplica o
+  // vendedor/pagamento de fornecedores que AINDA EXISTEM na lista atual — um fornecedor que foi
+  // removido de propósito depois que o backup foi feito não é "ressuscitado" sem querer.
+  var restaurarBackupCadastros = useCallback(function (idBackup) {
+    return sbBackupCadastros(cadastrosAtuaisRef.current).then(function () {
+      return sbBuscarConteudoBackup(idBackup);
+    }).then(function (linha) {
+      if (!linha || !linha.dados) return { ok: false, motivo: 'Backup não encontrado.' };
+      var backupVend = linha.dados.fornecedorVendedor || {};
+      var backupPag = linha.dados.fornecedorFormasPagamento || {};
+      var fornecedoresAtuais = {};
+      (cadastrosAtuaisRef.current.fornecedores || []).forEach(function (f) { fornecedoresAtuais[normalize(f)] = true; });
+      var restaurados = 0, ignorados = 0;
+      var novoVend, novoPag;
+      setCadastros(function (prev) {
+        novoVend = _objectSpread({}, prev.fornecedorVendedor || {});
+        novoPag = _objectSpread({}, prev.fornecedorFormasPagamento || {});
+        var todosNomes = Array.from(new Set([].concat(Object.keys(backupVend), Object.keys(backupPag))));
+        todosNomes.forEach(function (nome) {
+          if (!fornecedoresAtuais[nome]) { ignorados++; return; } // fornecedor não existe mais — não recria
+          restaurados++;
+          if (backupVend[nome] && backupVend[nome].length) novoVend[nome] = backupVend[nome];
+          if (backupPag[nome] && backupPag[nome].length) novoPag[nome] = backupPag[nome];
+        });
+        return _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: novoVend, fornecedorFormasPagamento: novoPag });
+      });
+      logEventoDiag("RESTAUROU BACKUP: " + idBackup + " — " + restaurados + " fornecedor(es) restaurado(s), " + ignorados + " ignorado(s) (não existem mais)");
+      return { ok: true, restaurados: restaurados, ignorados: ignorados };
+    }).catch(function () {
+      return { ok: false, motivo: 'Não foi possível restaurar agora. Verifique sua conexão e tente de novo.' };
+    });
+  }, []);
+  // FIX (mesmo pedido, agora para insumos): backup do estado atual primeiro (rede de segurança),
+  // depois aplica o backup escolhido. Diferente de cadastros — aqui, insumos QUE SUMIRAM da
+  // lista atual são adicionados de volta (não apenas ignorados), porque a lista de insumos em si
+  // é o "banco" de descrições que o "Ler com IA" casa — perder um insumo da lista é diferente de
+  // ter removido um fornecedor de propósito. Sinônimos são restaurados só para insumos que
+  // continuam existindo depois desse reforço.
+  var restaurarBackupInsumos = useCallback(function (idBackup) {
+    return sbBackupInsumos(cadastrosAtuaisRef.current.insumos, cadastrosAtuaisRef.current.insumoSinonimos).then(function () {
+      return sbBuscarConteudoBackup(idBackup);
+    }).then(function (linha) {
+      if (!linha || !linha.dados) return { ok: false, motivo: 'Backup não encontrado.' };
+      var backupInsumos = linha.dados.insumos || [];
+      var backupSinonimos = linha.dados.insumoSinonimos || {};
+      var novaListaInsumos, novoSinonimos, adicionados = 0, sinonimosRestaurados = 0;
+      setCadastros(function (prev) {
+        var listaAtual = prev.insumos || [];
+        var jaExiste = {};
+        listaAtual.forEach(function (i) { jaExiste[normalize(i)] = true; });
+        novaListaInsumos = listaAtual.slice();
+        backupInsumos.forEach(function (i) {
+          var n = normalize(i);
+          if (!jaExiste[n]) { novaListaInsumos.push(n); jaExiste[n] = true; adicionados++; }
+        });
+        novaListaInsumos = novaListaInsumos.sort();
+        novoSinonimos = _objectSpread({}, prev.insumoSinonimos || {});
+        Object.keys(backupSinonimos).forEach(function (nome) {
+          if (!jaExiste[nome]) return; // segurança extra — não deveria acontecer após o reforço acima
+          if (backupSinonimos[nome] && backupSinonimos[nome].length) { novoSinonimos[nome] = backupSinonimos[nome]; sinonimosRestaurados++; }
+        });
+        var updated = _objectSpread(_objectSpread({}, prev), {}, { insumos: novaListaInsumos, insumoSinonimos: novoSinonimos });
+        sbSaveInsumos(updated.insumos, updated.insumoSinonimos, versaoInsumosRef.current).then(function(novaVersao){
+          versaoInsumosRef.current = novaVersao;
+        }).catch(function(e){
+          if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('insumos', e.message);
+          else window.avisarErroSalvamento('Não foi possível salvar os insumos restaurados. Verifique sua conexão.');
+        });
+        return updated;
+      });
+      logEventoDiag("RESTAUROU BACKUP DE INSUMOS: " + idBackup + " — " + adicionados + " insumo(s) trazido(s) de volta, " + sinonimosRestaurados + " com sinônimos restaurados");
+      return { ok: true, adicionados: adicionados, sinonimosRestaurados: sinonimosRestaurados };
+    }).catch(function () {
+      return { ok: false, motivo: 'Não foi possível restaurar agora. Verifique sua conexão e tente de novo.' };
+    });
+  }, []);
   var handleCreate = /*#__PURE__*/function () {
     var _ref20 = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee9(m) {
       return _regenerator().w(function (_context9) {
@@ -1135,6 +1260,8 @@ function App() {
     // havia como repassá-las pro modal de cadastros aberto de dentro do mapa (ver mapacot-6-mapa.js).
     setVendedorFornecedor: setVendedorFornecedor,
     setVendedorEFormasPagamentoEmLote: setVendedorEFormasPagamentoEmLote,
+    restaurarBackupCadastros: restaurarBackupCadastros,
+    restaurarBackupInsumos: restaurarBackupInsumos,
     setFormasPagamentoFornecedor: setFormasPagamentoFornecedor,
     orcamentos: orcamentos,
     associacoes: associacoes,
@@ -1510,6 +1637,10 @@ function App() {
     onSetObs: setObsFornecedor,
     onSetVendedor: setVendedorFornecedor,
     onSetVendedorEFormasPagamentoEmLote: setVendedorEFormasPagamentoEmLote,
+    onListarBackups: sbListarBackupsCadastros,
+    onRestaurarBackup: restaurarBackupCadastros,
+    onListarBackupsInsumos: sbListarBackupsInsumos,
+    onRestaurarBackupInsumos: restaurarBackupInsumos,
     onSetFormasPagamento: setFormasPagamentoFornecedor,
     onSetSinonimos: setSinonimosInsumo,
     mapas: mapas,

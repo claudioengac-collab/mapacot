@@ -20,6 +20,8 @@ function MapEditor(_ref15) {
     // cairiam no mesmo substituto vazio, mesmo já vindo corretas de mapacot-9-app.js):
     setVendedorFornecedor = _ref15.setVendedorFornecedor || function(){},
     setVendedorEFormasPagamentoEmLote = _ref15.setVendedorEFormasPagamentoEmLote || function(){},
+    restaurarBackupCadastros = _ref15.restaurarBackupCadastros || function(){ return Promise.resolve({ ok: false, motivo: 'Indisponível.' }); },
+    restaurarBackupInsumos = _ref15.restaurarBackupInsumos || function(){ return Promise.resolve({ ok: false, motivo: 'Indisponível.' }); },
     setFormasPagamentoFornecedor = _ref15.setFormasPagamentoFornecedor || function(){},
     orcamentos = _ref15.orcamentos || {},
     associacoes = _ref15.associacoes || [],
@@ -93,6 +95,13 @@ var _useState27 = useState(init),
   // limpo ao fechar. Puramente aditivo: não interfere em nada do fluxo de um único mapa (o caso
   // mais comum), que continua funcionando exatamente igual quando esta lista está vazia.
   var _useStateMapasAdic=useState([]),mapasAdicionaisPO=_slicedToArray(_useStateMapasAdic,2)[0],setMapasAdicionaisPO=_slicedToArray(_useStateMapasAdic,2)[1];
+  // FIX (pedido do Claudio — poder restaurar backup de mapa, sem precisar de mim): mesmo padrão
+  // de estados já usado no painel de backups de cadastros/insumos.
+  var _useStateShowBkMapa = useState(false), showBackupsMapa = _slicedToArray(_useStateShowBkMapa, 2)[0], setShowBackupsMapa = _slicedToArray(_useStateShowBkMapa, 2)[1];
+  var _useStateListaBkMapa = useState(null), listaBackupsMapa = _slicedToArray(_useStateListaBkMapa, 2)[0], setListaBackupsMapa = _slicedToArray(_useStateListaBkMapa, 2)[1];
+  var _useStateCarregBkMapa = useState(false), carregandoBackupsMapa = _slicedToArray(_useStateCarregBkMapa, 2)[0], setCarregandoBackupsMapa = _slicedToArray(_useStateCarregBkMapa, 2)[1];
+  var _useStateRestBkMapa = useState(false), restaurandoMapa = _slicedToArray(_useStateRestBkMapa, 2)[0], setRestaurandoMapa = _slicedToArray(_useStateRestBkMapa, 2)[1];
+  var _useStateResRestBkMapa = useState(null), resultadoRestauracaoMapa = _slicedToArray(_useStateResRestBkMapa, 2)[0], setResultadoRestauracaoMapa = _slicedToArray(_useStateResRestBkMapa, 2)[1];
   var _useStateImpExcel=useState(false),showImportExcel=_slicedToArray(_useStateImpExcel,2)[0],setShowImportExcel=_slicedToArray(_useStateImpExcel,2)[1];
   var _useStateSIP=useState([]),itensSelecionadosPO=_slicedToArray(_useStateSIP,2)[0],setItensSelecionadosPO=_slicedToArray(_useStateSIP,2)[1];
   var _useStatePOCfg=useState({}),pedidoConfig=_slicedToArray(_useStatePOCfg,2)[0],setPedidoConfig=_slicedToArray(_useStatePOCfg,2)[1];
@@ -271,6 +280,50 @@ var _useState27 = useState(init),
       }));
     });
   };
+  // FIX (pedido do Claudio — poder restaurar um backup de mapa, sem precisar de mim): diferente
+  // de cadastros/insumos (onde dá pra mesclar com segurança), um MAPA tem itens, preços e
+  // fornecedores interligados de um jeito complexo demais pra mesclar automaticamente sem risco
+  // de misturar coisas de forma estranha. Por isso aqui a restauração é uma SUBSTITUIÇÃO COMPLETA
+  // (como "restaurar uma versão anterior" no Google Docs) — simples e previsível. Antes de
+  // qualquer coisa, guarda uma cópia do estado ATUAL (mesmo que pareça "errado"), então dá pra
+  // desfazer a restauração também, se não for o que a pessoa queria.
+  var restaurarBackupDesteMapa = function restaurarBackupDesteMapa(idBackup) {
+    var idMapaAtual = mapaRef.current.id;
+    return sbBackupMapa(idMapaAtual, mapaRef.current).then(function () {
+      return sbBuscarConteudoBackup(idBackup);
+    }).then(function (linha) {
+      if (!linha || !linha.dados) return { ok: false, motivo: 'Backup não encontrado.' };
+      var dadosBackup = linha.dados;
+      update(function (prev) {
+        return Object.assign({}, dadosBackup, { id: prev.id }); // mantém o id atual, troca o resto
+      });
+      return { ok: true, qtdItens: (dadosBackup.itens || []).length, qtdFornecedores: (dadosBackup.fornecedores || []).length };
+    }).catch(function () {
+      return { ok: false, motivo: 'Não foi possível restaurar agora. Verifique sua conexão e tente de novo.' };
+    });
+  };
+  var handleAbrirBackupsMapa = function() {
+    setShowBackupsMapa(true);
+    setResultadoRestauracaoMapa(null);
+    setCarregandoBackupsMapa(true);
+    sbListarBackupsMapa(mapaRef.current.id).then(function(lista){
+      setListaBackupsMapa(lista);
+      setCarregandoBackupsMapa(false);
+    });
+  };
+  var handleRestaurarBackupMapa = function(idBackup) {
+    var confirmou = window.confirm("Isso vai SUBSTITUIR TODO o conteúdo deste mapa (itens, preços, fornecedores) pelo que estava salvo nessa cópia.\n\nUma cópia do que está na tela AGORA também é guardada antes, então dá para desfazer se precisar.\n\nConfirma a restauração?");
+    if (!confirmou) return;
+    setRestaurandoMapa(true);
+    setResultadoRestauracaoMapa(null);
+    restaurarBackupDesteMapa(idBackup).then(function(resultado){
+      setRestaurandoMapa(false);
+      setResultadoRestauracaoMapa(resultado);
+      if (resultado && resultado.ok) {
+        sbListarBackupsMapa(mapaRef.current.id).then(function(lista){ setListaBackupsMapa(lista); });
+      }
+    });
+  };
   // FIX: reescrita completa do mecanismo de salvamento (debounce real), motivada por relatos
   // reais de dados perdidos que persistiam mesmo após várias correções pontuais. ANTES: cada
   // edição disparava uma requisição de salvamento quase imediata, exigindo uma fila complexa de
@@ -351,6 +404,29 @@ var _useState27 = useState(init),
       window.removeEventListener("focus", aoGanharFoco);
     };
   }, [saved]);
+  // FIX (pedido do Claudio — estender backup automático para mapas): mesmos dois gatilhos já
+  // usados para cadastros/insumos (sair da aba, e a cada 10 minutos), agora para o mapa que está
+  // ABERTO nesta tela. Usa "mapaRef.current" (já existe, sempre atualizado) — não precisa de uma
+  // ref nova. Só o mapa REALMENTE aberto ganha essas cópias extras, não o sistema inteiro.
+  useEffect(function () {
+    var aoSairDaAba = function () {
+      if (document.visibilityState !== "hidden") return;
+      var m = mapaRef.current;
+      if (!m || !m.id) return;
+      sbBackupMapa(m.id, m);
+    };
+    document.addEventListener("visibilitychange", aoSairDaAba);
+    return function () { document.removeEventListener("visibilitychange", aoSairDaAba); };
+  }, []);
+  useEffect(function () {
+    var INTERVALO_BACKUP_MAPA_MS = (typeof window !== "undefined" && window.__INTERVALO_BACKUP_TESTE_MS) || (10 * 60 * 1000); // 10 minutos
+    var timer = setInterval(function () {
+      var m = mapaRef.current;
+      if (!m || !m.id) return;
+      sbBackupMapa(m.id, m);
+    }, INTERVALO_BACKUP_MAPA_MS);
+    return function () { clearInterval(timer); };
+  }, []);
   var addItem = function addItem() {
     try { logEventoDiag("ADD item " + (((mapaRef.current && mapaRef.current.itens) || []).length + 1)); } catch (e) {}
     return update(function (m) {
@@ -2029,6 +2105,10 @@ var _useState27 = useState(init),
         onClick: function(){ logEventoDiag("PDF de Insumos gerado: mapa " + (mapa.numero != null ? mapa.numero : "?")); abrirPDF(buildInsumosHTML(mapa.obra, clock, itensAtivos)); setShowConfigMenu(false); },
         style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
       }, "\uD83D\uDCCB PDF de Insumos"),
+      /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ handleAbrirBackupsMapa(); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDD52 Backups deste mapa"),
       /*#__PURE__*/React.createElement("div", { style:{ borderTop:"1px solid #eee", margin:"6px 0" } }),
       /*#__PURE__*/React.createElement("div", {
         onClick: function(){ setShowCadEditor(true); setShowConfigMenu(false); },
@@ -2327,6 +2407,54 @@ var _useState27 = useState(init),
       style: { fontSize: 12.5, color: "#333", whiteSpace: "pre-wrap", overflowY: "auto", textTransform: "none", lineHeight: 1.5 }
     }, obsPopupFornecedor.texto)
   ),
+  // FIX (pedido do Claudio — poder restaurar um backup de mapa, sem precisar de mim): mesmo
+  // padrão visual já usado no painel de backups de cadastros/insumos, adaptado para mapa.
+  showBackupsMapa && /*#__PURE__*/React.createElement("div", {
+    style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.45)", zIndex: 10000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 },
+    onClick: function(e){ if (e.target === e.currentTarget) setShowBackupsMapa(false); }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: "#fff", borderRadius: 12, maxWidth: 560, width: "100%", maxHeight: "80vh", overflowY: "auto", boxShadow: "0 12px 40px rgba(0,0,0,0.3)" }
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { background: "#6b21a8", color: "#fff", padding: "14px 18px", borderRadius: "12px 12px 0 0", display: "flex", justifyContent: "space-between", alignItems: "center" }
+    },
+      /*#__PURE__*/React.createElement("span", { style: { fontWeight: 700, fontSize: 14 } }, "\ud83d\udd52 C\u00d3PIAS DE SEGURAN\u00c7A \u2014 ESTE MAPA"),
+      /*#__PURE__*/React.createElement("span", { onClick: function(){ setShowBackupsMapa(false); }, style: { cursor: "pointer", fontSize: 18 } }, "\u2715")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { padding: 18 } },
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, color: "#666", marginBottom: 14 } },
+        "Guardadas automaticamente a cada salvamento deste mapa, ao sair da aba, e a cada 10 minutos. Sempre as 5 mais recentes."
+      ),
+      carregandoBackupsMapa && /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 20, color: "#999", fontSize: 12 } }, "Carregando..."),
+      !carregandoBackupsMapa && listaBackupsMapa && listaBackupsMapa.length === 0 && /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", padding: 20, color: "#999", fontSize: 12 } }, "Nenhuma c\u00f3pia ainda \u2014 ser\u00e1 criada automaticamente conforme voc\u00ea usa o sistema."),
+      !carregandoBackupsMapa && listaBackupsMapa && listaBackupsMapa.map(function(bk){
+        var dataFormatada = new Date(bk.atualizado_em).toLocaleString('pt-BR');
+        return /*#__PURE__*/React.createElement("div", {
+          key: bk.id,
+          style: { border: "1px solid #e4d5f7", borderRadius: 8, padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }
+        },
+          /*#__PURE__*/React.createElement("div", { style: { fontSize: 12 } },
+            /*#__PURE__*/React.createElement("div", { style: { fontWeight: 700, color: "#333" } }, dataFormatada),
+            /*#__PURE__*/React.createElement("div", { style: { color: "#777", marginTop: 2 } }, "\ud83d\udce6 " + bk.qtdItens + " item(ns) \u00b7 \ud83c\udfe2 " + bk.qtdFornecedores + " fornecedor(es)")
+          ),
+          /*#__PURE__*/React.createElement("button", {
+            onClick: function(){ handleRestaurarBackupMapa(bk.id); },
+            disabled: restaurandoMapa,
+            style: { background: "#6b21a8", color: "#fff", border: "none", borderRadius: 6, padding: "7px 12px", fontSize: 11, fontWeight: 700, cursor: restaurandoMapa ? "default" : "pointer", opacity: restaurandoMapa ? 0.6 : 1, whiteSpace: "nowrap" }
+          }, restaurandoMapa ? "\u23f3..." : "RESTAURAR")
+        );
+      }),
+      resultadoRestauracaoMapa && /*#__PURE__*/React.createElement("div", {
+        style: { marginTop: 12, padding: "10px 12px", borderRadius: 8, fontSize: 11.5,
+          background: resultadoRestauracaoMapa.ok ? "#eafaf0" : "#fff3e0",
+          border: "1px solid " + (resultadoRestauracaoMapa.ok ? "#a5d6a7" : "#ffcc80"),
+          color: resultadoRestauracaoMapa.ok ? "#0e7a3f" : "#b35c00" }
+      }, resultadoRestauracaoMapa.ok
+          ? ("\u2714 Mapa restaurado: " + resultadoRestauracaoMapa.qtdItens + " item(ns), " + resultadoRestauracaoMapa.qtdFornecedores + " fornecedor(es).")
+          : ("\u26a0 " + (resultadoRestauracaoMapa.motivo || "N\u00e3o foi poss\u00edvel restaurar."))
+      )
+    )
+  )),
   showCadEditor && /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCadEditor,
     onClose: function onClose() { setShowCadEditor(false); },
@@ -2344,6 +2472,10 @@ var _useState27 = useState(init),
     // nenhum aparecer. Mesmas funções já usadas no outro local, só propagadas até aqui também.
     onSetVendedor: setVendedorFornecedor,
     onSetVendedorEFormasPagamentoEmLote: setVendedorEFormasPagamentoEmLote,
+    onListarBackups: sbListarBackupsCadastros,
+    onRestaurarBackup: restaurarBackupCadastros,
+    onListarBackupsInsumos: sbListarBackupsInsumos,
+    onRestaurarBackupInsumos: restaurarBackupInsumos,
     onSetFormasPagamento: setFormasPagamentoFornecedor,
     mapas: mapas,
     orcamentos: orcamentos,

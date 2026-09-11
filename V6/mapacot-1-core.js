@@ -457,6 +457,9 @@ var sbSaveMapa = function sbSaveMapa(m) {
         }
         logEventoDiag("\u2714 SALVO mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : "?") + " (" + ((dadosLimpos.itens || []).length) + " itens) \u2014 nova vers\u00e3o " + novaVersao);
         estado.ultimaVersaoConhecida = novaVersao; // propaga para a próxima save da fila usar
+        // FIX (pedido do Claudio — estender backup automático para mapas): a cada salvamento
+        // confirmado, guarda uma cópia extra rotativa DESTE mapa específico (não de todos).
+        sbBackupMapa(idMapa, Object.assign({}, dadosLimpos, { _versaoServidor: novaVersao }));
         return novaVersao;
       });
     });
@@ -568,6 +571,136 @@ var sbGetInsumos = /*#__PURE__*/function () {
 // DENTRO da fila (atualizada pela chamada anterior), não a versão desatualizada que o
 // componente React ainda tinha no momento em que foi chamada.
 var estadoSalvamentoCadastros = { fila: Promise.resolve(), ultimaVersaoConhecida: null };
+// FIX (pedido do Claudio — depois da segunda perda de fornecedor/vendedor/pagamento sem causa
+// encontrada no código do app, provavelmente algo do lado do servidor fora do meu alcance):
+// backup automático e rotativo dos cadastros. Guarda até 5 cópias, cada uma numa linha separada
+// da MESMA tabela "cadastros" (não precisa de tabela nova — usa os IDs especiais
+// "backup_cadastros_0" a "backup_cadastros_4", que o resto do app nunca lê, então não interfere
+// em nada do uso normal). Se todos os 5 slots já estiverem ocupados, sobrescreve o mais antigo —
+// sempre mantém as 5 cópias mais recentes. Falha aqui NUNCA deve travar o uso normal do sistema
+// (por isso o catch no final engole o erro — é uma proteção extra, não algo crítico pro dia a dia).
+var BACKUP_CADASTROS_SLOTS = ["backup_cadastros_0", "backup_cadastros_1", "backup_cadastros_2", "backup_cadastros_3", "backup_cadastros_4"];
+var BACKUP_INSUMOS_SLOTS = ["backup_insumos_0", "backup_insumos_1", "backup_insumos_2", "backup_insumos_3", "backup_insumos_4"];
+// FIX (extraído ao adicionar backup de insumos e mapas — mesma lógica, 3 lugares diferentes):
+// função genérica de rotação de backup, reutilizada por cadastros/insumos/mapas. Recebe a LISTA
+// de ids dos slots (5 deles) e os DADOS a salvar; acha um slot vazio ou, se todos ocupados, o
+// mais antigo, e grava ali. Não muda o comportamento já testado de sbBackupCadastros — só tira
+// a lógica repetida para um só lugar, para não ter 3 cópias quase-iguais dela pelo código.
+var criarBackupRotativo = function criarBackupRotativo(slots, dados) {
+  var filtro = "id=in.(" + slots.join(",") + ")";
+  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?").concat(filtro, "&select=id,atualizado_em"), { headers: SB, cache: "no-store" })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(existentes){
+      var idsExistentes = existentes.map(function(e){ return e.id; });
+      var slotAlvo = slots.find(function(id){ return idsExistentes.indexOf(id) === -1; });
+      if (!slotAlvo) {
+        var maisAntigo = existentes.reduce(function(a, b){
+          return new Date(a.atualizado_em) < new Date(b.atualizado_em) ? a : b;
+        });
+        slotAlvo = maisAntigo.id;
+      }
+      return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
+        method: "POST",
+        headers: SB,
+        body: JSON.stringify({ id: slotAlvo, dados: dados, atualizado_em: new Date().toISOString() })
+      });
+    });
+};
+var sbBackupCadastros = function sbBackupCadastros(cadastrosAtuais) {
+  var dadosBackup = {
+    obras: cadastrosAtuais.obras || [],
+    fornecedores: cadastrosAtuais.fornecedores || [],
+    unidades: cadastrosAtuais.unidades || [],
+    fornecedorObs: cadastrosAtuais.fornecedorObs || {},
+    fornecedorVendedor: cadastrosAtuais.fornecedorVendedor || {},
+    fornecedorFormasPagamento: cadastrosAtuais.fornecedorFormasPagamento || {}
+  };
+  return criarBackupRotativo(BACKUP_CADASTROS_SLOTS, dadosBackup)
+    .then(function(){ logEventoDiag("✔ BACKUP de cadastros atualizado"); })
+    .catch(function(){ logEventoDiag("✖ Falha ao atualizar backup de cadastros (uso normal não foi afetado)"); }); // backup é proteção extra — nunca deve travar o uso normal do sistema
+};
+// FIX (pedido do Claudio — poder restaurar um backup, não só criar): busca os 5 slots de
+// backup e devolve um RESUMO de cada um (quando foi feito, quantos fornecedores têm vendedor,
+// quantos têm forma de pagamento) — o suficiente para mostrar numa lista e a pessoa escolher
+// qual restaurar, sem precisar carregar o conteúdo completo de todos os 5 de uma vez.
+var sbListarBackupsCadastros = function sbListarBackupsCadastros() {
+  var filtro = "id=in.(" + BACKUP_CADASTROS_SLOTS.join(",") + ")";
+  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?").concat(filtro, "&select=id,dados,atualizado_em"), { headers: SB, cache: "no-store" })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(linhas){
+      return linhas.map(function(l){
+        var d = l.dados || {};
+        return {
+          id: l.id,
+          atualizado_em: l.atualizado_em,
+          qtdVendedor: Object.keys(d.fornecedorVendedor || {}).length,
+          qtdPagamento: Object.keys(d.fornecedorFormasPagamento || {}).length
+        };
+      }).sort(function(a, b){ return new Date(b.atualizado_em) - new Date(a.atualizado_em); }); // mais recente primeiro
+    })
+    .catch(function(){ return []; });
+};
+// FIX (mesmo pedido): busca o conteúdo COMPLETO de UM backup específico (pelo id do slot), para
+// a tela aplicar de volta. Só retorna os dados — quem decide COMO aplicar (mesclar com o que já
+// existe agora, por exemplo) é quem chama esta função, não ela.
+var sbBuscarConteudoBackup = function sbBuscarConteudoBackup(idBackup) {
+  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.").concat(idBackup, "&select=dados,atualizado_em"), { headers: SB, cache: "no-store" })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(linhas){ return linhas[0] || null; });
+};
+// FIX (pedido do Claudio — estender o backup automático para além de cadastros): mesmo padrão
+// já testado (rotação de 5 cópias), agora para a lista de INSUMOS (o "banco" de descrições
+// padronizadas + sinônimos que o "Ler com IA" usa para casar preços automaticamente). Reaproveita
+// "criarBackupRotativo" e "sbBuscarConteudoBackup", que já são genéricas — só o "resumo" para
+// mostrar na lista (quantos insumos, quantos sinônimos) é específico daqui.
+var sbBackupInsumos = function sbBackupInsumos(insumos, sinonimos) {
+  var dadosBackup = { insumos: insumos || [], insumoSinonimos: sinonimos || {} };
+  return criarBackupRotativo(BACKUP_INSUMOS_SLOTS, dadosBackup)
+    .then(function(){ logEventoDiag("✔ BACKUP de insumos atualizado"); })
+    .catch(function(){ logEventoDiag("✖ Falha ao atualizar backup de insumos (uso normal não foi afetado)"); });
+};
+var sbListarBackupsInsumos = function sbListarBackupsInsumos() {
+  var filtro = "id=in.(" + BACKUP_INSUMOS_SLOTS.join(",") + ")";
+  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?").concat(filtro, "&select=id,dados,atualizado_em"), { headers: SB, cache: "no-store" })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(linhas){
+      return linhas.map(function(l){
+        var d = l.dados || {};
+        return { id: l.id, atualizado_em: l.atualizado_em, qtdInsumos: (d.insumos || []).length, qtdSinonimos: Object.keys(d.insumoSinonimos || {}).length };
+      }).sort(function(a, b){ return new Date(b.atualizado_em) - new Date(a.atualizado_em); });
+    })
+    .catch(function(){ return []; });
+};
+// FIX (pedido do Claudio — estender backup automático para mapas): diferente de cadastros e
+// insumos (um objeto único no sistema todo), MAPAS são 130+ registros individuais — fazer backup
+// de TODOS a cada 10 minutos seria pesado e caro à toa. Em vez disso, cada MAPA tem seus PRÓPRIOS
+// 5 slots de backup (guardados na mesma tabela "cadastros", com uma chave que inclui o id do
+// mapa) — só o mapa que está REALMENTE sendo aberto/editado agora ganha proteção, que é o
+// cenário real de perda (editando um mapa específico), não o sistema inteiro de uma vez.
+var slotsBackupMapa = function slotsBackupMapa(idMapa) {
+  return [0, 1, 2, 3, 4].map(function(i){ return "backup_mapa_" + idMapa + "_" + i; });
+};
+var sbBackupMapa = function sbBackupMapa(idMapa, dadosMapa) {
+  if (!idMapa || !dadosMapa) return Promise.resolve();
+  var dadosLimpos = Object.assign({}, dadosMapa);
+  delete dadosLimpos._versaoServidor;
+  return criarBackupRotativo(slotsBackupMapa(idMapa), dadosLimpos)
+    .then(function(){ logEventoDiag("✔ BACKUP do mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : idMapa) + " atualizado"); })
+    .catch(function(){ logEventoDiag("✖ Falha ao atualizar backup do mapa " + (dadosLimpos.numero != null ? dadosLimpos.numero : idMapa) + " (uso normal não foi afetado)"); });
+};
+var sbListarBackupsMapa = function sbListarBackupsMapa(idMapa) {
+  var slots = slotsBackupMapa(idMapa);
+  var filtro = "id=in.(" + slots.join(",") + ")";
+  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?").concat(filtro, "&select=id,dados,atualizado_em"), { headers: SB, cache: "no-store" })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(linhas){
+      return linhas.map(function(l){
+        var d = l.dados || {};
+        return { id: l.id, atualizado_em: l.atualizado_em, qtdItens: (d.itens || []).length, qtdFornecedores: (d.fornecedores || []).length };
+      }).sort(function(a, b){ return new Date(b.atualizado_em) - new Date(a.atualizado_em); });
+    })
+    .catch(function(){ return []; });
+};
 var sbSaveCadastros = function sbSaveCadastros(c) {
   var main = {
     obras: c.obras || [],
@@ -655,6 +788,10 @@ var sbSaveInsumos = function sbSaveInsumos(insumos, sinonimos, versaoConhecida) 
       })
     }).then(function(r) {
       if (!r.ok) throw new Error('Erro ao salvar insumos (' + r.status + ')');
+      // FIX (pedido do Claudio — estender backup automático para insumos): colocado AQUI DENTRO
+      // (não em cada um dos 4 lugares que chamam sbSaveInsumos) para valer para todos eles de
+      // uma vez, sem risco de esquecer em algum. Roda em paralelo, sem atrasar o retorno.
+      sbBackupInsumos(insumos, sinonimos);
       return novaVersao;
     });
   });
