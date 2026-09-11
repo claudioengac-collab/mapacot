@@ -1658,7 +1658,14 @@ var SC = {
     borderBottom: "3px solid #f0a500",
     position: "sticky",
     top: 0,
-    zIndex: 20
+    // FIX (pedido do Claudio — ícones do fornecedor "vazando" por cima desta barra ao rolar):
+    // essa barra fixa tinha zIndex mais BAIXO que os ícones do cabeçalho do fornecedor
+    // (zIndex 60) — então, ao rolar, os ícones (excluir/ocultar/%) continuavam aparecendo POR
+    // CIMA desta barra mesmo depois do resto da célula (o nome) já ter saído de vista, dando a
+    // impressão de "ícone sozinho, sem contexto". Uma barra fixa de navegação deve sempre ficar
+    // acima de qualquer conteúdo normal da página que role por baixo dela — por isso o valor
+    // sobe para 100 (ainda bem abaixo dos modais/overlays do sistema, que usam 9500+).
+    zIndex: 100
   },
   headerIn: {
     maxWidth: 1100,
@@ -1841,7 +1848,7 @@ var SC = {
     gap: 8,
     position: "sticky",
     top: 0,
-    zIndex: 30,
+    zIndex: 100, // FIX (mesmo motivo do SC.header acima): antes 30, menor que os ícones do fornecedor (60) — agora acima de qualquer conteúdo normal da página, ícones inclusos.
     width: "100%",
     boxSizing: "border-box",
     overflowX: "auto",
