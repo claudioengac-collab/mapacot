@@ -1196,11 +1196,19 @@ var _useState27 = useState(init),
       }, /*#__PURE__*/React.createElement("div", {
         style: {
           display: "flex",
-          flexDirection: "column",
+          flexDirection: "row",
           alignItems: "center",
-          gap: 4
+          justifyContent: "center",
+          gap: 6
         }
       },
+      // FIX (pedido do Claudio — ícones "flutuando" sozinhos, sem o nome, por um instante ao
+      // rolar a tela): antes o nome ficava em cima e os ícones embaixo, empilhados na mesma
+      // célula — como ocupavam alturas diferentes, ao rolar, o nome saía de vista primeiro e por
+      // um instante só os ícones apareciam, sem contexto. Colocando os dois lado a lado, na MESMA
+      // linha, eles sempre entram e saem de vista JUNTOS — o problema deixa de existir, sem
+      // precisar de nenhum truque de "grudar no topo" (já tentado 4 vezes antes, sempre com o
+      // mesmo efeito colateral: o primeiro item da lista ficava escondido atrás do cabeçalho).
       // FIX 6 (definitivo): nome do fornecedor vem PRIMEIRO (fica em cima, visualmente), e os
       // ícones de excluir/ocultar vêm DEPOIS (ficam embaixo) — exatamente como combinado
       // originalmente. A tentativa anterior de colocar os ícones acima (para evitar que o
@@ -1272,17 +1280,17 @@ var _useState27 = useState(init),
         }
       }) : /*#__PURE__*/React.createElement("div", {
         onClick: function(){ setFornEditandoNome(function(prev){ var novo = new Set(prev); novo.add(f.id); return novo; }); },
-        title: "Clique para editar o nome",
+        title: (f.nome ? (f.nome + " — ") : "") + "Clique para editar o nome",
         style: {
-          width: "100%", boxSizing: "border-box", textAlign: "center", cursor: "pointer",
+          maxWidth: 92, boxSizing: "border-box", textAlign: "center", cursor: "pointer",
           border: "1px solid rgba(255,255,255,0.3)", borderRadius: 3,
-          background: "rgba(255,255,255,0.15)", padding: "3px 4px",
+          background: "rgba(255,255,255,0.15)", padding: "3px 6px",
           fontSize: 11, fontWeight: 700, color: "#fff",
-          whiteSpace: "normal", lineHeight: 1.25, minHeight: 15
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.25
         }
       }, f.nome || "NOME DO FORNECEDOR"),
       /*#__PURE__*/React.createElement("div", {
-        style: { display: "flex", gap: 10, alignItems: "center", justifyContent: "center", position: "relative", zIndex: 60 }
+        style: { display: "flex", gap: 8, alignItems: "center", justifyContent: "center", position: "relative", zIndex: 60, flexShrink: 0 }
       }, /*#__PURE__*/React.createElement("button", {
         onClick: function onClick() {
           if (window.confirm("EXCLUIR FORNECEDOR \"" + f.nome + "\"?")) removeForn(f.id);
