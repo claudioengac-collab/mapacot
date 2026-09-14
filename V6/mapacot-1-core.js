@@ -2854,6 +2854,15 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
       var rowCls = i % 2 === 1 ? " class=\"even\"" : "";
       var resumo = calcResumo(item, mapa.fornecedores || [], mapa.precos || {});
       var menorForn = (resumo.forn || "").toUpperCase();
+      // FIX (pedido do Claudio, depois de ver o PDF real — a descrição saía cortada em 16
+      // caracteres, tipo "DISCO - 71/4" 1…", ilegível e repetida em todas as linhas da seção; e
+      // o "detalhe" — a anotação por fornecedor que já existe no mapa — nunca aparecia neste
+      // relatório): a descrição agora sai por inteiro (o CSS já quebra linha automaticamente,
+      // sem altura fixa, então isso não desalinha a tabela — só deixa a linha um pouco mais alta
+      // quando o nome é comprido). O detalhe mostrado é o do fornecedor VENCEDOR (o "menor"),
+      // já que é dele que o preço em destaque vem — mostrado do mesmo jeito visual que o nome do
+      // fornecedor vencedor já é mostrado, uma linha pequena logo abaixo.
+      var detalheVencedor = resumo.minFornId ? (mapa.detalhes || {})[item.id + "_" + resumo.minFornId] : "";
 
       var fornCells = allForns.map(function(fname) {
         var f = (mapa.fornecedores || []).find(function(x){
@@ -2871,12 +2880,13 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
         + "<td style=\"text-align:center;width:28px;\">"  + esc(mapa.numero||"\u2014") + "</td>"
         + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + esc(truncar((mapa.obra||"\u2014").toUpperCase(), 36)) + "</td>"
         + "<td style=\"text-align:center;width:58px;\">" + fmtDate(new Date(mapa.criadoEm)) + "</td>"
-        + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc(truncar((item.descricao||"").toUpperCase(), 16)) + "</td>"
+        + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc((item.descricao||"").toUpperCase()) + "</td>"
         + "<td class=\"num\" style=\"width:34px;\">" + (item.qt||"") + "</td>"
         + "<td style=\"text-align:center;width:28px;\">" + (item.unid||"") + "</td>"
         + "<td class=\"menor-cell\" style=\"width:80px;\">"
           + "<div class=\"menor-val\">" + (resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "\u2014") + "</div>"
           + (menorForn ? "<div class=\"menor-forn\">" + esc(menorForn) + "</div>" : "")
+          + (detalheVencedor ? "<div class=\"menor-detalhe\">" + esc(detalheVencedor) + "</div>" : "")
         + "</td>"
         + fornCells
         + "</tr>";
@@ -2924,6 +2934,7 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
     "td.menor-cell{background:#fff8dc;text-align:center;border:2px solid #b8860b !important;}",
     "td.menor-val{font-weight:bold;color:#7b5e00;font-size:11px;}",
     "td.menor-forn{font-size:8px;color:#555;line-height:1.3;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
+    "td.menor-detalhe{font-size:8px;color:#7b5e00;font-style:italic;line-height:1.3;margin-top:1px;white-space:normal;word-break:break-word;}",
     "td.winner{background:#c8ecd2;font-weight:bold;text-align:right;}",
     "tr.even td{background:#f5f7fc;}",
     "tr.even td.menor-cell{background:#fff3c0;}",
