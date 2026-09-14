@@ -2810,7 +2810,13 @@ var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orca
     return "<div style=\"".concat(i > 0 ? "page-break-before:always;" : "", "\">").concat(body, "</div>");
   }).join(""), "</body></html>"));
 };
-var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo) {
+// FIX (pedido do Claudio — marcar vários insumos com checkbox, em vez de buscar um insumo por
+// vez): "insumosLista" agora é um ARRAY de nomes de insumo (antes era um texto único). A lógica
+// de comparação de preços por fornecedor, cores de vencedor e CSS continuam EXATAMENTE as
+// mesmas de antes — só que agora rodam uma vez PARA CADA insumo marcado, cada um com sua própria
+// seção no mesmo PDF (mapas/fornecedores diferentes por insumo, então cada seção tem sua própria
+// tabela, em vez de misturar tudo numa tabela só).
+var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumosLista) {
   // FIX: esc() local para evitar XSS/quebra de layout com nomes/descrições contendo < > & "
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   // FIX: corta o texto de verdade (no código, não via CSS) — garante altura de linha previsível
@@ -2818,25 +2824,89 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
   // CSS que corta visualmente (line-clamp), mas esse tipo de regra é conhecida por falhar
   // especificamente na hora de imprimir em alguns casos, mesmo funcionando bem na tela.
   function truncar(s, max){ s = String(s||''); return s.length > max ? s.slice(0, max - 1).trim() + '\u2026' : s; }
-  var resultados = [];
-  mapasComCurrent.forEach(function (mapa) {
-    (mapa.itens || []).forEach(function (item) {
-      if ((item.descricao || "").toUpperCase().includes(insumo.toUpperCase()))
-        resultados.push({ mapa: mapa, item: item });
+
+  // Monta a tabela de UM insumo (mesma lógica de sempre) — retorna null se não achou nada para
+  // esse insumo específico, para que a seção dele seja pulada silenciosamente no PDF final.
+  function montarSecaoInsumo(insumoNome) {
+    var resultados = [];
+    mapasComCurrent.forEach(function (mapa) {
+      (mapa.itens || []).forEach(function (item) {
+        if ((item.descricao || "").toUpperCase().includes(insumoNome.toUpperCase()))
+          resultados.push({ mapa: mapa, item: item });
+      });
     });
+    if (!resultados.length) return null;
+
+    var allForns = Array.from(new Set(
+      resultados.flatMap(function(r) {
+        return (r.mapa.fornecedores || [])
+          .map(function(f){ return (f.nome||"").toUpperCase(); })
+          .filter(Boolean);
+      })
+    )).slice(0, 12);
+
+    var fornHdrs = allForns.map(function(f) {
+      return "<th style=\"width:65px;\">" + esc(f) + "</th>";
+    }).join("");
+
+    var rows = resultados.map(function(r2, i) {
+      var mapa = r2.mapa, item = r2.item;
+      var rowCls = i % 2 === 1 ? " class=\"even\"" : "";
+      var resumo = calcResumo(item, mapa.fornecedores || [], mapa.precos || {});
+      var menorForn = (resumo.forn || "").toUpperCase();
+
+      var fornCells = allForns.map(function(fname) {
+        var f = (mapa.fornecedores || []).find(function(x){
+          return (x.nome||"").toUpperCase() === fname;
+        });
+        if (!f) return "<td style=\"text-align:center;color:#ccc;width:65px;\">\u2014</td>";
+        var v = parseMoney((mapa.precos||{})[""+item.id+"_"+f.id]);
+        var isMin = resumo.vlUnit !== null && v !== null && v > 0 && v === resumo.vlUnit;
+        return "<td class=\"" + (isMin ? "winner" : "num") + "\" style=\"width:65px;\">"
+             + (v !== null && v > 0 ? fmtMoney(v) : "<span style=\"color:#ccc;\">\u2014</span>")
+             + "</td>";
+      }).join("");
+
+      return "<tr" + rowCls + ">"
+        + "<td style=\"text-align:center;width:28px;\">"  + esc(mapa.numero||"\u2014") + "</td>"
+        + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + esc(truncar((mapa.obra||"\u2014").toUpperCase(), 36)) + "</td>"
+        + "<td style=\"text-align:center;width:58px;\">" + fmtDate(new Date(mapa.criadoEm)) + "</td>"
+        + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc(truncar((item.descricao||"").toUpperCase(), 16)) + "</td>"
+        + "<td class=\"num\" style=\"width:34px;\">" + (item.qt||"") + "</td>"
+        + "<td style=\"text-align:center;width:28px;\">" + (item.unid||"") + "</td>"
+        + "<td class=\"menor-cell\" style=\"width:80px;\">"
+          + "<div class=\"menor-val\">" + (resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "\u2014") + "</div>"
+          + (menorForn ? "<div class=\"menor-forn\">" + esc(menorForn) + "</div>" : "")
+        + "</td>"
+        + fornCells
+        + "</tr>";
+    }).join("");
+
+    return "<div style=\"background:#1a3a5c;padding:9px 14px;border-radius:4px 4px 0 0;margin-bottom:0;margin-top:14px;\">"
+      + "<div style=\"font-size:13px;font-weight:bold;color:#fff;\">" + esc(insumoNome.toUpperCase()) + "</div>"
+      + "<div style=\"font-size:10px;color:rgba(255,255,255,0.8);margin-top:2px;\">" + resultados.length + " OCORR\xCANCIA(S)</div>"
+      + "</div>"
+      + "<table><thead><tr>"
+      + "<th style=\"width:28px;\">MP<br>N\xBA</th>"
+      + "<th style=\"width:95px;text-align:left;\">OBRA</th>"
+      + "<th style=\"width:58px;\">DATA</th>"
+      + "<th style=\"text-align:left;min-width:130px;\">DESCRI\xC7\xC3O</th>"
+      + "<th style=\"width:34px;\">QT</th>"
+      + "<th style=\"width:28px;\">UN</th>"
+      + "<th class=\"menor-h\" style=\"width:80px;\">MENOR<br><span style=\"font-size:8px;font-weight:400;opacity:.85;\">FORNECEDOR</span></th>"
+      + fornHdrs
+      + "</tr></thead><tbody>" + rows + "</tbody></table>";
+  }
+
+  var secoesHTML = [];
+  var insumosSemResultado = [];
+  insumosLista.forEach(function (nomeInsumo) {
+    var secao = montarSecaoInsumo(nomeInsumo);
+    if (secao) secoesHTML.push(secao); else insumosSemResultado.push(nomeInsumo);
   });
-  if (!resultados.length) { alert("NENHUM INSUMO ENCONTRADO."); return; }
 
-  // Collect all unique supplier names across all results (max 12)
-  var allForns = Array.from(new Set(
-    resultados.flatMap(function(r) {
-      return (r.mapa.fornecedores || [])
-        .map(function(f){ return (f.nome||"").toUpperCase(); })
-        .filter(Boolean);
-    })
-  )).slice(0, 12);
+  if (!secoesHTML.length) { alert("NENHUM INSUMO ENCONTRADO."); return; }
 
-  // --- CSS ---
   var css = [
     "@page{size:A4 landscape;margin:4mm;}",
     "body{font-family:Arial,sans-serif;font-size:10px;text-transform:uppercase;margin:0;}",
@@ -2855,62 +2925,15 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
     "tr.even td.winner{background:#b8e6c4;}"
   ].join("");
 
-  // --- Header row ---
-  var fornHdrs = allForns.map(function(f) {
-    return "<th style=\"width:65px;\">" + esc(f) + "</th>";
-  }).join("");
+  var avisoSemResultado = insumosSemResultado.length
+    ? "<div style=\"font-size:10px;color:#a05000;margin:6px 0 0;\">SEM OCORR\xCANCIA PARA: " + esc(insumosSemResultado.join(", ")) + "</div>"
+    : "";
 
-  // --- Data rows ---
-  var rows = resultados.map(function(r2, i) {
-    var mapa = r2.mapa, item = r2.item;
-    var rowCls = i % 2 === 1 ? " class=\"even\"" : "";
-    var resumo = calcResumo(item, mapa.fornecedores || [], mapa.precos || {});
-    var menorForn = (resumo.forn || "").toUpperCase();
-
-    var fornCells = allForns.map(function(fname) {
-      var f = (mapa.fornecedores || []).find(function(x){
-        return (x.nome||"").toUpperCase() === fname;
-      });
-      if (!f) return "<td style=\"text-align:center;color:#ccc;width:65px;\">\u2014</td>";
-      var v = parseMoney((mapa.precos||{})[""+item.id+"_"+f.id]);
-      var isMin = resumo.vlUnit !== null && v !== null && v > 0 && v === resumo.vlUnit;
-      return "<td class=\"" + (isMin ? "winner" : "num") + "\" style=\"width:65px;\">"
-           + (v !== null && v > 0 ? fmtMoney(v) : "<span style=\"color:#ccc;\">\u2014</span>")
-           + "</td>";
-    }).join("");
-
-    return "<tr" + rowCls + ">"
-      + "<td style=\"text-align:center;width:28px;\">"  + esc(mapa.numero||"\u2014") + "</td>"
-      + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + esc(truncar((mapa.obra||"\u2014").toUpperCase(), 36)) + "</td>"
-      + "<td style=\"text-align:center;width:58px;\">" + fmtDate(new Date(mapa.criadoEm)) + "</td>"
-      + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc(truncar((item.descricao||"").toUpperCase(), 16)) + "</td>"
-      + "<td class=\"num\" style=\"width:34px;\">" + (item.qt||"") + "</td>"
-      + "<td style=\"text-align:center;width:28px;\">" + (item.unid||"") + "</td>"
-      + "<td class=\"menor-cell\" style=\"width:80px;\">"
-        + "<div class=\"menor-val\">" + (resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "\u2014") + "</div>"
-        + (menorForn ? "<div class=\"menor-forn\">" + esc(menorForn) + "</div>" : "")
-      + "</td>"
-      + fornCells
-      + "</tr>";
-  }).join("");
-
-  // --- Build HTML ---
   var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>" + css + "</style></head><body>"
-    + "<div style=\"background:#1a3a5c;padding:9px 14px;border-radius:4px 4px 0 0;margin-bottom:0;\">"
-    + "<div style=\"font-size:13px;font-weight:bold;color:#fff;\">RELAT\xD3RIO POR INSUMO</div>"
-    + "<div style=\"font-size:10px;color:rgba(255,255,255,0.8);margin-top:2px;\">BUSCA: &ldquo;"
-    + esc(insumo.toUpperCase()) + "&rdquo; \u2014 " + resultados.length + " OCORR\xCANCIA(S)</div>"
-    + "</div>"
-    + "<table><thead><tr>"
-    + "<th style=\"width:28px;\">MP<br>N\xBA</th>"
-    + "<th style=\"width:95px;text-align:left;\">OBRA</th>"
-    + "<th style=\"width:58px;\">DATA</th>"
-    + "<th style=\"text-align:left;min-width:130px;\">DESCRI\xC7\xC3O</th>"
-    + "<th style=\"width:34px;\">QT</th>"
-    + "<th style=\"width:28px;\">UN</th>"
-    + "<th class=\"menor-h\" style=\"width:80px;\">MENOR<br><span style=\"font-size:8px;font-weight:400;opacity:.85;\">FORNECEDOR</span></th>"
-    + fornHdrs
-    + "</tr></thead><tbody>" + rows + "</tbody></table></body></html>";
+    + "<div style=\"font-size:13px;font-weight:bold;color:#1a3a5c;\">RELAT\xD3RIO POR INSUMO \u2014 " + secoesHTML.length + " INSUMO(S)</div>"
+    + avisoSemResultado
+    + secoesHTML.join("")
+    + "</body></html>";
 
   abrirPDF(html);
 };

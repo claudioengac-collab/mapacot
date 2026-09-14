@@ -26,6 +26,40 @@ function ReportsModal(_ref12) {
     _useState26 = _slicedToArray(_useState25, 2),
     insumo = _useState26[0],
     setInsumo = _useState26[1];
+  var _useStateBuscaInsumo = useState(""),
+    _useStateBuscaInsumo2 = _slicedToArray(_useStateBuscaInsumo, 2),
+    buscaInsumo = _useStateBuscaInsumo2[0],
+    setBuscaInsumo = _useStateBuscaInsumo2[1];
+  var _useStateInsumosMarcados = useState(function () { return new Set(); }),
+    _useStateInsumosMarcados2 = _slicedToArray(_useStateInsumosMarcados, 2),
+    insumosMarcados = _useStateInsumosMarcados2[0],
+    setInsumosMarcados = _useStateInsumosMarcados2[1];
+  var insumosFiltrados = React.useMemo(function () {
+    var b = normalizeBusca(buscaInsumo);
+    if (!b) return [];
+    return (cadastros.insumos || []).filter(function (x) {
+      return normalizeBusca(x).includes(b);
+    }).slice(0, 500);
+  }, [cadastros, buscaInsumo]);
+  var toggleInsumoMarcado = function toggleInsumoMarcado(nome) {
+    setInsumosMarcados(function (prev) {
+      var novo = new Set(prev);
+      if (novo.has(nome)) novo.delete(nome); else novo.add(nome);
+      return novo;
+    });
+  };
+  var todosFiltradosMarcados = insumosFiltrados.length > 0 && insumosFiltrados.every(function (n) { return insumosMarcados.has(n); });
+  var toggleMarcarTodosFiltrados = function toggleMarcarTodosFiltrados() {
+    setInsumosMarcados(function (prev) {
+      var novo = new Set(prev);
+      if (todosFiltradosMarcados) {
+        insumosFiltrados.forEach(function (n) { novo.delete(n); });
+      } else {
+        insumosFiltrados.forEach(function (n) { novo.add(n); });
+      }
+      return novo;
+    });
+  };
   return /*#__PURE__*/React.createElement(Modal, {
     open: open,
     onClose: onClose,
@@ -139,34 +173,85 @@ function ReportsModal(_ref12) {
     return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
   }).length, " MAPA(S)")), tab === "orcamento" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {style: SC.rDesc}, "Gera o relatório de orçamento de uma obra."), /*#__PURE__*/React.createElement("label", {style: SC.lbl}, "OBRA"), /*#__PURE__*/React.createElement(AutocompleteInput, {value: obra, onChange: setObra, suggestions: Object.keys(orcamentos), placeholder: "BUSCAR OU DIGITAR OBRA...", showOnFocus: true, xStyle: {marginBottom: 4}, inputStyle: {border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none"}}), obra && /*#__PURE__*/React.createElement("div", {style: {fontSize: 11, color: "#888", marginTop: 4}}, orcamentos[obra] ? (orcamentos[obra].itens||orcamentos[obra]||[]).length + " ITEM(S)" : "SEM ORÇAMENTO")), tab === "insumo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: SC.rDesc
-  }, "Compara pre\xE7os de um insumo em todos os mapas."), /*#__PURE__*/React.createElement("label", {
+  }, "Compara pre\xE7os de um ou mais insumos em todos os mapas."), /*#__PURE__*/React.createElement("label", {
     style: SC.lbl
-  }, "INSUMO"), /*#__PURE__*/React.createElement(AutocompleteInput, {
-    value: insumo,
-    onChange: setInsumo,
-    suggestions: cadastros.insumos || [],
-    placeholder: "EX: TIJOLO, CIMENTO...",
-    xStyle: {
-      marginBottom: 4
-    },
-    inputStyle: {
+  }, "BUSCAR INSUMO"), /*#__PURE__*/React.createElement("input", {
+    value: buscaInsumo,
+    onChange: function (e) { setBuscaInsumo(e.target.value); },
+    placeholder: "EX: TIJOLO, CIMENTO, DISCO...",
+    style: {
+      width: "100%",
       border: "1.5px solid #dde1e9",
       borderRadius: 8,
       padding: "10px 12px",
       fontSize: 13,
-      outline: "none"
+      outline: "none",
+      marginBottom: 8,
+      boxSizing: "border-box"
     }
-  }), insumo && /*#__PURE__*/React.createElement("div", {
+  }), insumosFiltrados.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      background: "#f5f0ff",
+      borderRadius: 6,
+      padding: "8px 10px",
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      fontSize: 11.5,
+      fontWeight: 700,
+      color: "#5b21b6",
+      cursor: "pointer"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: todosFiltradosMarcados,
+    onChange: toggleMarcarTodosFiltrados
+  }), "MARCAR TODOS OS " + insumosFiltrados.length + " DA BUSCA"), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 11,
-      color: "#888",
-      marginTop: 4
+      color: "#5b21b6",
+      fontWeight: 700
     }
-  }, mapas.flatMap(function (m) {
-    return (m.itens || []).filter(function (i) {
-      return (i.descricao || "").toUpperCase().includes(insumo.toUpperCase());
-    });
-  }).length, " OCORR\xCANCIA(S)"))), /*#__PURE__*/React.createElement("div", {
+  }, insumosMarcados.size + " MARCADO(S)")), insumosFiltrados.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxHeight: 220,
+      overflowY: "auto",
+      border: "1px solid #e4e8f4",
+      borderRadius: 8
+    }
+  }, insumosFiltrados.map(function (nome) {
+    var marcado = insumosMarcados.has(nome);
+    return /*#__PURE__*/React.createElement("label", {
+      key: nome,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 9,
+        padding: "8px 12px",
+        borderBottom: "1px solid #f0f2f7",
+        fontSize: 12,
+        cursor: "pointer",
+        background: marcado ? "#f0faf4" : "transparent"
+      }
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: marcado,
+      onChange: function () { toggleInsumoMarcado(nome); }
+    }), /*#__PURE__*/React.createElement("span", {
+      style: { flex: 1 }
+    }, nome));
+  })), !buscaInsumo.trim() && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 11, color: "#999", marginTop: 4 }
+  }, "Digite para buscar os insumos cadastrados."), buscaInsumo.trim() && insumosFiltrados.length === 0 && /*#__PURE__*/React.createElement("div", {
+    style: { fontSize: 11, color: "#999", marginTop: 4 }
+  }, "Nenhum insumo encontrado para esta busca."))), /*#__PURE__*/React.createElement("div", {
     style: SC.mFtr
   }, /*#__PURE__*/React.createElement("button", {
     style: SC.btnSec,
@@ -212,12 +297,13 @@ function ReportsModal(_ref12) {
         }
       }
         if (tab === "insumo") {
-        if (!insumo.trim()) {
-          alert("INFORME O INSUMO.");
+        if (insumosMarcados.size === 0) {
+          alert("MARQUE PELO MENOS UM INSUMO.");
           return;
         }
-        logEventoDiag("RELAT\u00d3RIO gerado: por INSUMO (" + insumo + ")");
-        gerarRelatorioInsumo(mapasComCurrent, insumo);
+        var _listaInsumosMarcados = Array.from(insumosMarcados);
+        logEventoDiag("RELAT\u00d3RIO gerado: por INSUMO (" + _listaInsumosMarcados.length + " marcado(s): " + _listaInsumosMarcados.join(", ") + ")");
+        gerarRelatorioInsumo(mapasComCurrent, _listaInsumosMarcados);
       }
     }
   }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
