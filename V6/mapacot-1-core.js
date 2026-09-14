@@ -2899,10 +2899,15 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
   }
 
   var secoesHTML = [];
-  var insumosSemResultado = [];
+  // FIX (pedido do Claudio, depois de testar de verdade e ver o PDF ficar dominado por uma
+  // parede de texto de "sem ocorrência"): ele marca insumos em massa de propósito — porque não
+  // lembra exatamente o que comprou — e quer só os que TIVERAM ocorrência de verdade no
+  // relatório. Não mostra mais nem lista, nem contagem dos que não tiveram — nem no topo nem no
+  // fim. Continua contando quantos insumos ENTRARAM de verdade no relatório (secoesHTML.length)
+  // para o cabeçalho geral, que é sempre o número de seções que realmente aparecem.
   insumosLista.forEach(function (nomeInsumo) {
     var secao = montarSecaoInsumo(nomeInsumo);
-    if (secao) secoesHTML.push(secao); else insumosSemResultado.push(nomeInsumo);
+    if (secao) secoesHTML.push(secao);
   });
 
   if (!secoesHTML.length) { alert("NENHUM INSUMO ENCONTRADO."); return; }
@@ -2925,13 +2930,8 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
     "tr.even td.winner{background:#b8e6c4;}"
   ].join("");
 
-  var avisoSemResultado = insumosSemResultado.length
-    ? "<div style=\"font-size:10px;color:#a05000;margin:6px 0 0;\">SEM OCORR\xCANCIA PARA: " + esc(insumosSemResultado.join(", ")) + "</div>"
-    : "";
-
   var html = "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>" + css + "</style></head><body>"
     + "<div style=\"font-size:13px;font-weight:bold;color:#1a3a5c;\">RELAT\xD3RIO POR INSUMO \u2014 " + secoesHTML.length + " INSUMO(S)</div>"
-    + avisoSemResultado
     + secoesHTML.join("")
     + "</body></html>";
 
