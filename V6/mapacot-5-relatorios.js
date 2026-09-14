@@ -41,6 +41,19 @@ function ReportsModal(_ref12) {
       return normalizeBusca(x).includes(b);
     }).slice(0, 500);
   }, [cadastros, buscaInsumo]);
+  // FIX (pedido do Claudio, 14/09 — "clico em GERAR PDF e tudo tem que ficar zerado para uma
+  // nova pesquisa; e ao fechar e voltar, também"): o modal fica sempre montado, então o estado
+  // dos campos sobrevivia a gerar e a fechar. Com a lista de insumos marcados isso ficou pior —
+  // dezenas de caixinhas voltavam marcadas na consulta seguinte. Esta função zera TODOS os campos
+  // de TODAS as abas (datas, obra, busca de insumo, marcações). A aba atual é mantida.
+  var limparCampos = function limparCampos() {
+    setPeriodo({ inicio: "", fim: "" });
+    setObra("");
+    setInsumo("");
+    setBuscaInsumo("");
+    setInsumosMarcados(new Set());
+  };
+  var fecharLimpando = function fecharLimpando() { limparCampos(); onClose(); };
   var toggleInsumoMarcado = function toggleInsumoMarcado(nome) {
     setInsumosMarcados(function (prev) {
       var novo = new Set(prev);
@@ -75,7 +88,7 @@ function ReportsModal(_ref12) {
       color: "#999",
       cursor: "pointer"
     },
-    onClick: onClose
+    onClick: fecharLimpando
   }, /*#__PURE__*/React.createElement(IcoClose, null))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -262,7 +275,7 @@ function ReportsModal(_ref12) {
     style: SC.mFtr
   }, /*#__PURE__*/React.createElement("button", {
     style: SC.btnSec,
-    onClick: onClose
+    onClick: fecharLimpando
   }, "FECHAR"), /*#__PURE__*/React.createElement("button", {
     style: SC.btnPri,
     onClick: function onClick() {
@@ -273,6 +286,7 @@ function ReportsModal(_ref12) {
         }
         logEventoDiag("RELAT\u00d3RIO gerado: por PER\u00cdODO (" + periodo.inicio + " a " + periodo.fim + ")");
         gerarRelatorioPeriodo(mapasComCurrent, periodo.inicio, periodo.fim, orcamentos, associacoes);
+        limparCampos();
       }
       if (tab === "obra") {
         if (!obra.trim()) {
@@ -289,6 +303,7 @@ function ReportsModal(_ref12) {
         }
         logEventoDiag("RELAT\u00d3RIO gerado: por OBRA (" + (obra.trim() || "TODAS AS OBRAS") + ")");
         gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes);
+        limparCampos();
       }
       if (tab === "orcamento") {
         if (!obra.trim()) { alert("INFORME A OBRA."); return; }
@@ -299,6 +314,7 @@ function ReportsModal(_ref12) {
           var htmlRelOrc = gerarRelatorioOrcamento(mapasComCurrent, obra, orcamentos, associacoes);
           if (!htmlRelOrc) { alert("Não foi possível montar o relatório para esta obra (resultado veio vazio)."); return; }
           abrirPDF(htmlRelOrc);
+          limparCampos();
         } catch (erroRelOrc) {
           alert("ERRO ao gerar o relatório de orçamento:\n" + (erroRelOrc && erroRelOrc.message ? erroRelOrc.message : String(erroRelOrc)));
         }
@@ -311,6 +327,7 @@ function ReportsModal(_ref12) {
         var _listaInsumosMarcados = Array.from(insumosMarcados);
         logEventoDiag("RELAT\u00d3RIO gerado: por INSUMO (" + _listaInsumosMarcados.length + " marcado(s): " + _listaInsumosMarcados.join(", ") + ")");
         gerarRelatorioInsumo(mapasComCurrent, _listaInsumosMarcados);
+        limparCampos();
       }
     }
   }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
