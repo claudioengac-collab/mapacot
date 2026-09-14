@@ -14,8 +14,11 @@ function normalizeVendedorLista(valor) {
 function ModalLoteVendedorPagamento(_ref_lote) {
   var fornecedoresExistentes = _ref_lote.fornecedoresExistentes || [],
     onClose = _ref_lote.onClose,
-    onConfirmar = _ref_lote.onConfirmar;
-  var _sT = useState(""), textoColado = _slicedToArray(_sT, 2)[0], setTextoColado = _slicedToArray(_sT, 2)[1];
+    onConfirmar = _ref_lote.onConfirmar,
+    // FIX (pedido do Claudio — reconstruir vendedor/pagamento a partir dos mapas, depois da perda
+    // de 14/09): texto pré-preenchido, opcional. Sem ele, o modal se comporta exatamente como antes.
+    textoInicial = _ref_lote.textoInicial || "";
+  var _sT = useState(textoInicial), textoColado = _slicedToArray(_sT, 2)[0], setTextoColado = _slicedToArray(_sT, 2)[1];
   var _sR = useState(null), resultados = _slicedToArray(_sR, 2)[0], setResultados = _slicedToArray(_sR, 2)[1];
 
   // FIX: match exato (via normalize, igual ao resto do sistema) primeiro; nomes de fornecedor
@@ -145,6 +148,7 @@ function CadastrosModal(_ref11) {
     onSetObs = _ref11.onSetObs || function(){},
     onSetVendedor = _ref11.onSetVendedor || function(){},
     onSetVendedorEFormasPagamentoEmLote = _ref11.onSetVendedorEFormasPagamentoEmLote || function(){},
+    onReconstruirDosMapas = _ref11.onReconstruirDosMapas, // opcional — só o app da tela principal fornece
     onListarBackups = _ref11.onListarBackups || function(){ return Promise.resolve([]); },
     onRestaurarBackup = _ref11.onRestaurarBackup || function(){ return Promise.resolve({ ok: false, motivo: 'Indisponível.' }); },
     onListarBackupsInsumos = _ref11.onListarBackupsInsumos || function(){ return Promise.resolve([]); },
@@ -163,6 +167,8 @@ function CadastrosModal(_ref11) {
   // FIX (pedido do Claudio — cadastro em lote de vendedor/pagamento, depois da perda de dados
   // pelo bug da condição de corrida): controla se o modal de "colar lista" está aberto.
   var _useStateLote = useState(false), showLoteVendPag = _slicedToArray(_useStateLote, 2)[0], setShowLoteVendPag = _slicedToArray(_useStateLote, 2)[1];
+  var _useStateLoteTxt = useState(""), loteTextoInicial = _slicedToArray(_useStateLoteTxt, 2)[0], setLoteTextoInicial = _slicedToArray(_useStateLoteTxt, 2)[1];
+  var _useStateRec = useState(false), reconstruindo = _slicedToArray(_useStateRec, 2)[0], setReconstruindo = _slicedToArray(_useStateRec, 2)[1];
   // FIX (pedido do Claudio — "não tem uma forma de acompanhar se está funcionando?"): estado do
   // botão "VERIFICAR TUDO", que relê o servidor sob demanda e compara com o que está na tela,
   // sem precisar editar nada primeiro. "verificando" controla o texto do botão enquanto checa;
@@ -440,10 +446,30 @@ function CadastrosModal(_ref11) {
   // FIX (pedido do Claudio — cadastro em lote de vendedor/pagamento, depois da perda de dados
   // pelo bug da condição de corrida): botão só na aba Fornecedores, abre o modal de "colar lista".
   tab === "fornecedores" && /*#__PURE__*/React.createElement("button", {
-    onClick: function(){ setShowLoteVendPag(true); },
+    onClick: function(){ setLoteTextoInicial(""); setShowLoteVendPag(true); },
     title: "Cadastrar vendedor e forma de pagamento de vários fornecedores de uma vez, colando uma lista",
     style: { background: "#fff3e0", border: "1px solid #ffcc80", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#e65100", cursor: "pointer", whiteSpace: "nowrap" }
   }, "\ud83d\udccb EM LOTE"),
+  // FIX (pedido do Claudio — depois da perda de vendedor/pagamento de 14/09): reconstrói a lista a
+  // partir do HISTÓRICO que continua salvo — o contato e a condição de pagamento de cada
+  // fornecedor em cada mapa, e a forma de pagamento de cada pedido. Gera o texto no formato do EM
+  // LOTE e abre o próprio EM LOTE já preenchido: a pessoa confere, ajusta se quiser, e confirma
+  // pelo fluxo que já existe e já foi testado. Nada de tela nova. O botão só aparece quando o app
+  // fornece a função (Banco de Cadastros aberto pela tela principal).
+  tab === "fornecedores" && onReconstruirDosMapas && /*#__PURE__*/React.createElement("button", {
+    onClick: function(){
+      setReconstruindo(true);
+      Promise.resolve(onReconstruirDosMapas()).then(function(r){
+        setReconstruindo(false);
+        if (!r || !r.texto) { alert("Nenhum vendedor ou forma de pagamento encontrado nos mapas e pedidos salvos."); return; }
+        setLoteTextoInicial(r.texto);
+        setShowLoteVendPag(true);
+      }).catch(function(){ setReconstruindo(false); alert("Não foi possível ler os mapas/pedidos agora. Tente de novo."); });
+    },
+    disabled: reconstruindo,
+    title: "Monta a lista de vendedor/forma de pagamento a partir do que já foi usado nos mapas e pedidos salvos, e abre o EM LOTE preenchido para você conferir e confirmar",
+    style: { background: "#f3e5f5", border: "1px solid #ce93d8", borderRadius: 8, padding: "0 12px", fontSize: 11, fontWeight: 700, color: "#6a1b9a", cursor: reconstruindo ? "default" : "pointer", whiteSpace: "nowrap", opacity: reconstruindo ? 0.6 : 1 }
+  }, reconstruindo ? "\u23f3 LENDO MAPAS..." : "\ud83d\udd01 RECONSTRUIR DOS MAPAS"),
   // FIX (pedido do Claudio — "não tem uma forma de acompanhar se está funcionando?"): botão que
   // relê o servidor AGORA e compara com a tela, sem precisar editar nada primeiro — dá uma
   // resposta objetiva a qualquer momento, em vez de precisar confiar ou testar manualmente.
@@ -929,6 +955,7 @@ function CadastrosModal(_ref11) {
     }
   }, (cadastros[tab] || []).length, " CADASTRO(S) NO TOTAL"))),
   showLoteVendPag && /*#__PURE__*/React.createElement(ModalLoteVendedorPagamento, {
+    textoInicial: loteTextoInicial,
     fornecedoresExistentes: cadastros.fornecedores || [],
     onClose: function(){ setShowLoteVendPag(false); },
     onConfirmar: function(itens){ onSetVendedorEFormasPagamentoEmLote(itens); setShowLoteVendPag(false); }

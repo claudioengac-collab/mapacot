@@ -1159,6 +1159,59 @@ function App() {
   // queria, dá pra voltar atrás também. Depois MESCLA (não substitui tudo): só aplica o
   // vendedor/pagamento de fornecedores que AINDA EXISTEM na lista atual — um fornecedor que foi
   // removido de propósito depois que o backup foi feito não é "ressuscitado" sem querer.
+  // FIX (pedido do Claudio — depois da perda de vendedor/pagamento de 14/09): RECONSTRÓI a lista
+  // a partir do histórico que continua salvo. Fontes: (1) cada MAPA guarda, por fornecedor, o
+  // contato (= vendedor) e a condição de pagamento no rodapé; (2) cada PEDIDO guarda o
+  // fornecedor e a forma de pagamento usada. Junta tudo por fornecedor (só os que existem no
+  // cadastro atual — não inventa fornecedor) e devolve o TEXTO no formato do EM LOTE
+  // ("NOME;VEND1,VEND2;FORMA1,FORMA2"), para a tela abrir o EM LOTE preenchido. Esta função é
+  // só LEITURA: não altera estado nem salva nada — quem salva é o fluxo do EM LOTE, depois que a
+  // pessoa confere e confirma (e a gravação passa pela trava anti-apagão como qualquer outra).
+  var reconstruirVendedoresDosMapas = useCallback(function () {
+    var cad = cadastrosAtuaisRef.current || {};
+    var oficiais = {}; // normalize(nome) -> nome oficial cadastrado
+    (cad.fornecedores || []).forEach(function (f) { oficiais[normalize(f)] = f; });
+    var acum = {}; // nome oficial -> { vend: Set, pag: Set }
+    var pegar = function (nomeForn) { var of = oficiais[normalize(nomeForn)]; if (!of) return null; if (!acum[of]) acum[of] = { vend: {}, pag: {} }; return acum[of]; };
+    var limpar = function (s, max) { return String(s || "").trim().toUpperCase().slice(0, max); };
+    // Começa pelo que JÁ está cadastrado hoje (união): o EM LOTE substitui a lista de cada
+    // fornecedor por inteiro — sem isto, um fornecedor cujo histórico só tivesse forma de
+    // pagamento (sem contato em mapa nenhum) sairia com vendedor vazio, e confirmar APAGARIA um
+    // vendedor que a pessoa já tivesse recadastrado à mão. Assim, confirmar nunca remove nada.
+    Object.keys(cad.fornecedorVendedor || {}).forEach(function (nome) {
+      var a = pegar(nome); if (!a) return;
+      normalizeVendedorLista(cad.fornecedorVendedor[nome]).forEach(function (vv) { var c = limpar(vv, 200); if (c) a.vend[c] = true; });
+    });
+    Object.keys(cad.fornecedorFormasPagamento || {}).forEach(function (nome) {
+      var a = pegar(nome); if (!a) return;
+      (cad.fornecedorFormasPagamento[nome] || []).forEach(function (pp) { var p = limpar(pp, 60); if (p) a.pag[p] = true; });
+    });
+    (mapas || []).forEach(function (m) {
+      var rod = m.rodape || {};
+      (m.fornecedores || []).forEach(function (f) {
+        var a = pegar(f.nome); if (!a) return;
+        var r = rod[f.id] || {};
+        var c = limpar(r.contato, 200); if (c) a.vend[c] = true;
+        var p = limpar(r.condicoesPagamento, 60); if (p) a.pag[p] = true;
+      });
+    });
+    var montarTexto = function () {
+      var linhas = Object.keys(acum).sort().map(function (nome) {
+        var v = Object.keys(acum[nome].vend), p = Object.keys(acum[nome].pag);
+        if (!v.length && !p.length) return null;
+        return nome + ";" + v.join(",") + ";" + p.join(",");
+      }).filter(Boolean);
+      logEventoDiag("RECONSTRUÇÃO de vendedor/pagamento a partir de mapas/pedidos: " + linhas.length + " fornecedor(es) com algo encontrado");
+      return { texto: linhas.join("\n"), qtd: linhas.length };
+    };
+    return sbGetPedidos().then(function (pedidos) {
+      (pedidos || []).forEach(function (po) {
+        var a = pegar(po.fornecedor_nome); if (!a) return;
+        var p = limpar(po.forma_pagamento, 60); if (p) a.pag[p] = true;
+      });
+      return montarTexto();
+    }).catch(function () { return montarTexto(); }); // pedidos indisponíveis: entrega o que os mapas deram
+  }, [mapas]);
   var restaurarBackupCadastros = useCallback(function (idBackup) {
     // FIX (14/09 — cada tentativa de restaurar gravava ANTES um backup do estado atual, que já
     // estava vazio, queimando um dos 5 slots bons por tentativa): se o estado atual não tem
@@ -1734,6 +1787,7 @@ function App() {
     onSetObs: setObsFornecedor,
     onSetVendedor: setVendedorFornecedor,
     onSetVendedorEFormasPagamentoEmLote: setVendedorEFormasPagamentoEmLote,
+    onReconstruirDosMapas: reconstruirVendedoresDosMapas,
     onListarBackups: sbListarBackupsCadastros,
     onRestaurarBackup: restaurarBackupCadastros,
     onListarBackupsInsumos: sbListarBackupsInsumos,
