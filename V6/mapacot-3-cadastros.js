@@ -219,7 +219,11 @@ function CadastrosModal(_ref11) {
   var handleVerificarTudo = function() {
     setVerificando(true);
     setResultadoVerificacao(null);
-    fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados"), { headers: SB, cache: "no-store" })
+    // FIX DEFINITIVO (14/09): vendedor/formas de pagamento agora vivem na linha própria
+    // "vendedores" (ver sbSaveVendedores em mapacot-1-core.js) — a conferência passa a ler
+    // de lá. Se a linha ainda não existir (antes da 1ª migração), compara com vazio, que é
+    // exatamente o que o servidor tem nela.
+    fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.vendedores&select=dados"), { headers: SB, cache: "no-store" })
       .then(function(r){ return r.ok ? r.json() : []; })
       .then(function(rows){
         var gravado = (rows[0] && rows[0].dados) || {};

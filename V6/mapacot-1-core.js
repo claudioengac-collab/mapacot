@@ -586,15 +586,34 @@ var BACKUP_INSUMOS_SLOTS = ["backup_insumos_0", "backup_insumos_1", "backup_insu
 // de ids dos slots (5 deles) e os DADOS a salvar; acha um slot vazio ou, se todos ocupados, o
 // mais antigo, e grava ali. Não muda o comportamento já testado de sbBackupCadastros — só tira
 // a lógica repetida para um só lugar, para não ter 3 cópias quase-iguais dela pelo código.
-var criarBackupRotativo = function criarBackupRotativo(slots, dados) {
+var criarBackupRotativo = function criarBackupRotativo(slots, dados, medir) {
+  // FIX (causa direta da perda dos 5 backups bons em 14/09 — encontrada na varredura pedida
+  // pelo Claudio): a rotação sempre sobrescrevia o slot mais ANTIGO, sem olhar o conteúdo. Com
+  // os dados já apagados no servidor, cada backup novo (a cada salvamento, ao sair da aba, e
+  // ANTES de cada tentativa de restaurar) gravava uma cópia VAZIA por cima de uma cópia BOA de
+  // sexta-feira — 5 tentativas de restaurar zeraram os 5 slots. Agora, quando quem chama passa
+  // uma função "medir" (quanto dado relevante existe numa cópia), a regra é: uma cópia com
+  // medida 0 NUNCA sobrescreve uma cópia com medida > 0. Ela só ocupa um slot livre, ou um
+  // slot que também esteja com medida 0; se todos os slots têm dados, a cópia vazia é
+  // simplesmente pulada (registrada no diagnóstico). Sem "medir", o comportamento é o de sempre
+  // (insumos e mapas não mudaram).
   var filtro = "id=in.(" + slots.join(",") + ")";
-  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?").concat(filtro, "&select=id,atualizado_em"), { headers: SB, cache: "no-store" })
+  var selecao = medir ? "id,dados,atualizado_em" : "id,atualizado_em";
+  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?").concat(filtro, "&select=" + selecao), { headers: SB, cache: "no-store" })
     .then(function(r){ return r.ok ? r.json() : []; })
     .then(function(existentes){
       var idsExistentes = existentes.map(function(e){ return e.id; });
       var slotAlvo = slots.find(function(id){ return idsExistentes.indexOf(id) === -1; });
       if (!slotAlvo) {
-        var maisAntigo = existentes.reduce(function(a, b){
+        var candidatos = existentes;
+        if (medir && medir(dados) === 0) {
+          candidatos = existentes.filter(function(e){ return medir(e.dados || {}) === 0; });
+          if (!candidatos.length) {
+            logEventoDiag("BACKUP pulado: a cópia atual está vazia e todos os 5 slots têm dados — nenhum backup bom foi sobrescrito.");
+            return Promise.resolve({ ok: true, pulado: true });
+          }
+        }
+        var maisAntigo = candidatos.reduce(function(a, b){
           return new Date(a.atualizado_em) < new Date(b.atualizado_em) ? a : b;
         });
         slotAlvo = maisAntigo.id;
@@ -606,6 +625,12 @@ var criarBackupRotativo = function criarBackupRotativo(slots, dados) {
       });
     });
 };
+// Medida de "quanto dado relevante" tem uma cópia de cadastros: fornecedores com vendedor +
+// fornecedores com forma de pagamento. Usada só pela regra de rotação acima.
+var medirCadastros = function medirCadastros(d) {
+  d = d || {};
+  return Object.keys(d.fornecedorVendedor || {}).length + Object.keys(d.fornecedorFormasPagamento || {}).length;
+};
 var sbBackupCadastros = function sbBackupCadastros(cadastrosAtuais) {
   var dadosBackup = {
     obras: cadastrosAtuais.obras || [],
@@ -615,8 +640,8 @@ var sbBackupCadastros = function sbBackupCadastros(cadastrosAtuais) {
     fornecedorVendedor: cadastrosAtuais.fornecedorVendedor || {},
     fornecedorFormasPagamento: cadastrosAtuais.fornecedorFormasPagamento || {}
   };
-  return criarBackupRotativo(BACKUP_CADASTROS_SLOTS, dadosBackup)
-    .then(function(){ logEventoDiag("✔ BACKUP de cadastros atualizado"); })
+  return criarBackupRotativo(BACKUP_CADASTROS_SLOTS, dadosBackup, medirCadastros)
+    .then(function(res){ if (!(res && res.pulado)) logEventoDiag("✔ BACKUP de cadastros atualizado"); })
     .catch(function(){ logEventoDiag("✖ Falha ao atualizar backup de cadastros (uso normal não foi afetado)"); }); // backup é proteção extra — nunca deve travar o uso normal do sistema
 };
 // FIX (pedido do Claudio — poder restaurar um backup, não só criar): busca os 5 slots de
@@ -706,12 +731,20 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
     obras: c.obras || [],
     fornecedores: c.fornecedores || [],
     unidades: c.unidades || [],
-    fornecedorObs: c.fornecedorObs || {}, // FIX: observações livres por fornecedor — incluído
+    fornecedorObs: c.fornecedorObs || {} // FIX: observações livres por fornecedor — incluído
     // explicitamente aqui porque esta função só salva os campos citados nesta lista; um
     // campo novo que não apareça aqui seria descartado silenciosamente ao salvar (mesmo
     // tipo de bug já corrigido antes no orçamento).
-    fornecedorVendedor: c.fornecedorVendedor || {}, // vendedor cadastrado por fornecedor (mesmo padrão de fornecedorObs)
-    fornecedorFormasPagamento: c.fornecedorFormasPagamento || {} // lista de formas de pagamento aceitas por fornecedor
+    // FIX DEFINITIVO (14/09 — 3ª perda de vendedor/formas de pagamento, varredura completa
+    // pedida pelo Claudio): vendedor e formas de pagamento NÃO ficam mais nesta linha "global".
+    // Causa raiz encontrada: o POST usa "resolution=merge-duplicates", que SUBSTITUI o JSON
+    // inteiro da linha — e existe código antigo (ex: versão de 05/08, e qualquer cópia velha no
+    // cache do navegador, já que o index.html ficou em "?v=7" desde agosto) cujo sbSaveCadastros
+    // monta este objeto SEM esses dois campos. Um único salvamento desse código velho apagava
+    // tudo, silenciosamente. Agora os dois campos vivem numa linha própria ("vendedores", ver
+    // sbSaveVendedores abaixo) — um código antigo nem sabe que ela existe, então não consegue
+    // apagá-la. O que quer que ainda esteja em "global" desses campos é ignorado (só é lido uma
+    // vez, como migração, se a linha nova ainda não existir — ver carregamento no app).
   };
   var estado = estadoSalvamentoCadastros;
   // Só na PRIMEIRA chamada desta sessão a fila ainda não tem uma versão conhecida — usa a que
@@ -733,41 +766,96 @@ var sbSaveCadastros = function sbSaveCadastros(c) {
       }).then(function(r){
         if(!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar cadastros ('+r.status+'): '+t); });
         estado.ultimaVersaoConhecida = novaVersao; // propaga para a próxima save da fila usar
-        // FIX (pedido do Claudio — "o sistema disse que salvou, mas não salvou de verdade"): até
-        // aqui, um POST sem erro HTTP era tratado como garantia de que os dados realmente
-        // persistiram. Isso nem sempre é verdade — pode haver alguma diferença entre o que o
-        // servidor aceitou e o que realmente gravou, sem gerar um erro visível no POST em si.
-        // Esta confirmação relê DIRETO do servidor logo em seguida e compara com o que foi
-        // enviado; se algo não bater, o usuário é avisado NA HORA, com uma mensagem que diz
-        // exatamente isso — em vez de descobrir só depois, sem explicação, que os dados sumiram.
-        return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.global&select=dados"), { headers: SB, cache: "no-store" })
-          .then(function(rConf){ return rConf.ok ? rConf.json() : []; })
-          .then(function(rows){
-            var gravado = rows[0] && rows[0].dados;
-            // FIX (causa raiz real do aviso falso "dados não batem" — confirmado com o Claudio:
-            // ele testou e os dados estavam SEMPRE lá de verdade, o aviso é que estava errado):
-            // a comparação anterior usava JSON.stringify(a) === JSON.stringify(b), que depende
-            // da ORDEM das chaves dentro do objeto E dos itens dentro de cada lista. Bancos como
-            // o Postgres/Supabase não garantem preservar essa ordem ao gravar e reler um campo
-            // JSON — o CONTEÚDO volta idêntico, só a ordem interna pode mudar — e isso sozinho já
-            // fazia o texto comparado ficar diferente, mesmo com os dados corretos. A comparação
-            // agora ignora ordem completamente: mesma chave e mesmo conjunto de valores por
-            // chave, na ordem que for, conta como igual.
-            var confereVend = mesmoConteudoMapaDeListas(gravado && gravado.fornecedorVendedor, main.fornecedorVendedor);
-            var conferePag = mesmoConteudoMapaDeListas(gravado && gravado.fornecedorFormasPagamento, main.fornecedorFormasPagamento);
-            if (!gravado || !confereVend || !conferePag) {
-              logEventoDiag("\u2716\u2716\u2716 ALERTA: o servidor confirmou o salvamento, mas a releitura mostra dados DIFERENTES do que foi enviado — vendedor/pagamento podem não ter persistido de verdade.");
-              window.avisarErroSalvamento('O sistema salvou, mas ao conferir de volta os dados não batem. Isso pode indicar um problema no servidor — não confie neste salvamento, tente novamente e avise o suporte se repetir.');
-            }
-            return novaVersao;
-          })
-          .catch(function(){ return novaVersao; }); // falha na CONFERÊNCIA em si (ex: sem internet no instante seguinte) não deve mascarar o sucesso do salvamento original
+        return novaVersao;
       });
     });
   });
 
   return estado.fila;
 }
+// ─── Vendedor / formas de pagamento — LINHA PRÓPRIA ("vendedores") ───────────────────────────
+// FIX DEFINITIVO (14/09): ver explicação em sbSaveCadastros. Mesmo padrão de fila + versão já
+// comprovado em cadastros, mais a TRAVA DE SEGURANÇA (camada 2): nunca grava ZERO fornecedores
+// onde o servidor tem 2 ou mais — ninguém apaga uma lista inteira de uma vez de propósito pela
+// tela (a exclusão pela tela é sempre um por um), então esse salto só pode ser bug. Quando isso
+// acontece, o salvamento é RECUSADO, avisado na tela e registrado no diagnóstico.
+var VENDEDORES_ROW_ID = "vendedores";
+var estadoSalvamentoVendedores = { fila: Promise.resolve(), ultimaVersaoConhecida: null };
+var sbGetVendedores = function sbGetVendedores() {
+  return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.").concat(VENDEDORES_ROW_ID, "&select=dados,atualizado_em"), { headers: SB, cache: "no-store" })
+    .then(function(r){
+      if (!r.ok) throw new Error("Erro ao carregar vendedores (" + r.status + ")");
+      return r.json();
+    })
+    .then(function(rows){
+      if (!rows || !rows[0] || !rows[0].dados) return null; // linha ainda não existe (1ª vez) — o app migra a partir de "global"
+      return {
+        fornecedorVendedor: rows[0].dados.fornecedorVendedor || {},
+        fornecedorFormasPagamento: rows[0].dados.fornecedorFormasPagamento || {},
+        versao: rows[0].atualizado_em
+      };
+    });
+};
+var sbSaveVendedores = function sbSaveVendedores(vend, pag, versaoConhecida) {
+  var main = { fornecedorVendedor: vend || {}, fornecedorFormasPagamento: pag || {} };
+  var estado = estadoSalvamentoVendedores;
+  if (estado.ultimaVersaoConhecida === null) estado.ultimaVersaoConhecida = versaoConhecida || null;
+
+  estado.fila = estado.fila.catch(function(){}).then(function(){
+    var versaoParaVerificar = estado.ultimaVersaoConhecida;
+    // UMA leitura do servidor serve para as duas proteções: a versão (conflito entre abas) e o
+    // conteúdo (trava contra apagão).
+    return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.").concat(VENDEDORES_ROW_ID, "&select=dados,atualizado_em"), { headers: SB, cache: "no-store" })
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(rows){
+        var linha = rows && rows[0];
+        var versaoServidor = linha && linha.atualizado_em;
+        if (versaoParaVerificar && versaoServidor && !mesmaVersaoTs(versaoServidor, versaoParaVerificar)) {
+          var errConf = new Error('Vendedores/formas de pagamento foram modificados em outra aba ou dispositivo. Recarregue a página antes de continuar, para não sobrescrever as mudanças mais recentes.');
+          errConf.isVersionConflict = true;
+          throw errConf;
+        }
+        var noServidor = (linha && linha.dados) || {};
+        var qtdVendServ = Object.keys(noServidor.fornecedorVendedor || {}).length;
+        var qtdPagServ = Object.keys(noServidor.fornecedorFormasPagamento || {}).length;
+        var qtdVendNovo = Object.keys(main.fornecedorVendedor).length;
+        var qtdPagNovo = Object.keys(main.fornecedorFormasPagamento).length;
+        if ((qtdVendServ >= 2 && qtdVendNovo === 0) || (qtdPagServ >= 2 && qtdPagNovo === 0)) {
+          var msg = "TRAVA DE SEGURANÇA: o sistema ia gravar ZERO fornecedor(es) com vendedor/pagamento onde o servidor tem " + qtdVendServ + " com vendedor e " + qtdPagServ + " com forma de pagamento. Salvamento RECUSADO — os dados do servidor foram preservados.";
+          logEventoDiag("\u2716\u2716\u2716 " + msg);
+          var errTrava = new Error(msg);
+          errTrava.isApagaoBloqueado = true;
+          throw errTrava;
+        }
+        var novaVersao = new Date().toISOString().replace("Z", "+00:00");
+        return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros"), {
+          method: "POST",
+          headers: SB,
+          body: JSON.stringify({ id: VENDEDORES_ROW_ID, dados: main, atualizado_em: novaVersao })
+        }).then(function(r){
+          if (!r.ok) return r.text().then(function(t){ throw new Error('Erro ao salvar vendedores (' + r.status + '): ' + t); });
+          estado.ultimaVersaoConhecida = novaVersao;
+          // Conferência pós-salvamento (movida de sbSaveCadastros, onde protegia estes mesmos
+          // campos): relê do servidor e compara pelo CONTEÚDO, ignorando ordem.
+          return fetch("".concat(SUPABASE_URL, "/rest/v1/cadastros?id=eq.").concat(VENDEDORES_ROW_ID, "&select=dados"), { headers: SB, cache: "no-store" })
+            .then(function(rConf){ return rConf.ok ? rConf.json() : []; })
+            .then(function(rows2){
+              var gravado = rows2[0] && rows2[0].dados;
+              var confereVend = mesmoConteudoMapaDeListas(gravado && gravado.fornecedorVendedor, main.fornecedorVendedor);
+              var conferePag = mesmoConteudoMapaDeListas(gravado && gravado.fornecedorFormasPagamento, main.fornecedorFormasPagamento);
+              if (!gravado || !confereVend || !conferePag) {
+                logEventoDiag("\u2716\u2716\u2716 ALERTA: o servidor confirmou o salvamento de vendedores, mas a releitura mostra dados DIFERENTES do que foi enviado.");
+                window.avisarErroSalvamento('O sistema salvou vendedores/pagamento, mas ao conferir de volta os dados não batem. Não confie neste salvamento, tente novamente e avise o suporte se repetir.');
+              }
+              return novaVersao;
+            })
+            .catch(function(){ return novaVersao; });
+        });
+      });
+  });
+
+  return estado.fila;
+};
 var sbSaveInsumos = function sbSaveInsumos(insumos, sinonimos, versaoConhecida) {
   // FIX: adiciona "sinonimos" como parâmetro EXPLÍCITO (não opcional no final) — de propósito,
   // para forçar cada lugar que chama esta função a decidir conscientemente o que enviar aqui,

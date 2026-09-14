@@ -523,6 +523,22 @@ function App() {
   // CARREGAMENTO (dado inicial, depois insumos em segundo plano) — o efeito de salvar ignora
   // essas duas vezes, e só salva de verdade a partir da PRIMEIRA mudança feita pelo usuário.
   var cadastrosMudouPorCarregamentoRef = useRef(0);
+  // FIX DEFINITIVO (14/09 — vendedor/formas de pagamento em linha própria, ver sbSaveVendedores
+  // em mapacot-1-core.js): estado de controle da linha "vendedores", separado do de "global".
+  // - versaoVendedoresRef: versão conhecida da linha (conflito entre abas), como versaoCadastrosRef.
+  // - ultimoVendSalvoRef: o ÚLTIMO conteúdo carregado ou salvo com sucesso. O efeito de salvar só
+  //   grava quando o conteúdo atual for DIFERENTE disso — comparado pelo conteúdo, ignorando
+  //   ordem (mesmoConteudoMapaDeListas). Isso substitui, para esta linha, o contador frágil de
+  //   "mudou por carregamento": carregar nunca dispara salvamento, porque o carregado e o
+  //   "último salvo" são iguais por definição.
+  // - vendedoresOk: só vira true depois de LER a linha do servidor com sucesso (ou confirmar que
+  //   ela ainda não existe). Enquanto for false, NUNCA salva — nunca gravar por cima de um estado
+  //   do servidor que não se conhece.
+  var versaoVendedoresRef = useRef(null);
+  var ultimoVendSalvoRef = useRef(null);
+  var _useStateVendOk = useState(false),
+    vendedoresOk = _slicedToArray(_useStateVendOk, 2)[0],
+    setVendedoresOk = _slicedToArray(_useStateVendOk, 2)[1];
   // FIX (pedido do Claudio — backup ao sair da aba): guarda sempre o valor MAIS ATUAL de
   // "cadastros", para o listener de visibilitychange (registrado uma única vez, mais abaixo)
   // conseguir ler o estado de agora, não uma versão "congelada" de quando o listener foi criado
@@ -690,6 +706,78 @@ function App() {
     });
   }, [cadastros.obras]);
 
+  // ─── Vendedor / formas de pagamento — CARREGAR da linha própria ("vendedores") ───────────────
+  // FIX DEFINITIVO (14/09): roda uma vez, assim que "global" terminou de carregar. Lê a linha
+  // "vendedores"; se ela existir, é a fonte da verdade (o que estiver em "global" desses campos
+  // é ignorado). Se ainda NÃO existir (primeira abertura depois desta atualização), usa o que
+  // veio em "global" como MIGRAÇÃO — e o efeito de salvar abaixo cria a linha nova com isso.
+  // Se a leitura FALHAR (rede), vendedoresOk fica false e nada é salvo nesta sessão para esses
+  // campos — melhor não salvar do que gravar por cima de um servidor que não se conhece.
+  useEffect(function () {
+    if (!cadastrosOk) return;
+    var cancelado = false;
+    sbGetVendedores().then(function (linha) {
+      if (cancelado) return;
+      if (linha) {
+        versaoVendedoresRef.current = linha.versao;
+        ultimoVendSalvoRef.current = { vend: linha.fornecedorVendedor, pag: linha.fornecedorFormasPagamento };
+        cadastrosMudouPorCarregamentoRef.current++; // é CARREGAMENTO — o efeito de "global" não deve salvar por causa disto
+        setCadastros(function (prev) {
+          return _objectSpread(_objectSpread({}, prev), {}, {
+            fornecedorVendedor: linha.fornecedorVendedor,
+            fornecedorFormasPagamento: linha.fornecedorFormasPagamento
+          });
+        });
+        logEventoDiag("VENDEDORES carregados da linha própria: " + Object.keys(linha.fornecedorVendedor).length + " com vendedor, " + Object.keys(linha.fornecedorFormasPagamento).length + " com forma de pagamento");
+      } else {
+        versaoVendedoresRef.current = null;
+        ultimoVendSalvoRef.current = null; // nunca salvo ainda — o efeito abaixo vai criar a linha com o que veio de "global"
+        var atual = cadastrosAtuaisRef.current || {};
+        logEventoDiag("VENDEDORES: linha própria ainda não existe — migrando de 'global' (" + Object.keys(atual.fornecedorVendedor || {}).length + " com vendedor, " + Object.keys(atual.fornecedorFormasPagamento || {}).length + " com forma de pagamento)");
+      }
+      setVendedoresOk(true);
+    }).catch(function (e) {
+      if (cancelado) return;
+      logEventoDiag("\u2716 Falha ao carregar vendedores/formas de pagamento: " + (e && e.message ? e.message : String(e)) + " — salvamento desses campos DESATIVADO nesta sessão por segurança.");
+      window.avisarErroSalvamento('Não foi possível carregar vendedores e formas de pagamento. Recarregue a página. (Nada foi apagado.)');
+    });
+    return function () { cancelado = true; };
+  }, [cadastrosOk]);
+
+  // ─── Vendedor / formas de pagamento — PERSISTIR na linha própria ─────────────────────────────
+  useEffect(function () {
+    if (!vendedoresOk) return;
+    var vend = cadastros.fornecedorVendedor || {};
+    var pag = cadastros.fornecedorFormasPagamento || {};
+    var ultimo = ultimoVendSalvoRef.current;
+    if (ultimo && mesmoConteudoMapaDeListas(ultimo.vend, vend) && mesmoConteudoMapaDeListas(ultimo.pag, pag)) return; // nada mudou de verdade
+    var qtdVend = Object.keys(vend).length, qtdPag = Object.keys(pag).length;
+    logEventoDiag("SALVANDO VENDEDORES (" + qtdVend + " com vendedor, " + qtdPag + " com forma de pagamento)");
+    sbSaveVendedores(vend, pag, versaoVendedoresRef.current)
+      .then(function (novaVersao) {
+        versaoVendedoresRef.current = novaVersao;
+        ultimoVendSalvoRef.current = { vend: vend, pag: pag };
+        logEventoDiag("\u2714 SALVOU VENDEDORES — nova versão " + novaVersao);
+      })
+      .catch(function (e) {
+        if (e && e.isApagaoBloqueado) {
+          // A trava recusou gravar zero por cima de dados. Avisa, e RESSINCRONIZA a tela com o
+          // servidor (que continua com os dados), para a pessoa não ficar vendo um "0" falso.
+          window.avisarErroSalvamento(e.message);
+          sbGetVendedores().then(function (linha) {
+            if (!linha) return;
+            versaoVendedoresRef.current = linha.versao;
+            ultimoVendSalvoRef.current = { vend: linha.fornecedorVendedor, pag: linha.fornecedorFormasPagamento };
+            cadastrosMudouPorCarregamentoRef.current++;
+            setCadastros(function (prev) {
+              return _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: linha.fornecedorVendedor, fornecedorFormasPagamento: linha.fornecedorFormasPagamento });
+            });
+          }).catch(function(){});
+        } else if (e && e.isVersionConflict) window.avisarConflitoVersaoUmaVez('vendedores', e.message);
+        else window.avisarErroSalvamento('Não foi possível salvar vendedores/formas de pagamento. Verifique sua conexão.');
+      });
+  }, [cadastros.fornecedorVendedor, cadastros.fornecedorFormasPagamento, vendedoresOk]);
+
   // Persist cadastros
   useEffect(function () {
     // FIX (ver declaração do ref no início do componente — causa raiz do bug real relatado
@@ -709,7 +797,10 @@ function App() {
       // vendedor realmente chegou ao servidor. Agora fica registrado dos dois lados.
       var qtdVend = Object.keys(cadastros.fornecedorVendedor || {}).length;
       var qtdPag = Object.keys(cadastros.fornecedorFormasPagamento || {}).length;
-      logEventoDiag("SALVANDO CADASTROS (" + qtdVend + " fornecedor(es) com vendedor, " + qtdPag + " com forma de pagamento)");
+      // FIX DEFINITIVO (14/09): vendedor/pagamento agora vivem na linha "vendedores" (log próprio,
+      // "SALVANDO VENDEDORES"). Este salvamento de "global" grava obras/fornecedores/unidades/obs;
+      // as contagens ficam aqui só como referência do estado da tela naquele instante.
+      logEventoDiag("SALVANDO CADASTROS/global (" + (cadastros.fornecedores || []).length + " fornecedor(es), " + (cadastros.obras || []).length + " obra(s); tela com " + qtdVend + " vendedor(es) e " + qtdPag + " pagamento(s) — esses vão na linha 'vendedores')");
       sbSaveCadastros(Object.assign({}, cadastros, { _versaoServidor: versaoCadastrosRef.current }))
         .then(function(novaVersao){
           versaoCadastrosRef.current = novaVersao; // FIX: atualiza via ref (não state) para não disparar este mesmo useEffect de novo — evita loop
@@ -1069,7 +1160,13 @@ function App() {
   // vendedor/pagamento de fornecedores que AINDA EXISTEM na lista atual — um fornecedor que foi
   // removido de propósito depois que o backup foi feito não é "ressuscitado" sem querer.
   var restaurarBackupCadastros = useCallback(function (idBackup) {
-    return sbBackupCadastros(cadastrosAtuaisRef.current).then(function () {
+    // FIX (14/09 — cada tentativa de restaurar gravava ANTES um backup do estado atual, que já
+    // estava vazio, queimando um dos 5 slots bons por tentativa): se o estado atual não tem
+    // nenhum vendedor nem forma de pagamento, não há o que preservar — pula esse backup prévio.
+    var atual = cadastrosAtuaisRef.current || {};
+    var atualVazio = Object.keys(atual.fornecedorVendedor || {}).length === 0 && Object.keys(atual.fornecedorFormasPagamento || {}).length === 0;
+    var backupPrevio = atualVazio ? Promise.resolve() : sbBackupCadastros(atual);
+    return backupPrevio.then(function () {
       return sbBuscarConteudoBackup(idBackup);
     }).then(function (linha) {
       if (!linha || !linha.dados) return { ok: false, motivo: 'Backup não encontrado.' };
