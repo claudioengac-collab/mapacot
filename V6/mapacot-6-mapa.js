@@ -221,7 +221,17 @@ var _useState27 = useState(init),
     }
     document.addEventListener('mousedown', aoClicarForaConfig);
     // FIX: fecha o menu se a página rolar, para evitar posição desatualizada (menu via portal usa position:fixed)
-    function aoRolar(){ setShowConfigMenu(false); }
+    // FIX (14/09 — pedido do Claudio: "a barra de rolagem do menu fecha ele direto"): este
+    // listener usa captura no window, então pegava TAMBÉM a rolagem de DENTRO do próprio menu
+    // (que tem barra própria, maxHeight 70vh). Bastou o menu ganhar o 12º item em 11/09 para
+    // passar de 70% da tela e a barra aparecer — e rolar nela fechava o menu na hora. Agora
+    // ignora a rolagem cujo alvo está dentro do menu; rolagem da PÁGINA continua fechando.
+    function aoRolar(e){
+      // e.target só é um nó do DOM em eventos de scroll de elemento/documento; no 'resize' (que
+      // também usa este handler) o alvo é o window — por isso a checagem de nodeType antes do contains.
+      if (e && e.target && e.target.nodeType && configPortalRef.current && configPortalRef.current.contains(e.target)) return;
+      setShowConfigMenu(false);
+    }
     window.addEventListener('scroll', aoRolar, true);
     window.addEventListener('resize', aoRolar);
     return function(){
@@ -2090,7 +2100,7 @@ var _useState27 = useState(init),
     showConfigMenu && configMenuPos && ReactDOM.createPortal(
     /*#__PURE__*/React.createElement("div", {
       ref: configPortalRef,
-      style: { position:"fixed", top: configMenuPos.top, left: configMenuPos.left, background:"#fff", borderRadius:8, boxShadow:"0 8px 28px rgba(0,0,0,.28)", padding:8, zIndex:99999, minWidth:220, maxHeight:"70vh", overflowY:"auto" }
+      style: { position:"fixed", top: configMenuPos.top, left: configMenuPos.left, background:"#fff", borderRadius:8, boxShadow:"0 8px 28px rgba(0,0,0,.28)", padding:8, zIndex:99999, minWidth:220, maxHeight:"70vh", overflowY:"auto", overscrollBehavior:"contain" }
     },
       /*#__PURE__*/React.createElement("div", {
         onClick: function(){ logEventoDiag((!inclAnalise ? "ATIVOU" : "DESATIVOU") + " An\u00e1lise no PDF (mapa " + (mapa.numero != null ? mapa.numero : "?") + ")"); setInclAnalise(!inclAnalise); setShowConfigMenu(false); },
