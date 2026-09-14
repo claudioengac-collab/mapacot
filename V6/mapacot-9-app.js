@@ -1136,21 +1136,31 @@ function App() {
   // antes de chamar isto). Atualiza TUDO num único setCadastros — dispara UM salvamento no
   // final, não um por fornecedor (mais rápido e evita qualquer chance de saves em sequência
   // rápida colidirem entre si, mesmo já protegido pela fila em sbSaveCadastros).
-  var setVendedorEFormasPagamentoEmLote = useCallback(function (itens) {
+  var setVendedorEFormasPagamentoEmLote = useCallback(function (itens, opcoes) {
     var lista = (itens || []).filter(function (it) { return it && normalize(it.nomeFornecedor); });
     if (!lista.length) return;
-    logEventoDiag("CADASTRO EM LOTE: vendedor/pagamento para " + lista.length + " fornecedor(es) — " + lista.map(function(it){ return normalize(it.nomeFornecedor); }).join(", "));
-    setCadastros(function (prev) {
-      var novoVend = _objectSpread({}, prev.fornecedorVendedor || {});
-      var novoPag = _objectSpread({}, prev.fornecedorFormasPagamento || {});
-      lista.forEach(function (it) {
-        var nome = normalize(it.nomeFornecedor);
-        var vends = (it.vendedores || []).map(function(s){ return String(s||'').trim().slice(0,200); }).filter(function(s){ return s.length>0; });
-        var pags = (it.formasPagamento || []).map(function(s){ return String(s||'').trim().slice(0,60); }).filter(function(s){ return s.length>0; });
-        if (vends.length) novoVend[nome] = vends; else delete novoVend[nome];
-        if (pags.length) novoPag[nome] = pags; else delete novoPag[nome];
+    var substituirTudo = !!(opcoes && opcoes.substituirTudo);
+    // FIX (pedido do Claudio, 14/09 — 109 fornecedores depois da reconstrução, ele só queria os
+    // 19): modo SUBSTITUIR TUDO — a lista colada vira a lista COMPLETA; quem não está nela fica
+    // sem vendedor/pagamento. Antes de aplicar, guarda um backup do estado atual (a rotação nunca
+    // sobrescreve uma cópia com dados usando uma vazia, então esse backup entra num slot). A
+    // gravação no servidor passa pela trava anti-apagão como qualquer outra.
+    var atual = cadastrosAtuaisRef.current || {};
+    var backupPrevio = substituirTudo ? sbBackupCadastros(atual) : Promise.resolve();
+    logEventoDiag("CADASTRO EM LOTE" + (substituirTudo ? " (SUBSTITUIR TUDO)" : "") + ": vendedor/pagamento para " + lista.length + " fornecedor(es) — " + lista.map(function(it){ return normalize(it.nomeFornecedor); }).join(", "));
+    backupPrevio.catch(function(){}).then(function () {
+      setCadastros(function (prev) {
+        var novoVend = substituirTudo ? {} : _objectSpread({}, prev.fornecedorVendedor || {});
+        var novoPag = substituirTudo ? {} : _objectSpread({}, prev.fornecedorFormasPagamento || {});
+        lista.forEach(function (it) {
+          var nome = normalize(it.nomeFornecedor);
+          var vends = (it.vendedores || []).map(function(s){ return String(s||'').trim().slice(0,200); }).filter(function(s){ return s.length>0; });
+          var pags = (it.formasPagamento || []).map(function(s){ return String(s||'').trim().slice(0,60); }).filter(function(s){ return s.length>0; });
+          if (vends.length) novoVend[nome] = vends; else delete novoVend[nome];
+          if (pags.length) novoPag[nome] = pags; else delete novoPag[nome];
+        });
+        return _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: novoVend, fornecedorFormasPagamento: novoPag });
       });
-      return _objectSpread(_objectSpread({}, prev), {}, { fornecedorVendedor: novoVend, fornecedorFormasPagamento: novoPag });
     });
   }, []);
   // FIX (pedido do Claudio — poder restaurar um backup): aplica de volta o vendedor/forma de

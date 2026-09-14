@@ -17,8 +17,13 @@ function ModalLoteVendedorPagamento(_ref_lote) {
     onConfirmar = _ref_lote.onConfirmar,
     // FIX (pedido do Claudio — reconstruir vendedor/pagamento a partir dos mapas, depois da perda
     // de 14/09): texto pré-preenchido, opcional. Sem ele, o modal se comporta exatamente como antes.
-    textoInicial = _ref_lote.textoInicial || "";
+    textoInicial = _ref_lote.textoInicial || "",
+    // FIX (pedido do Claudio, 14/09 — ficou com 109 fornecedores depois da reconstrução, quando só
+    // queria os 19): quem já tem vendedor/pagamento HOJE, para calcular quantos seriam removidos
+    // com "SUBSTITUIR TUDO".
+    atuaisComVendedorOuPagamento = _ref_lote.atuaisComVendedorOuPagamento || [];
   var _sT = useState(textoInicial), textoColado = _slicedToArray(_sT, 2)[0], setTextoColado = _slicedToArray(_sT, 2)[1];
+  var _sS = useState(false), substituirTudo = _slicedToArray(_sS, 2)[0], setSubstituirTudo = _slicedToArray(_sS, 2)[1];
   var _sR = useState(null), resultados = _slicedToArray(_sR, 2)[0], setResultados = _slicedToArray(_sR, 2)[1];
 
   // FIX: match exato (via normalize, igual ao resto do sistema) primeiro; nomes de fornecedor
@@ -69,9 +74,17 @@ function ModalLoteVendedorPagamento(_ref_lote) {
   var reconhecidos = (resultados || []).filter(function(r) { return r.nomeOficial; });
   var naoReconhecidos = (resultados || []).filter(function(r) { return !r.nomeOficial; });
 
+  // Com SUBSTITUIR TUDO: quem está cadastrado hoje e NÃO aparece na lista colada será removido.
+  var nomesNaLista = {};
+  reconhecidos.forEach(function(r) { nomesNaLista[normalize(r.nomeOficial)] = true; });
+  var seriamRemovidos = substituirTudo ? atuaisComVendedorOuPagamento.filter(function(n) { return !nomesNaLista[normalize(n)]; }) : [];
+  // Trava da tela: com SUBSTITUIR TUDO, um nome não reconhecido bloqueia TUDO — senão removeria
+  // 90 e cadastraria só 15, deixando de fora justamente os que a pessoa digitou com grafia diferente.
+  var bloqueadoPorNaoReconhecido = substituirTudo && naoReconhecidos.length > 0;
   var handleConfirmar = function() {
+    if (bloqueadoPorNaoReconhecido) return;
     var itens = reconhecidos.map(function(r) { return { nomeFornecedor: r.nomeOficial, vendedores: r.vendedores, formasPagamento: r.formasPagamento }; });
-    onConfirmar(itens);
+    onConfirmar(itens, { substituirTudo: substituirTudo });
   };
 
   return /*#__PURE__*/React.createElement(Modal, { open: true, onClose: onClose, maxWidth: 620 },
@@ -92,6 +105,13 @@ function ModalLoteVendedorPagamento(_ref_lote) {
           placeholder: "REMOLO JARUDE E CIA LTDA; Marcelo Jarude; Pix, Boleto 30 dias\nAGRO BOI; Ana Paula; Depósito\nCOSTA REPRESENTAÇÕES E COMERCIO LTDA.; Roberto Costa; Pix",
           style: { width: "100%", minHeight: 140, border: "2px dashed #ffb74d", borderRadius: 8, padding: 10, fontSize: 11.5, fontFamily: "monospace", color: "#444" }
         }),
+        /*#__PURE__*/React.createElement("label", { style: { display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10, padding: "8px 10px", background: substituirTudo ? "#fdecea" : "#f7f7f7", border: "1px solid " + (substituirTudo ? "#ef9a9a" : "#e0e0e0"), borderRadius: 8, cursor: "pointer", fontSize: 11 } },
+          /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: substituirTudo, onChange: function(e) { setSubstituirTudo(e.target.checked); }, style: { marginTop: 2 } }),
+          /*#__PURE__*/React.createElement("span", null,
+            /*#__PURE__*/React.createElement("b", { style: { color: substituirTudo ? "#c62828" : "#333" } }, "SUBSTITUIR TUDO"),
+            /*#__PURE__*/React.createElement("span", { style: { color: "#666" } }, " — remover vendedor/pagamento de todo fornecedor que N\xc3O estiver nesta lista. Hoje " + atuaisComVendedorOuPagamento.length + " fornecedor(es) t\xeam vendedor/pagamento. Sem marcar, a lista s\xf3 adiciona/atualiza, nunca remove.")
+          )
+        ),
         /*#__PURE__*/React.createElement("button", {
           onClick: handleVerificar,
           disabled: !textoColado.trim(),
@@ -105,6 +125,10 @@ function ModalLoteVendedorPagamento(_ref_lote) {
           /*#__PURE__*/React.createElement("div", { style: { flex: 1, textAlign: "center", padding: "8px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, background: "#fff0e0", color: "#b35c00" } }, "\ud83d\udfe0 " + naoReconhecidos.length + " não encontrados")
         ),
 
+        substituirTudo && /*#__PURE__*/React.createElement("div", { style: { background: "#fdecea", border: "1px solid #ef9a9a", borderRadius: 8, padding: 10, marginBottom: 12, fontSize: 11, color: "#b71c1c" } },
+          /*#__PURE__*/React.createElement("b", null, "SUBSTITUIR TUDO: "), reconhecidos.length + " ser\xe3o cadastrados e ", /*#__PURE__*/React.createElement("b", null, seriamRemovidos.length + " ser\xe3o removidos"), " (v\xe3o ficar sem vendedor/pagamento). Ao final, " + reconhecidos.length + " fornecedor(es) ter\xe3o vendedor/pagamento. Um backup do estado atual \xe9 guardado antes.",
+          bloqueadoPorNaoReconhecido && /*#__PURE__*/React.createElement("div", { style: { marginTop: 6, fontWeight: 700 } }, "\u26d4 Bloqueado: h\xe1 " + naoReconhecidos.length + " nome(s) n\xe3o reconhecido(s). Com SUBSTITUIR TUDO, corrija-os antes \u2014 sen\xe3o eles ficariam de fora e seriam removidos.")
+        ),
         naoReconhecidos.length > 0 && /*#__PURE__*/React.createElement("div", { style: { background: "#fffaf3", border: "1px solid #f0c090", borderRadius: 8, padding: 10, marginBottom: 12 } },
           /*#__PURE__*/React.createElement("div", { style: { fontSize: 10.5, color: "#b35c00", marginBottom: 6, fontWeight: 700 } }, "Estes nomes não bateram com nenhum fornecedor já cadastrado — confira a grafia e cole de novo:"),
           naoReconhecidos.map(function(r, i) {
@@ -129,9 +153,9 @@ function ModalLoteVendedorPagamento(_ref_lote) {
           }, "\u2190 VOLTAR E CORRIGIR"),
           /*#__PURE__*/React.createElement("button", {
             onClick: handleConfirmar,
-            disabled: reconhecidos.length === 0,
-            style: { flex: 2, background: "#2e7d32", border: "none", borderRadius: 6, padding: "9px 12px", color: "#fff", cursor: reconhecidos.length ? "pointer" : "default", fontWeight: 700, fontSize: 11, opacity: reconhecidos.length ? 1 : 0.5 }
-          }, "CADASTRAR " + reconhecidos.length + " FORNECEDOR(ES)")
+            disabled: reconhecidos.length === 0 || bloqueadoPorNaoReconhecido,
+            style: { flex: 2, background: substituirTudo ? "#c62828" : "#2e7d32", border: "none", borderRadius: 6, padding: "9px 12px", color: "#fff", cursor: (reconhecidos.length && !bloqueadoPorNaoReconhecido) ? "pointer" : "default", fontWeight: 700, fontSize: 11, opacity: (reconhecidos.length && !bloqueadoPorNaoReconhecido) ? 1 : 0.5 }
+          }, substituirTudo ? ("SUBSTITUIR: FICAR S\xd3 COM " + reconhecidos.length + ", REMOVER " + seriamRemovidos.length) : ("CADASTRAR " + reconhecidos.length + " FORNECEDOR(ES)"))
         )
       )
     )
@@ -956,9 +980,10 @@ function CadastrosModal(_ref11) {
   }, (cadastros[tab] || []).length, " CADASTRO(S) NO TOTAL"))),
   showLoteVendPag && /*#__PURE__*/React.createElement(ModalLoteVendedorPagamento, {
     textoInicial: loteTextoInicial,
+    atuaisComVendedorOuPagamento: Array.from(new Set([].concat(Object.keys(cadastros.fornecedorVendedor || {}), Object.keys(cadastros.fornecedorFormasPagamento || {})))),
     fornecedoresExistentes: cadastros.fornecedores || [],
     onClose: function(){ setShowLoteVendPag(false); },
-    onConfirmar: function(itens){ onSetVendedorEFormasPagamentoEmLote(itens); setShowLoteVendPag(false); }
+    onConfirmar: function(itens, opcoes){ onSetVendedorEFormasPagamentoEmLote(itens, opcoes); setShowLoteVendPag(false); }
   }),
   // FIX (pedido do Claudio — poder restaurar um backup, sem precisar de mim): painel simples
   // com a lista das cópias guardadas automaticamente, cada uma com um botão de restaurar.
