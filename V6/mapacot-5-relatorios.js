@@ -177,7 +177,14 @@ function ReportsModal(_ref12) {
     style: SC.lbl
   }, "BUSCAR INSUMO"), /*#__PURE__*/React.createElement("input", {
     value: buscaInsumo,
-    onChange: function (e) { setBuscaInsumo(e.target.value); },
+    // FIX (pedido do Claudio, depois de ver na prática — a marcação ficando acumulada entre
+    // buscas diferentes causava confusão, mesmo tendo sido o comportamento pedido e testado
+    // antes: "220 MARCADO(S)" numa busca que só tinha 16 resultados visíveis, vindo de uma busca
+    // anterior completamente diferente): agora cada busca nova começa do zero — trocar o texto
+    // da busca limpa a marcação automaticamente. Efeito colateral direto, e esperado: o PDF de
+    // cada vez cobre só os insumos marcados NA BUSCA ATUAL, não mais o acumulado de buscas
+    // anteriores.
+    onChange: function (e) { setBuscaInsumo(e.target.value); setInsumosMarcados(new Set()); },
     placeholder: "EX: TIJOLO, CIMENTO, DISCO...",
     style: {
       width: "100%",
