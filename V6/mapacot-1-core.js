@@ -1278,6 +1278,25 @@ var casarComCatalogoInsumos = function(descricao, catalogoInsumos, aprendizadosA
   if (melhor >= 0.35) return { oficial: melhorNome, viaEnsinado: false, score: melhor };
   return null;
 };
+// FIX (pedido do Claudio, 14/09 — "a unidade tem que cruzar com o banco de dados, do mesmo jeito
+// que o insumo já cruza; não pode aceitar 'unidades' quando o cadastro só tem 'UN'"): mesmo
+// princípio de "casarComCatalogoInsumos", só que mais simples de propósito — uma unidade é uma
+// sigla curta (UN, KG, M²...), então comparar por PARECIDO (como o wordScore faz com descrições
+// longas) daria falso positivo fácil entre siglas diferentes. Aqui o critério é: igual depois de
+// tirar acento e maiúscula/minúscula (normalizeBusca) — nada além disso conta como reconhecido.
+// Qualquer coisa fora disso cai na tela de confirmação manual, exatamente como pedido.
+var casarComCatalogoUnidades = function(unidadeDigitada, catalogoUnidades, aprendizadosUnidadeAtuais) {
+  var chave = String(unidadeDigitada || '').trim().toUpperCase();
+  if (!chave) return null;
+  var jaEnsinado = (aprendizadosUnidadeAtuais || {})[chave];
+  if (jaEnsinado && (catalogoUnidades || []).indexOf(jaEnsinado) >= 0) {
+    return { oficial: jaEnsinado, viaEnsinado: true };
+  }
+  var chaveNorm = normalizeBusca(chave);
+  var achado = (catalogoUnidades || []).find(function(u) { return normalizeBusca(u) === chaveNorm; });
+  if (achado) return { oficial: achado, viaEnsinado: false };
+  return null;
+};
 var normalize = function normalize(s) {
   return (s || "").trim().toUpperCase();
 };

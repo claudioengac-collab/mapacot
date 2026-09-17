@@ -113,7 +113,25 @@ var _useState27 = useState(init),
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
   var _useStateApr=useState({}),aprendizados=_slicedToArray(_useStateApr,2)[0],setAprendizados=_slicedToArray(_useStateApr,2)[1];
-  useEffect(function(){ sbBuscarAprendizados().then(function(m){ setAprendizados(m); }); },[]);
+  // FIX (pedido do Claudio, 14/09 — unidade também tem que cruzar e "ensinar" como insumo já faz):
+  // reaproveita a MESMA tabela de aprendizado (só um "texto original → valor oficial" genérico),
+  // sem precisar de tabela nova — a chave de unidade é gravada com um prefixo ("UNID::") só pra
+  // nunca colidir com uma chave de insumo. Um ÚNICO carregamento já separa os dois mapas aqui,
+  // então "aprendizados" (usado por casarComCatalogoInsumos) nunca vê uma chave de unidade, e
+  // vice-versa — cada função de cruzamento continua enxergando só o que é dela.
+  var _useStateAprU=useState({}),aprendizadosUnidade=_slicedToArray(_useStateAprU,2)[0],setAprendizadosUnidade=_slicedToArray(_useStateAprU,2)[1];
+  var PREFIXO_APRENDIZADO_UNIDADE = "UNID::";
+  useEffect(function(){
+    sbBuscarAprendizados().then(function(m){
+      var soInsumo = {}, soUnidade = {};
+      Object.keys(m||{}).forEach(function(chave){
+        if (chave.indexOf(PREFIXO_APRENDIZADO_UNIDADE) === 0) soUnidade[chave.slice(PREFIXO_APRENDIZADO_UNIDADE.length)] = m[chave];
+        else soInsumo[chave] = m[chave];
+      });
+      setAprendizados(soInsumo);
+      setAprendizadosUnidade(soUnidade);
+    });
+  },[]);
   var registrarAprendizado = function(textoOriginal, insumoDescricao){
     logEventoDiag("ENSINAR SISTEMA: \"" + String(textoOriginal||'').slice(0,40) + "\" \u2192 " + insumoDescricao);
     sbSalvarAprendizado(textoOriginal, insumoDescricao).catch(function(){
@@ -121,6 +139,14 @@ var _useState27 = useState(init),
     });
     var chave = String(textoOriginal||'').trim().toUpperCase();
     setAprendizados(function(prev){ var n = Object.assign({}, prev); n[chave] = insumoDescricao; return n; });
+  };
+  var registrarAprendizadoUnidade = function(textoOriginal, unidadeOficial){
+    logEventoDiag("ENSINAR SISTEMA (unidade): \"" + String(textoOriginal||'').slice(0,40) + "\" \u2192 " + unidadeOficial);
+    sbSalvarAprendizado(PREFIXO_APRENDIZADO_UNIDADE + String(textoOriginal||'').trim().toUpperCase(), unidadeOficial).catch(function(){
+      window.avisarErroSalvamento('Não foi possível salvar o aprendizado de unidade. Verifique sua conexão.');
+    });
+    var chave = String(textoOriginal||'').trim().toUpperCase();
+    setAprendizadosUnidade(function(prev){ var n = Object.assign({}, prev); n[chave] = unidadeOficial; return n; });
   };
   var desfazerAprendizado = function(textoOriginal){
     var chave = String(textoOriginal||'').trim().toUpperCase();
@@ -2752,8 +2778,11 @@ var _useState27 = useState(init),
   }),
   showAdicionarVarios && /*#__PURE__*/React.createElement(ModalAdicionarVariosItens, {
     cadastrosInsumos: cadastros.insumos||[],
+    cadastrosUnidades: cadastros.unidades||[],
     aprendizados: aprendizados,
+    aprendizadosUnidade: aprendizadosUnidade,
     onRegistrarAprendizado: registrarAprendizado,
+    onRegistrarAprendizadoUnidade: registrarAprendizadoUnidade,
     onConfirmar: function(itensParaAdicionar){
       addVariosItens(itensParaAdicionar);
       setShowAdicionarVarios(false);
@@ -2952,8 +2981,11 @@ var _useState27 = useState(init),
 // (buscar e ensinar o sistema, ou deixar de fora por enquanto).
 function ModalAdicionarVariosItens(_ref_avi) {
   var cadastrosInsumos = _ref_avi.cadastrosInsumos || [];
+  var cadastrosUnidades = _ref_avi.cadastrosUnidades || [];
   var aprendizados = _ref_avi.aprendizados || {};
+  var aprendizadosUnidade = _ref_avi.aprendizadosUnidade || {};
   var onRegistrarAprendizado = _ref_avi.onRegistrarAprendizado || function(){};
+  var onRegistrarAprendizadoUnidade = _ref_avi.onRegistrarAprendizadoUnidade || function(){};
   var onConfirmar = _ref_avi.onConfirmar || function(){};
   var onClose = _ref_avi.onClose || function(){};
 
@@ -2962,15 +2994,26 @@ function ModalAdicionarVariosItens(_ref_avi) {
   var _sProc = useState(false), processando = _slicedToArray(_sProc,2)[0], setProcessando = _slicedToArray(_sProc,2)[1];
   var _sErro = useState(''), erro = _slicedToArray(_sErro,2)[0], setErro = _slicedToArray(_sErro,2)[1];
   var _sResultados = useState(null), resultados = _slicedToArray(_sResultados,2)[0], setResultados = _slicedToArray(_sResultados,2)[1];
+  // FIX (pedido do Claudio, 14/09): "buscaAberta"/"textoBusca" agora são indexados por
+  // "idx_insumo" ou "idx_unidade" — cada item pode ter os DOIS problemas ao mesmo tempo
+  // (insumo não reconhecido E unidade não reconhecida), e cada um precisa da sua própria
+  // caixa de busca aberta/fechada, independente da outra.
   var _sBuscaItem = useState({}), buscaAberta = _slicedToArray(_sBuscaItem,2)[0], setBuscaAberta = _slicedToArray(_sBuscaItem,2)[1];
   var _sTextoBusca = useState({}), textoBusca = _slicedToArray(_sTextoBusca,2)[0], setTextoBusca = _slicedToArray(_sTextoBusca,2)[1];
 
   var processarItensBrutos = function(itensBrutos) {
     var comMatch = itensBrutos.map(function(it){
       var match = casarComCatalogoInsumos(it.descricao, cadastrosInsumos, aprendizados);
+      // FIX (pedido do Claudio, 14/09 — "a unidade tem que cruzar com o banco de dados, do
+      // mesmo jeito que o insumo já cruza"): antes, "it.unid" ia direto pro mapa sem checar
+      // nada — aceitava qualquer texto do Excel/colado, mesmo unidade que não existisse no
+      // cadastro. Agora passa pelo mesmo tipo de cruzamento que o insumo já tinha.
+      var matchUnidade = casarComCatalogoUnidades(it.unid, cadastrosUnidades, aprendizadosUnidade);
       return {
-        qtd: it.qtd, unid: it.unid, descricaoOriginal: it.descricao,
-        match: match, decisao: match ? 'usar' : 'pular', ensinarNaConfirmacao: false
+        qtd: it.qtd, unidOriginal: it.unid, descricaoOriginal: it.descricao,
+        match: match, matchUnidade: matchUnidade,
+        decisao: (match && matchUnidade) ? 'usar' : 'pular',
+        ensinarNaConfirmacao: false, ensinarUnidadeNaConfirmacao: false
       };
     });
     setResultados(comMatch);
@@ -3027,25 +3070,84 @@ function ModalAdicionarVariosItens(_ref_avi) {
       var novo = prev.slice();
       novo[idx] = _objectSpread(_objectSpread({}, novo[idx]), {}, {
         match: { oficial: nomeOficial, viaEnsinado: false, score: 1 },
-        decisao: 'usar', ensinarNaConfirmacao: true
+        decisao: novo[idx].matchUnidade ? 'usar' : 'pular', ensinarNaConfirmacao: true
       });
       return novo;
     });
-    setBuscaAberta(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx, false)); });
+    setBuscaAberta(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx+'_insumo', false)); });
+  };
+  // FIX (pedido do Claudio, 14/09): mesmo mecanismo de "escolher sugestão e ensinar", agora
+  // também para unidade — escolhida separadamente da sugestão de insumo, já que um item pode
+  // precisar de ajuste nos dois ao mesmo tempo.
+  var escolherSugestaoUnidade = function(idx, nomeOficial) {
+    setResultados(function(prev){
+      var novo = prev.slice();
+      novo[idx] = _objectSpread(_objectSpread({}, novo[idx]), {}, {
+        matchUnidade: { oficial: nomeOficial, viaEnsinado: false },
+        decisao: novo[idx].match ? 'usar' : 'pular', ensinarUnidadeNaConfirmacao: true
+      });
+      return novo;
+    });
+    setBuscaAberta(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx+'_unidade', false)); });
   };
 
   var handleConfirmarFinal = function() {
     var paraAdicionar = [];
     (resultados||[]).forEach(function(r){
-      if (r.decisao !== 'usar' || !r.match) return;
+      if (r.decisao !== 'usar' || !r.match || !r.matchUnidade) return;
       if (r.ensinarNaConfirmacao) onRegistrarAprendizado(r.descricaoOriginal, r.match.oficial);
-      paraAdicionar.push({ qtd: r.qtd, unid: r.unid, descricao: r.match.oficial });
+      if (r.ensinarUnidadeNaConfirmacao) onRegistrarAprendizadoUnidade(r.unidOriginal, r.matchUnidade.oficial);
+      paraAdicionar.push({ qtd: r.qtd, unid: r.matchUnidade.oficial, descricao: r.match.oficial });
     });
     onConfirmar(paraAdicionar);
   };
 
-  var reconhecidos = (resultados||[]).filter(function(r){ return r.match; });
-  var naoReconhecidos = (resultados||[]).filter(function(r){ return !r.match; });
+  var reconhecidos = (resultados||[]).filter(function(r){ return r.match && r.matchUnidade; });
+  var naoReconhecidos = (resultados||[]).filter(function(r){ return !r.match || !r.matchUnidade; });
+
+  // FIX (pedido do Claudio, 14/09 — "o filtro não está puxando todos os insumos relacionados ao
+  // que eu digito"): a busca manual usava .indexOf() puro — sensível a acento (buscar "TELHA"
+  // não achava "TÊLHA..."). Agora usa normalizeBusca (a mesma função já usada e corrigida antes
+  // no Banco de Cadastros e no autocompletar do mapa), dos dois lados da comparação. Reaproveitada
+  // tanto pela busca de insumo quanto pela nova busca de unidade.
+  var renderCampoBusca = function(chaveBusca, catalogo, onEscolher) {
+    var termoBusca = textoBusca[chaveBusca] || '';
+    var termoNorm = normalizeBusca(termoBusca);
+    var sugestoes = termoBusca.length >= 2
+      ? catalogo.filter(function(nome){ return normalizeBusca(nome).indexOf(termoNorm) >= 0; }).slice(0, 6)
+      : [];
+    return /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement('input', {
+        value: termoBusca, autoFocus: true, placeholder: 'Digite pra buscar no catálogo...',
+        onChange: function(e){ setTextoBusca(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, chaveBusca, e.target.value)); }); },
+        style:{width:'100%',marginTop:2,padding:'6px 8px',border:'1px solid #ccc',borderRadius:5,fontSize:10.5}
+      }),
+      sugestoes.map(function(s, si){
+        return /*#__PURE__*/React.createElement('div', {
+          key: si, onClick: function(){ onEscolher(s); },
+          style:{fontSize:9.5,padding:'4px 6px',background:'#fff',border:'1px solid #ddd',borderRadius:4,marginTop:3,cursor:'pointer'}
+        }, s);
+      })
+    );
+  };
+  // Uma "seção de problema" completa: rótulo + (botão pra abrir busca, ou a busca já aberta).
+  // Reaproveitada tanto pra insumo quanto pra unidade — só muda o catálogo e o texto do rótulo.
+  var renderSecaoProblema = function(idx, rotulo, catalogo, chaveBusca, onEscolher) {
+    var estaAbertoBusca = !!buscaAberta[chaveBusca];
+    return /*#__PURE__*/React.createElement('div', { style:{marginTop:8} },
+      /*#__PURE__*/React.createElement('div', { style:{fontSize:9.5,color:'#b35c00',marginBottom:4} }, rotulo),
+      !estaAbertoBusca && /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:6} },
+        /*#__PURE__*/React.createElement('div', {
+          onClick: function(){ setBuscaAberta(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, chaveBusca, true)); }); },
+          style:{background:'#eef2ff',color:'#2a5298',padding:'8px 10px',borderRadius:6,fontSize:10.5,cursor:'pointer'}
+        }, '🔗 Já existe, só escrito diferente — buscar e ensinar'),
+        /*#__PURE__*/React.createElement('div', {
+          style:{background:'#f5f5f5',color:'#777',padding:'8px 10px',borderRadius:6,fontSize:10.5}
+        }, '⏭️ Deixado de fora por enquanto (item não entra no mapa)')
+      ),
+      estaAbertoBusca && renderCampoBusca(chaveBusca, catalogo, onEscolher)
+    );
+  };
 
   return /*#__PURE__*/React.createElement(Modal, { open: true, onClose: onClose, maxWidth: 640 },
     /*#__PURE__*/React.createElement('div', { style:{background:'#7c3aed',color:'#fff',padding:'12px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'} },
@@ -3101,42 +3203,19 @@ function ModalAdicionarVariosItens(_ref_avi) {
         naoReconhecidos.length > 0 && /*#__PURE__*/React.createElement('div', { style:{fontSize:10.5,color:'#666',marginBottom:10} }, 'Os itens abaixo não vão entrar no mapa até você decidir o que fazer com cada um.'),
 
         (resultados||[]).map(function(r, idx){
-          if (r.match) return null; // os reconhecidos não precisam de card individual, só contam no resumo
-          var estaAbertoBusca = !!buscaAberta[idx];
-          var termoBusca = textoBusca[idx] || '';
-          var sugestoes = termoBusca.length >= 2
-            ? cadastrosInsumos.filter(function(nome){ return nome.toUpperCase().indexOf(termoBusca.toUpperCase()) >= 0; }).slice(0, 6)
-            : [];
+          if (r.match && r.matchUnidade) return null; // totalmente reconhecido, só conta no resumo
           return /*#__PURE__*/React.createElement('div', { key: idx, style:{border:'1px solid #f0c090',background:'#fffaf3',borderRadius:8,padding:11,marginBottom:10} },
             /*#__PURE__*/React.createElement('div', { style:{fontSize:11.5,fontWeight:700,color:'#333'} },
-              /*#__PURE__*/React.createElement('span', { style:{color:'#888',fontWeight:400,fontSize:10} }, r.qtd + ' ' + r.unid + ' · '),
+              /*#__PURE__*/React.createElement('span', { style:{color:'#888',fontWeight:400,fontSize:10} }, r.qtd + ' ' + r.unidOriginal + ' · '),
               r.descricaoOriginal
             ),
-            /*#__PURE__*/React.createElement('div', { style:{fontSize:9.5,color:'#b35c00',margin:'4px 0 8px'} }, '⚠️ Nada parecido encontrado no catálogo (' + cadastrosInsumos.length + ' insumos)'),
-            !estaAbertoBusca && /*#__PURE__*/React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:6} },
-              /*#__PURE__*/React.createElement('div', {
-                onClick: function(){ setBuscaAberta(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx, true)); }); },
-                style:{background:'#eef2ff',color:'#2a5298',padding:'8px 10px',borderRadius:6,fontSize:10.5,cursor:'pointer'}
-              }, '🔗 Este é um insumo que já existe, só escrito diferente — buscar e ensinar'),
-              /*#__PURE__*/React.createElement('div', {
-                style:{background:'#f5f5f5',color:'#777',padding:'8px 10px',borderRadius:6,fontSize:10.5}
-              }, '⏭️ Deixado de fora por enquanto (não entra no mapa)')
+            !r.match && renderSecaoProblema(
+              idx, '⚠️ Insumo não encontrado no catálogo (' + cadastrosInsumos.length + ' insumos)',
+              cadastrosInsumos, idx+'_insumo', function(s){ escolherSugestao(idx, s); }
             ),
-            estaAbertoBusca && /*#__PURE__*/React.createElement(React.Fragment, null,
-              /*#__PURE__*/React.createElement('input', {
-                value: termoBusca,
-                autoFocus: true,
-                placeholder: 'Digite pra buscar no catálogo...',
-                onChange: function(e){ setTextoBusca(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, idx, e.target.value)); }); },
-                style:{width:'100%',marginTop:2,padding:'6px 8px',border:'1px solid #ccc',borderRadius:5,fontSize:10.5}
-              }),
-              sugestoes.map(function(s, si){
-                return /*#__PURE__*/React.createElement('div', {
-                  key: si,
-                  onClick: function(){ escolherSugestao(idx, s); },
-                  style:{fontSize:9.5,padding:'4px 6px',background:'#fff',border:'1px solid #ddd',borderRadius:4,marginTop:3,cursor:'pointer'}
-                }, s);
-              })
+            !r.matchUnidade && renderSecaoProblema(
+              idx, '⚠️ Unidade "' + r.unidOriginal + '" não encontrada no catálogo (' + cadastrosUnidades.length + ' unidades cadastradas)',
+              cadastrosUnidades, idx+'_unidade', function(s){ escolherSugestaoUnidade(idx, s); }
             )
           );
         }),
