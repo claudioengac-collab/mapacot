@@ -3113,8 +3113,16 @@ function ModalAdicionarVariosItens(_ref_avi) {
   var renderCampoBusca = function(chaveBusca, catalogo, onEscolher) {
     var termoBusca = textoBusca[chaveBusca] || '';
     var termoNorm = normalizeBusca(termoBusca);
+    // FIX (pedido do Claudio, 24/09 — "o filtro não faz a busca geral, só aparece esse limite"):
+    // buscar "AÇO" com catálogo de ~19 mil insumos achava dezenas de itens contendo o termo, mas
+    // só mostrava os 6 primeiros em ordem alfabética — então itens como "BARRA DE AÇO..." nunca
+    // apareciam, ficando atrás de vários "ABAFADOR...DE AÇO" / "ABRAÇADEIRA...DE AÇO" que vêm
+    // antes no alfabeto. A busca em si já era certa (usa normalizeBusca, acha em qualquer parte
+    // do nome); o problema era só cortar demais o que mostrar. Mesmo padrão já usado e testado
+    // no Banco de Cadastros para listas grandes: limite de 500 (em vez de 6) + área com rolagem
+    // própria, em vez de uma lista sem fim que estourasse o modal.
     var sugestoes = termoBusca.length >= 2
-      ? catalogo.filter(function(nome){ return normalizeBusca(nome).indexOf(termoNorm) >= 0; }).slice(0, 6)
+      ? catalogo.filter(function(nome){ return normalizeBusca(nome).indexOf(termoNorm) >= 0; }).slice(0, 500)
       : [];
     return /*#__PURE__*/React.createElement(React.Fragment, null,
       /*#__PURE__*/React.createElement('input', {
@@ -3122,12 +3130,17 @@ function ModalAdicionarVariosItens(_ref_avi) {
         onChange: function(e){ setTextoBusca(function(prev){ return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, chaveBusca, e.target.value)); }); },
         style:{width:'100%',marginTop:2,padding:'6px 8px',border:'1px solid #ccc',borderRadius:5,fontSize:10.5}
       }),
-      sugestoes.map(function(s, si){
+      sugestoes.length > 0 && /*#__PURE__*/React.createElement('div', {
+        style:{maxHeight:220,overflowY:'auto',marginTop:3}
+      }, sugestoes.map(function(s, si){
         return /*#__PURE__*/React.createElement('div', {
           key: si, onClick: function(){ onEscolher(s); },
-          style:{fontSize:9.5,padding:'4px 6px',background:'#fff',border:'1px solid #ddd',borderRadius:4,marginTop:3,cursor:'pointer'}
+          style:{fontSize:9.5,padding:'4px 6px',background:'#fff',border:'1px solid #ddd',borderRadius:4,marginTop:si===0?0:3,cursor:'pointer'}
         }, s);
-      })
+      })),
+      termoBusca.length >= 2 && sugestoes.length === 0 && /*#__PURE__*/React.createElement('div', {
+        style:{fontSize:9.5,color:'#999',marginTop:4}
+      }, 'Nada encontrado com esse termo no catálogo.')
     );
   };
   // Uma "seção de problema" completa: rótulo + (botão pra abrir busca, ou a busca já aberta).
