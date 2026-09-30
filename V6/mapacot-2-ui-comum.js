@@ -285,6 +285,11 @@ function EC(_ref0) {
     strictMatch = _ref0.strictMatch,
     detailValue = _ref0.detailValue,
     onDetailChange = _ref0.onDetailChange,
+    // NOVO (pedido do Claudio — anexar PDF/Excel): elemento opcional mostrado ao lado do texto,
+    // igual ao detailValue/DetalheBtn logo abaixo, mas livre (qualquer React node pronto, não só
+    // o botão de detalhe). Quando não é passado, "extra" fica undefined e nada muda pra nenhuma
+    // das outras dezenas de células que já usam EC hoje — mesmo princípio do detailValue.
+    extra = _ref0.extra,
     wrapText = _ref0.wrapText,
     guardEdit = _ref0.guardEdit,
     // FIX (pedido do Claudio — Condições de Pagamento): permite que a lista de sugestões
@@ -412,7 +417,7 @@ function EC(_ref0) {
     key: "det",
     value: detailValue,
     onChange: onDetailChange
-  }));
+  }), extra || null);
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -539,6 +544,26 @@ var IcoClip = function IcoClip() {
     y1: "16",
     x2: "13",
     y2: "16"
+  }));
+};
+// NOVO (pedido do Claudio — anexar PDF/Excel): ícone de clipe de papel de verdade, separado do
+// IcoClip acima (que já é usado no card de cada mapa da tela inicial, com outro significado —
+// reaproveitar ele aqui ia confundir os dois usos). Mesmo estilo visual dos outros ícones
+// (stroke, sem preenchimento, viewBox 24x24).
+var IcoAnexo = function IcoAnexo(_refAnexo) {
+  var _refAnexo$w = (_refAnexo || {}).w,
+    w = _refAnexo$w === void 0 ? 15 : _refAnexo$w;
+  return /*#__PURE__*/React.createElement("svg", {
+    width: w,
+    height: w,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M21.44 11.05l-9.19 9.19a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95l-9.2 9.19a1.5 1.5 0 0 1-2.12-2.12l8.49-8.48"
   }));
 };
 var IcoChev = function IcoChev() {

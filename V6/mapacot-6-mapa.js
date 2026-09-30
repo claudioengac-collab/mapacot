@@ -7,6 +7,45 @@ function normalizeVendedorLista(valor) {
   if (valor) return [valor];
   return [];
 }
+// NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): formata tamanho (bytes -> "842 KB" /
+// "1,2 MB") e data (ISO -> "30/09/2026") de cada anexo, só para exibição na listinha do painel.
+function fmtBytes(bytes) {
+  var n = Number(bytes) || 0;
+  if (n < 1024 * 1024) return Math.round(n / 1024) + " KB";
+  return (n / 1024 / 1024).toFixed(1).replace(".", ",") + " MB";
+}
+function fmtDataAnexo(iso) {
+  try { return new Date(iso).toLocaleDateString("pt-BR"); } catch (e) { return ""; }
+}
+// NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): botão pequeno (clipe + bolinha com a
+// contagem) usado nas 2 posições — dentro da célula "OBSERVAÇÕES" de cada fornecedor (via prop
+// "extra" do EC) e ao lado do cabeçalho "OBSERVAÇÃO GERAL DO MAPA". Só abre/fecha o painel de
+// anexos — não sobe nem apaga arquivo nenhum sozinho.
+function AnexoClipBtn(_refClip) {
+  var qtd = _refClip.qtd,
+    onClick = _refClip.onClick,
+    claro = _refClip.claro; // "claro" = versão para fundo escuro (cabeçalho azul)
+  return /*#__PURE__*/React.createElement("span", {
+    onClick: function (e) { e.stopPropagation(); onClick(); },
+    title: qtd > 0 ? (qtd + " arquivo(s) anexado(s) — toque para ver") : "Anexar PDF ou Excel",
+    style: {
+      position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: 23, height: 21, marginLeft: 6, borderRadius: 5, cursor: "pointer", flexShrink: 0,
+      verticalAlign: "middle",
+      background: claro ? "rgba(255,255,255,0.15)" : (qtd > 0 ? "#eef2fb" : "#f5f7fb"),
+      border: "1px solid " + (claro ? "rgba(255,255,255,0.35)" : (qtd > 0 ? "#c3d0ec" : "#e0e4ee")),
+      color: claro ? "#fff" : "#2a5298"
+    }
+  }, /*#__PURE__*/React.createElement(IcoAnexo, { w: 12 }),
+  qtd > 0 && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: "absolute", top: -6, right: -6, background: "#e0731f", color: "#fff",
+      fontSize: 8.5, fontWeight: 800, borderRadius: 8, minWidth: 14, height: 14,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px",
+      border: "1.5px solid #fff", lineHeight: 1
+    }
+  }, qtd));
+}
 function MapEditor(_ref15) {
   var init = _ref15.mapa,
     onBack = _ref15.onBack,
@@ -206,6 +245,18 @@ var _useState27 = useState(init),
     var t = setTimeout(function () { document.addEventListener("click", fechar); }, 0);
     return function () { clearTimeout(t); document.removeEventListener("click", fechar); };
   }, [obsPopupFornecedor]);
+  // NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): qual painel de anexos está aberto
+  // agora — null (fechado), {tipo:"forn", fornId, fornNome} ou {tipo:"geral"}. Só um por vez,
+  // mesmo padrão do obsPopupFornecedor acima.
+  var _useStateAnexosAberto = useState(null),
+    anexosAbertoPara = _slicedToArray(_useStateAnexosAberto, 2)[0],
+    setAnexosAbertoPara = _slicedToArray(_useStateAnexosAberto, 2)[1];
+  var _useStateAnexosEnv = useState(false),
+    anexosEnviando = _slicedToArray(_useStateAnexosEnv, 2)[0],
+    setAnexosEnviando = _slicedToArray(_useStateAnexosEnv, 2)[1];
+  var _useStateAnexosErro = useState(""),
+    anexosErro = _slicedToArray(_useStateAnexosErro, 2)[0],
+    setAnexosErro = _slicedToArray(_useStateAnexosErro, 2)[1];
   var mapContainerRef = useRef();
   var tableRef = useRef();
   // Estados do modal de associação
@@ -711,6 +762,63 @@ var _useState27 = useState(init),
       return _objectSpread(_objectSpread({}, m), {}, {
         obsGeral: v
       });
+    });
+  };
+  // NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): mesmo padrão exato do setObsGeral
+  // acima — o "update()" salva o objeto do mapa inteiro, então este campo novo nunca corre o
+  // risco de ser descartado silenciosamente ao salvar (ver comentário grande em sbSaveCadastros,
+  // no mapacot-1-core.js, sobre esse bug já ter acontecido 3 vezes com outro tipo de campo).
+  var setAnexosGerais = function setAnexosGerais(v) {
+    return update(function (m) {
+      return _objectSpread(_objectSpread({}, m), {}, {
+        anexosGerais: v
+      });
+    });
+  };
+  // NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): helpers do painel de anexos.
+  // "alvo" é sempre {tipo:"geral"} ou {tipo:"forn", fornId, fornNome}.
+  var anexosDe = function anexosDe(alvo) {
+    if (!alvo) return [];
+    if (alvo.tipo === "geral") return mapa.anexosGerais || [];
+    return (rodape[alvo.fornId] || {}).anexos || [];
+  };
+  var salvarListaAnexos = function salvarListaAnexos(alvo, novaLista) {
+    if (alvo.tipo === "geral") setAnexosGerais(novaLista);
+    else setRodape(alvo.fornId, "anexos", novaLista);
+  };
+  var handleUploadAnexo = function handleUploadAnexo(alvo, file) {
+    if (!file || !alvo) return;
+    setAnexosErro("");
+    // Validação síncrona ANTES de mexer no estado de "enviando" — um arquivo do tipo errado
+    // não deve nem piscar um spinner, o aviso já aparece na hora.
+    var erroValidacao = anexoValidar(file);
+    if (erroValidacao) { setAnexosErro(erroValidacao); return; }
+    setAnexosEnviando(true);
+    var destino = alvo.tipo === "geral" ? "geral" : ("forn_" + alvo.fornId);
+    sbUploadAnexo(mapa.id, destino, file).then(function (meta) {
+      // Lê a lista de novo (não a de fora do .then) — evita perder um arquivo se dois uploads
+      // terminarem em sequência rápida (ex: usuário escolhe 2 arquivos um atrás do outro).
+      var listaAtual = anexosDe(alvo);
+      salvarListaAnexos(alvo, listaAtual.concat([meta]));
+      setAnexosEnviando(false);
+    }).catch(function (e) {
+      setAnexosEnviando(false);
+      setAnexosErro((e && e.message) || "Falha ao enviar o arquivo. Verifique sua internet e tente de novo.");
+    });
+  };
+  var handleExcluirAnexo = function handleExcluirAnexo(alvo, idx) {
+    var listaAtual = anexosDe(alvo);
+    var item = listaAtual[idx];
+    if (!item) return;
+    if (!window.confirm("Remover \"" + item.nome + "\"? Esta ação não pode ser desfeita.")) return;
+    setAnexosErro("");
+    sbExcluirAnexo(item.caminho).then(function () {
+      var listaMaisNova = anexosDe(alvo); // relê, por segurança (mesmo motivo do upload acima)
+      var i2 = listaMaisNova.indexOf(item);
+      var novaLista = i2 >= 0 ? listaMaisNova.slice(0, i2).concat(listaMaisNova.slice(i2 + 1)) : listaMaisNova;
+      salvarListaAnexos(alvo, novaLista);
+    }).catch(function (e) {
+      setAnexosErro((e && e.message) || "Falha ao excluir o arquivo. Verifique sua internet e tente de novo.");
     });
   };
   // ── Helpers de orçamento ──────────────────────────────────────────────────
@@ -1966,6 +2074,14 @@ var _useState27 = useState(init),
           // fica para o usuário escolher; com só 1, já vem auto-preenchido mas pode trocar).
           suggestions: row.formaPagamento ? ((cadastros.fornecedorFormasPagamento || {})[normalize(f.nome)] || []) : (row.mostrarVendedorSugestoes ? listaVendedoresLinha : undefined),
           showOnFocus: (row.formaPagamento || row.mostrarVendedorSugestoes) ? true : undefined,
+          // NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): só a linha "OBSERVAÇÕES"
+          // ganha o ícone de anexo — nenhuma outra linha (Contato, Condições de Pagamento,
+          // Desconto, Frete...) é afetada. "extra" é a prop nova adicionada no EC, que por
+          // padrão não faz nada quando não é passada (ver mapacot-2-ui-comum.js).
+          extra: row.key === "observacao" ? /*#__PURE__*/React.createElement(AnexoClipBtn, {
+            qtd: ((rodape[f.id] || {}).anexos || []).length,
+            onClick: function () { setAnexosAbertoPara({ tipo: "forn", fornId: f.id, fornNome: f.nome }); }
+          }) : undefined,
           tdSt: _objectSpread(_objectSpread({}, SC.td), {}, {
             borderLeft: "1px solid #e4e8f4"
           })
@@ -2027,9 +2143,18 @@ var _useState27 = useState(init),
         padding: "8px 14px",
         fontWeight: 700,
         fontSize: 12,
-        letterSpacing: 0.4
+        letterSpacing: 0.4,
+        // NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): "display:flex" adicionado só
+        // pra alinhar o ícone novo à direita do texto — não muda a aparência do texto em si.
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
       }
-    }, "OBSERVA\xC7\xC3O GERAL DO MAPA"), /*#__PURE__*/React.createElement("textarea", {
+    }, "OBSERVA\xC7\xC3O GERAL DO MAPA", /*#__PURE__*/React.createElement(AnexoClipBtn, {
+      qtd: (mapa.anexosGerais || []).length,
+      claro: true,
+      onClick: function () { setAnexosAbertoPara({ tipo: "geral" }); }
+    })), /*#__PURE__*/React.createElement("textarea", {
       value: mapa.obsGeral || "",
       onChange: function onChange(e) {
         var el=e.target, ss=el.selectionStart, se=el.selectionEnd;
@@ -2463,6 +2588,78 @@ var _useState27 = useState(init),
       style: { fontSize: 12.5, color: "#333", whiteSpace: "pre-wrap", overflowY: "auto", textTransform: "none", lineHeight: 1.5 }
     }, obsPopupFornecedor.texto)
   ),
+  // NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): painel de anexos — lista, envia e
+  // exclui arquivos de um fornecedor (anexosAbertoPara.tipo==="forn") ou gerais do mapa
+  // (tipo==="geral"). Fundo escurecido + fecha ao tocar fora, mesmo padrão já usado no painel de
+  // backups do mapa logo abaixo — não inventa um jeito novo de abrir/fechar popup.
+  anexosAbertoPara && /*#__PURE__*/React.createElement("div", {
+    style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.45)", zIndex: 9900, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "60px 16px 16px" },
+    onClick: function (e) { if (e.target === e.currentTarget) { setAnexosAbertoPara(null); setAnexosErro(""); } }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: { background: "#fff", border: "2px solid #f0a500", borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,0.25)", maxWidth: 420, width: "100%", overflow: "hidden" }
+  },
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "12px 16px", background: "#fff8ec", borderBottom: "1px solid #f0dba0" }
+    },
+      /*#__PURE__*/React.createElement("span", { style: { fontWeight: 800, fontSize: 13, color: "#b87800" } },
+        "📎 ARQUIVOS — ", anexosAbertoPara.tipo === "geral" ? "OBSERVA\xC7\xC3O GERAL DO MAPA" : anexosAbertoPara.fornNome),
+      /*#__PURE__*/React.createElement("span", {
+        onClick: function () { setAnexosAbertoPara(null); setAnexosErro(""); },
+        style: { cursor: "pointer", color: "#999", fontSize: 16, lineHeight: "16px" }
+      }, "✕")
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { padding: "12px 16px", maxHeight: "50vh", overflowY: "auto" } },
+      (function () {
+        var lista = anexosDe(anexosAbertoPara);
+        if (!lista.length) return /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", color: "#aaa", fontSize: 11, padding: "18px 0" } }, "Nenhum arquivo anexado ainda");
+        return lista.map(function (a, idx) {
+          var ehPdf = a.tipo === ".pdf";
+          return /*#__PURE__*/React.createElement("div", {
+            key: a.caminho || idx,
+            style: { display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: idx < lista.length - 1 ? "1px dotted #e4e8f4" : "none" }
+          },
+            /*#__PURE__*/React.createElement("div", {
+              style: { width: 32, height: 32, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, flexShrink: 0, color: "#fff", fontWeight: 800, background: ehPdf ? "#c0392b" : "#1a7a43" }
+            }, ehPdf ? "PDF" : "XLS"),
+            /*#__PURE__*/React.createElement("div", { style: { flex: 1, minWidth: 0 } },
+              /*#__PURE__*/React.createElement("div", { style: { fontSize: 11.5, fontWeight: 600, color: "#222", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, a.nome),
+              /*#__PURE__*/React.createElement("div", { style: { fontSize: 9.5, color: "#999", marginTop: 1 } }, fmtBytes(a.tamanho) + " · " + fmtDataAnexo(a.criadoEm))
+            ),
+            /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0 } },
+              /*#__PURE__*/React.createElement("a", {
+                href: anexoUrlPublica(a.caminho), target: "_blank", rel: "noopener noreferrer", download: a.nome, title: "Baixar",
+                style: { border: "none", borderRadius: 6, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, background: "#e6f4ea", color: "#186818", textDecoration: "none" }
+              }, "⬇"),
+              /*#__PURE__*/React.createElement("button", {
+                onClick: function () { handleExcluirAnexo(anexosAbertoPara, idx); }, title: "Excluir",
+                style: { border: "none", borderRadius: 6, width: 26, height: 26, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, background: "#fdecea", color: "#c0392b" }
+              }, "🗑")
+            )
+          );
+        });
+      })()
+    ),
+    /*#__PURE__*/React.createElement("div", { style: { padding: "10px 16px 14px" } },
+      /*#__PURE__*/React.createElement("input", {
+        type: "file", accept: ".pdf,.xlsx,.xls,.csv", id: "input-anexo-painel", style: { display: "none" },
+        onChange: function (e) {
+          var file = e.target.files && e.target.files[0];
+          e.target.value = "";
+          if (file) handleUploadAnexo(anexosAbertoPara, file);
+        }
+      }),
+      /*#__PURE__*/React.createElement("button", {
+        onClick: function () { document.getElementById("input-anexo-painel").click(); },
+        disabled: anexosEnviando,
+        style: { width: "100%", background: "#2a5298", color: "#fff", border: "none", borderRadius: 7, padding: 10, fontSize: 12, fontWeight: 700, cursor: anexosEnviando ? "default" : "pointer", opacity: anexosEnviando ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }
+      }, anexosEnviando ? "ENVIANDO..." : "📎 + ADICIONAR ARQUIVO"),
+      anexosErro && /*#__PURE__*/React.createElement("div", {
+        style: { fontSize: 10.5, color: "#c0392b", background: "#fdecea", borderRadius: 6, padding: "6px 8px", marginTop: 8 }
+      }, "❌ " + anexosErro),
+      /*#__PURE__*/React.createElement("div", { style: { fontSize: 9.5, color: "#999", textAlign: "center", marginTop: 8, lineHeight: 1.4 } },
+        "PDF ou Excel (.pdf, .xlsx, .xls, .csv) · até 15MB por arquivo")
+    )
+  )),
   // FIX (pedido do Claudio — poder restaurar um backup de mapa, sem precisar de mim): mesmo
   // padrão visual já usado no painel de backups de cadastros/insumos, adaptado para mapa.
   showBackupsMapa && /*#__PURE__*/React.createElement("div", {

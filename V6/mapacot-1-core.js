@@ -31,6 +31,115 @@ var SB = {
   "Content-Type": "application/json",
   "Prefer": "resolution=merge-duplicates"
 };
+
+// ═══ ANEXOS (PDF/Excel) — pedido do Claudio, 30/09/2026 ═══
+// Guarda os arquivos de orçamento físico (PDF/Excel) anexados por fornecedor ou como observação
+// geral do mapa. O ARQUIVO em si vai para o Supabase Storage (bucket separado da tabela de
+// dados); só a REFERÊNCIA (nome, caminho, tamanho, data) fica salva dentro do próprio mapa
+// (rodape[fornId].anexos / mapa.anexosGerais) — de propósito NÃO fica na tabela "cadastros",
+// porque sbSaveCadastros só salva os campos que lista explicitamente (bug que já mordeu este
+// projeto 3 vezes — ver comentário em sbSaveCadastros). sbSaveMapa salva o objeto inteiro, sem
+// lista de campos, então um campo novo aqui nunca é descartado silenciosamente.
+//
+// PRÉ-REQUISITO (fora deste arquivo): o bucket "mapacot-anexos" precisa existir no Supabase
+// antes disso funcionar — ver script SQL entregue separadamente (criar_bucket_anexos.sql).
+var ANEXOS_BUCKET = "mapacot-anexos";
+var ANEXOS_TIPOS_OK = [".pdf", ".xlsx", ".xls", ".csv"];
+var ANEXOS_TAMANHO_MAX = 15 * 1024 * 1024; // 15MB — mesmo limite combinado com o Claudio
+
+// Mapeamento manual de extensão -> Content-Type. NÃO confia no "file.type" do navegador porque
+// esse valor varia entre Android/iOS/desktop (em alguns aparelhos vem vazio para .csv, por
+// exemplo) — controlar o Content-Type aqui garante o mesmo resultado em qualquer aparelho.
+var ANEXOS_MIME = {
+  ".pdf": "application/pdf",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".xls": "application/vnd.ms-excel",
+  ".csv": "text/csv"
+};
+
+function anexoExtensao(nomeArquivo) {
+  var n = (nomeArquivo || "").toLowerCase();
+  var achou = ANEXOS_TIPOS_OK.find(function (ext) { return n.endsWith(ext); });
+  return achou || null;
+}
+
+// Validação ANTES de tentar subir — evita gastar tempo/dados do usuário com um upload que o
+// servidor ia recusar de qualquer forma (o bucket também tem os mesmos limites, como segunda
+// trava — ver criar_bucket_anexos.sql).
+function anexoValidar(file) {
+  if (!file) return "Nenhum arquivo selecionado.";
+  var ext = anexoExtensao(file.name);
+  if (!ext) return "Tipo não permitido. Só PDF ou Excel (.pdf, .xlsx, .xls, .csv).";
+  if (file.size > ANEXOS_TAMANHO_MAX) return "Arquivo muito grande (máx. 15MB).";
+  return null;
+}
+
+// Remove acentos e qualquer caractere fora de [a-zA-Z0-9._-] do nome original, só para o CAMINHO
+// guardado no Storage — o nome original completo (com acento, com espaço) continua sendo
+// mostrado normalmente na lista, guardado à parte, sem sofrer essa limpeza.
+function anexoSanitizarNome(nome) {
+  var base = String(nome || "arquivo");
+  try { base = base.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) {}
+  base = base.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return base.slice(-140); // limite de tamanho de caminho, mantém o FIM do nome (onde fica a extensão)
+}
+
+// Um caminho por mapa+destino+timestamp+aleatório: impossível colidir com o anexo de outro
+// fornecedor, outro mapa, ou dois uploads no mesmíssimo milissegundo.
+function anexoCaminho(mapaId, destino, nomeOriginal) {
+  var aleatorio = Math.random().toString(36).slice(2, 8);
+  return "mapa_" + mapaId + "/" + destino + "/" + Date.now() + "_" + aleatorio + "_" + anexoSanitizarNome(nomeOriginal);
+}
+
+function sbUploadAnexo(mapaId, destino, file) {
+  var erro = anexoValidar(file);
+  if (erro) return Promise.reject(new Error(erro));
+  var ext = anexoExtensao(file.name);
+  var caminho = anexoCaminho(mapaId, destino, file.name);
+  var headersUpload = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": "Bearer " + SUPABASE_KEY,
+    "Content-Type": ANEXOS_MIME[ext] || "application/octet-stream"
+  };
+  return fetch(SUPABASE_URL + "/storage/v1/object/" + ANEXOS_BUCKET + "/" + caminho, {
+    method: "POST",
+    headers: headersUpload,
+    body: file
+  }).then(function (r) {
+    if (!r.ok) {
+      return r.text().then(function (t) {
+        throw new Error("Falha ao enviar \"" + file.name + "\" (" + r.status + "): " + (t || "erro desconhecido"));
+      });
+    }
+    return {
+      nome: file.name,
+      caminho: caminho,
+      tamanho: file.size,
+      tipo: ext,
+      criadoEm: new Date().toISOString()
+    };
+  });
+}
+
+function sbExcluirAnexo(caminho) {
+  return fetch(SUPABASE_URL + "/storage/v1/object/" + ANEXOS_BUCKET + "/" + caminho, {
+    method: "DELETE",
+    headers: SB
+  }).then(function (r) {
+    // 404 = o arquivo já não existe no Storage (ex: excluído por outro caminho antes). O
+    // objetivo de excluir — não ter mais essa referência — já está cumprido, então trata como
+    // sucesso em vez de travar o usuário numa referência órfã que ele não consegue mais remover.
+    if (!r.ok && r.status !== 404) throw new Error("Falha ao excluir arquivo (" + r.status + ").");
+    return true;
+  });
+}
+
+// Bucket público (mesmo nível de proteção que o resto do sistema já tem hoje — quem tem a URL
+// do projeto acessa; não existe login individual em nenhuma parte do MAPACOT). Por isso o link
+// de download não precisa expirar nem ser assinado — é só a URL pública do próprio Storage.
+function anexoUrlPublica(caminho) {
+  return SUPABASE_URL + "/storage/v1/object/public/" + ANEXOS_BUCKET + "/" + caminho;
+}
 // ═══ DIAGNÓSTICO EMBUTIDO ═══
 // Registra os eventos de salvamento/abertura/atualização desta sessão e permite consultar,
 // direto do app, qual versão de aplicativo fez o último salvamento de cada mapa no servidor.
