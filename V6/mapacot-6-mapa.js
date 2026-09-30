@@ -1591,7 +1591,12 @@ var _useState27 = useState(init),
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           textAlign: "right",
           background: "#f0f4ff",
-          borderLeft: "2px solid #b8c8e8"
+          borderLeft: "2px solid #b8c8e8",
+          // FIX (bagunca no bloco RESUMO com nota/link longo - pedido do Claudio): sem
+          // verticalAlign definido, a celula caia no padrao "middle" do navegador; numa linha
+          // esticada pela nota longa, o valor "flutuava" no meio da linha. Mesma correcao nas
+          // 2 celulas abaixo (VL. TOTAL e FORNECEDOR), pra manterem sempre a mesma altura.
+          verticalAlign: "top"
         })
       }, resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "",
       resumo.minFornId && (detalhes || {})[item.id + "_" + resumo.minFornId] ?
@@ -1603,14 +1608,20 @@ var _useState27 = useState(init),
             marginTop: 2,
             paddingTop: 2,
             textAlign: "left",
-            fontWeight: 400
+            fontWeight: 400,
+            // FIX (bagunca no bloco RESUMO - pedido do Claudio): a nota podia conter um link
+            // comprido sem espacos (ex: URL de marketplace); sem quebra de palavra, o texto
+            // vazava pra fora da celula de 95px. Agora sempre quebra dentro da propria coluna.
+            wordBreak: "break-word",
+            overflowWrap: "anywhere"
           }
         }, "\u21b3 " + (detalhes || {})[item.id + "_" + resumo.minFornId]) : null
       ), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           textAlign: "right",
           fontWeight: 600,
-          background: "#f0f4ff"
+          background: "#f0f4ff",
+          verticalAlign: "top"
         })
       }, resumo.vlTotal !== null ? fmtMoney(resumo.vlTotal) : ""), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
@@ -1622,7 +1633,8 @@ var _useState27 = useState(init),
           // linha só; agora quebra em várias linhas, centralizado, mostrando o nome completo.
           textAlign: "center",
           whiteSpace: "normal",
-          lineHeight: 1.3
+          lineHeight: 1.3,
+          verticalAlign: "top"
         })
       }, resumo.forn || "")), visibleChunk.map(function (f) {
         var _precos$key;
