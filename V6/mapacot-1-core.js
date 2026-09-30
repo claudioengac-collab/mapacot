@@ -121,10 +121,18 @@ function sbUploadAnexo(mapaId, destino, file) {
   });
 }
 
+// FIX (relatado pelo Claudio, 30/09/2026 — "Falha ao excluir arquivo (400)"): a rota de
+// exclusão do Supabase Storage NÃO é "DELETE /object/{bucket}/{caminho}" (isso é só para o
+// upload/POST) — para excluir, o Storage exige "DELETE /object/{bucket}" com o(s) caminho(s)
+// dentro do CORPO da requisição, em { prefixes: [...] } (é assim que o SDK oficial do Supabase
+// faz — conferido no código-fonte do storage-js antes de corrigir, para não trocar um achismo
+// por outro). A 1ª versão mandava o caminho pela URL e nada no corpo, por isso o servidor
+// recusava com 400 (pedido mal formado) em vez de aceitar ou dizer "não encontrado".
 function sbExcluirAnexo(caminho) {
-  return fetch(SUPABASE_URL + "/storage/v1/object/" + ANEXOS_BUCKET + "/" + caminho, {
+  return fetch(SUPABASE_URL + "/storage/v1/object/" + ANEXOS_BUCKET, {
     method: "DELETE",
-    headers: SB
+    headers: SB, // SB já inclui Content-Type: application/json
+    body: JSON.stringify({ prefixes: [caminho] })
   }).then(function (r) {
     // 404 = o arquivo já não existe no Storage (ex: excluído por outro caminho antes). O
     // objetivo de excluir — não ter mais essa referência — já está cumprido, então trata como
