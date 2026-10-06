@@ -21,6 +21,55 @@ function fmtDataAnexo(iso) {
 // contagem) usado nas 2 posições — dentro da célula "OBSERVAÇÕES" de cada fornecedor (via prop
 // "extra" do EC) e ao lado do cabeçalho "OBSERVAÇÃO GERAL DO MAPA". Só abre/fecha o painel de
 // anexos — não sobe nem apaga arquivo nenhum sozinho.
+// NOVO (pedido do Claudio, 06/10/2026 — saldo parcial de pedidos): selo pequeno exibido logo abaixo
+// da quantidade (coluna QT.) de um item que JÁ TEM pedido mas ainda NÃO está 100% atendido,
+// ex.: "PEDIDO 15 / FALTA 15" para um item de 30. É só EXIBIÇÃO: lê os números que o mapa já
+// calcula em itensAtendidosMap (qtTotal / qtPedida / pedidos) e não cria, altera nem apaga
+// nenhum pedido. Item sem pedido ou 100% atendido não recebe o selo (ver condição no ponto de uso).
+function fmtQtdSaldo(n) {
+  var v = Math.round((Number(n) || 0) * 1000) / 1000;
+  return v.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+}
+function SaldoParcialSelo(_refSp) {
+  var qtTotal = _refSp.qtTotal,
+    qtPedida = _refSp.qtPedida,
+    unid = _refSp.unid,
+    pedidos = _refSp.pedidos || [],
+    onLongPress = _refSp.onLongPress;
+  var falta = Math.round((qtTotal - qtPedida) * 1000) / 1000;
+  var pct = Math.max(0, Math.min(100, (qtPedida / qtTotal) * 100));
+  var titulo = "PEDIDO PARCIAL — " + fmtQtdSaldo(qtPedida) + " de " + fmtQtdSaldo(qtTotal) + (unid ? " " + unid : "") + " (falta " + fmtQtdSaldo(falta) + ")" +
+    pedidos.map(function (p) { return "\n" + p.num + " · " + p.forn + " · " + fmtQtdSaldo(p.qt) + " un (" + p.status + ")"; }).join("");
+  // texto sempre em 1 linha por rótulo; a fonte encolhe um pouco se o número for grande (coluna QT. é estreita)
+  var txtPed = "PEDIDO " + fmtQtdSaldo(qtPedida), txtFalta = "FALTA " + fmtQtdSaldo(falta);
+  var _lenSaldo = Math.max(txtPed.length, txtFalta.length);
+  var fsSaldo = _lenSaldo <= 10 ? 8.5 : (_lenSaldo <= 12 ? 7.5 : 6.5);
+  return /*#__PURE__*/React.createElement("span", {
+    "data-saldo-parcial": "1",
+    title: titulo,
+    // toque longo no tablet (mesmo gesto já usado no item totalmente atendido)
+    onTouchStart: function (e) {
+      clearTimeout(window._poLockTimer);
+      window._poLockStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      window._poLockTimer = setTimeout(function () { if (onLongPress) onLongPress(); }, 800);
+    },
+    onTouchEnd: function () { clearTimeout(window._poLockTimer); },
+    onTouchMove: function (e) {
+      if (!window._poLockStart) return;
+      var dx = e.touches[0].clientX - window._poLockStart.x;
+      var dy = e.touches[0].clientY - window._poLockStart.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 10) clearTimeout(window._poLockTimer);
+    },
+    style: {
+      display: "block", margin: "4px -6px 0", borderRadius: 5, border: "1px solid #f0c060",
+      background: "#fff7e0", padding: "2px 1px 3px", cursor: "help", textAlign: "center", lineHeight: 1.15,
+      userSelect: "none", textDecoration: "none", whiteSpace: "nowrap", overflow: "hidden"
+    }
+  }, /*#__PURE__*/React.createElement("span", { style: { display: "block", fontSize: fsSaldo, color: "#186818", fontWeight: 700 } }, txtPed),
+  /*#__PURE__*/React.createElement("span", { style: { display: "block", fontSize: fsSaldo, color: "#b34700", fontWeight: 800 } }, txtFalta),
+  /*#__PURE__*/React.createElement("span", { style: { display: "block", height: 4, borderRadius: 3, background: "#f3dca8", marginTop: 3, overflow: "hidden" } },
+    /*#__PURE__*/React.createElement("span", { style: { display: "block", height: "100%", width: pct + "%", background: "#2f9e44" } })));
+}
 function AnexoClipBtn(_refClip) {
   var qtd = _refClip.qtd,
     onClick = _refClip.onClick,
@@ -1620,7 +1669,16 @@ var _useState27 = useState(init),
         align: "center",
         tdSt: SC.td,
         numericOnly: true,
-        guardEdit: true
+        guardEdit: true,
+        // NOVO (06/10/2026 — saldo parcial): só aparece se há pedido E ainda sobra saldo. Sem
+        // pedido (qtPedida 0) ou 100% atendido (esse caso nem chega aqui, usa o ramo travado acima)
+        // o valor é undefined e o EC renderiza exatamente como antes.
+        extra: (!_isExcluido && _dadosAtend.qtTotal > 0 && _dadosAtend.qtPedida > 0 && _dadosAtend.qtPedida < _dadosAtend.qtTotal)
+          ? /*#__PURE__*/React.createElement(SaldoParcialSelo, {
+            qtTotal: _dadosAtend.qtTotal, qtPedida: _dadosAtend.qtPedida, unid: item.unid, pedidos: _dadosAtend.pedidos,
+            onLongPress: function () { setTooltipItemId(item.id); }
+          })
+          : undefined
       }), _isAtendido
         ? /*#__PURE__*/React.createElement("td", Object.assign({}, _cellProps, { style: Object.assign({}, _cellProps.style, {textAlign:'center'}) }), item.unid)
         : /*#__PURE__*/React.createElement(EC, {
@@ -2773,7 +2831,9 @@ var _useState27 = useState(init),
     /*#__PURE__*/React.createElement('div', {
       style:{ background:'#fff',borderRadius:8,padding:'16px 20px',maxWidth:340,boxShadow:'0 8px 24px rgba(0,0,0,0.3)',border:'2px solid #3B6D11' }
     },
-      /*#__PURE__*/React.createElement('div', { style:{fontWeight:'bold',fontSize:12,color:'#3B6D11',marginBottom:10} }, '\uD83D\uDD12 ITEM TOTALMENTE ATENDIDO'),
+      /*#__PURE__*/React.createElement('div', { style:{fontWeight:'bold',fontSize:12,color:'#3B6D11',marginBottom:10} }, (itensAtendidosMap[tooltipItemId]&&!itensAtendidosMap[tooltipItemId].atendido)
+        ? ('PEDIDO PARCIAL \u2014 ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtPedida) + ' de ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtTotal) + ' (falta ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtTotal - itensAtendidosMap[tooltipItemId].qtPedida) + ')')
+        : '\uD83D\uDD12 ITEM TOTALMENTE ATENDIDO'),
       (itensAtendidosMap[tooltipItemId]&&itensAtendidosMap[tooltipItemId].pedidos||[]).map(function(p, i){
         return /*#__PURE__*/React.createElement('div', { key:i, style:{fontSize:11,color:'#333',padding:'4px 0',borderBottom:'1px solid #eee'} },
           /*#__PURE__*/React.createElement('strong', { style:{color:'#7c3aed'} }, p.num),
