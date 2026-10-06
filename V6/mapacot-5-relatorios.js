@@ -34,6 +34,12 @@ function ReportsModal(_ref12) {
     _useStateInsumosMarcados2 = _slicedToArray(_useStateInsumosMarcados, 2),
     insumosMarcados = _useStateInsumosMarcados2[0],
     setInsumosMarcados = _useStateInsumosMarcados2[1];
+  // NOVO (06/10/2026 — atendimento pelo almoxarifado): filtros da aba "ALMOXARIFADO". Período vazio
+  // = TODAS as retiradas (as datas são opcionais, ao contrário da aba "POR PERÍODO").
+  var _almoxFPadrao = { inicio: "", fim: "", obra: "", insumo: "", visao: "detalhado", estornadas: true };
+  var _useStateAlmoxF = useState(_almoxFPadrao),
+    almoxF = _slicedToArray(_useStateAlmoxF, 2)[0],
+    setAlmoxF = _slicedToArray(_useStateAlmoxF, 2)[1];
   var insumosFiltrados = React.useMemo(function () {
     var b = normalizeBusca(buscaInsumo);
     if (!b) return [];
@@ -52,6 +58,7 @@ function ReportsModal(_ref12) {
     setInsumo("");
     setBuscaInsumo("");
     setInsumosMarcados(new Set());
+    setAlmoxF(_almoxFPadrao);
   };
   var fecharLimpando = function fecharLimpando() { limparCampos(); onClose(); };
   var toggleInsumoMarcado = function toggleInsumoMarcado(nome) {
@@ -95,7 +102,7 @@ function ReportsModal(_ref12) {
       borderBottom: "2px solid #e8eaf0",
       background: "#f8f9fb"
     }
-  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["orcamento", "OR\xC7AMENTO"], ["insumo", "POR INSUMO"]].map(function (_ref13) {
+  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["orcamento", "OR\xC7AMENTO"], ["insumo", "POR INSUMO"], ["almox", "ALMOXARIFADO"]].map(function (_ref13) {
     var _ref14 = _slicedToArray(_ref13, 2),
       id = _ref14[0],
       lbl = _ref14[1];
@@ -271,7 +278,11 @@ function ReportsModal(_ref12) {
     style: { fontSize: 11, color: "#999", marginTop: 4 }
   }, "Digite para buscar os insumos cadastrados."), buscaInsumo.trim() && insumosFiltrados.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: { fontSize: 11, color: "#999", marginTop: 4 }
-  }, "Nenhum insumo encontrado para esta busca."))), /*#__PURE__*/React.createElement("div", {
+  }, "Nenhum insumo encontrado para esta busca.")), tab === "almox" && /*#__PURE__*/React.createElement(AlmoxRelatorioForm, {
+    cadastros: cadastros,
+    f: almoxF,
+    setF: setAlmoxF
+  })), /*#__PURE__*/React.createElement("div", {
     style: SC.mFtr
   }, /*#__PURE__*/React.createElement("button", {
     style: SC.btnSec,
@@ -319,6 +330,28 @@ function ReportsModal(_ref12) {
           alert("ERRO ao gerar o relatório de orçamento:\n" + (erroRelOrc && erroRelOrc.message ? erroRelOrc.message : String(erroRelOrc)));
         }
       }
+      if (tab === "almox") {
+        // Datas opcionais: vazio = tudo. Só valida se as duas vierem preenchidas ao contrário.
+        if (almoxF.inicio && almoxF.fim && almoxF.inicio > almoxF.fim) {
+          alert("A DATA INICIAL N\u00c3O PODE SER MAIOR QUE A DATA FINAL.");
+          return;
+        }
+        try {
+          var _regsAlmox = coletarRetiradasAlmox(mapasComCurrent, almoxF);
+          if (!_regsAlmox.length) {
+            alert("NENHUMA RETIRADA DO ALMOXARIFADO ENCONTRADA COM ESSES FILTROS.");
+            return;
+          }
+          if (!almoxF.inicio && !almoxF.fim && !almoxF.obra.trim() && !almoxF.insumo.trim()) {
+            if (!window.confirm("NENHUM FILTRO INFORMADO.\n\nO relat\u00f3rio vai trazer TODAS as retiradas do almoxarifado (" + _regsAlmox.length + " registro(s)) de TODAS as obras.\n\nDeseja continuar?")) return;
+          }
+          logEventoDiag("RELAT\u00d3RIO gerado: ALMOXARIFADO (" + _regsAlmox.length + " registro(s), " + almoxF.visao + ")");
+          abrirPDF(gerarRelatorioAlmox(_regsAlmox, almoxF));
+          limparCampos();
+        } catch (erroRelAlmox) {
+          alert("ERRO ao gerar o relat\u00f3rio do almoxarifado:\n" + (erroRelAlmox && erroRelAlmox.message ? erroRelAlmox.message : String(erroRelAlmox)));
+        }
+      }
         if (tab === "insumo") {
         if (insumosMarcados.size === 0) {
           alert("MARQUE PELO MENOS UM INSUMO.");
@@ -331,6 +364,160 @@ function ReportsModal(_ref12) {
       }
     }
   }, /*#__PURE__*/React.createElement(IcoPDF, null), " GERAR PDF")));
+}
+
+// ─── Relatório do ALMOXARIFADO (06/10/2026) ──────────────────────────────────
+// Lê só o que já está dentro de cada mapa (mapa.almox[item.id]) — não consulta pedidos nem banco,
+// não grava nada. Estornadas continuam registradas (riscadas) para conferência.
+function almoxDataLocalKey(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+}
+function almoxFmtNum(n) {
+  var v = Math.round((Number(n) || 0) * 1000) / 1000;
+  return v.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+}
+function almoxFmtData(iso) {
+  var k = almoxDataLocalKey(iso);
+  return k ? k.slice(8, 10) + "/" + k.slice(5, 7) + "/" + k.slice(0, 4) : "";
+}
+function coletarRetiradasAlmox(mapas, f) {
+  f = f || {};
+  var obraF = (f.obra || "").trim().toUpperCase();
+  var insF = (f.insumo || "").trim().toUpperCase();
+  var out = [];
+  (mapas || []).forEach(function (m) {
+    if (!m) return;
+    if (obraF && (m.obra || "").toUpperCase().indexOf(obraF) === -1) return;
+    var almox = m.almox || {};
+    (m.itens || []).forEach(function (it) {
+      var regs = almox[it.id];
+      if (!regs || !regs.length) return;
+      var txtItem = ((it.descricao || "") + " " + (it.detalhe || "")).toUpperCase();
+      if (insF && txtItem.indexOf(insF) === -1) return;
+      regs.forEach(function (r) {
+        if (!r) return;
+        if (r.estornado && f.estornadas === false) return;
+        var dk = almoxDataLocalKey(r.data);
+        if (f.inicio && (!dk || dk < f.inicio)) return;
+        if (f.fim && (!dk || dk > f.fim)) return;
+        out.push({
+          obra: m.obra || "", mapaNum: m.numero, itemNum: it.num, descricao: it.descricao || "", detalhe: it.detalhe || "",
+          unid: it.unid || "", qtSolic: parseNumBR(it.qt) || 0, qt: Number(r.qt) || 0, data: r.data, dk: dk,
+          por: r.por || "", obs: r.obs || "", estornado: !!r.estornado
+        });
+      });
+    });
+  });
+  out.sort(function (a, b) {
+    if (a.obra !== b.obra) return a.obra < b.obra ? -1 : 1;
+    if (a.dk !== b.dk) return a.dk < b.dk ? -1 : 1;
+    if ((a.data || "") !== (b.data || "")) return (a.data || "") < (b.data || "") ? -1 : 1;
+    if ((a.mapaNum || 0) !== (b.mapaNum || 0)) return (a.mapaNum || 0) - (b.mapaNum || 0);
+    return (Number(a.itemNum) || 0) - (Number(b.itemNum) || 0);
+  });
+  return out;
+}
+function gerarRelatorioAlmox(regs, f) {
+  f = f || {};
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  var periodoTxt = (f.inicio || f.fim)
+    ? ((f.inicio ? almoxFmtData(f.inicio + "T12:00:00") : "início") + " a " + (f.fim ? almoxFmtData(f.fim + "T12:00:00") : "hoje"))
+    : "todo o período";
+  var meta = "Período: " + periodoTxt + " · Obra: " + esc(f.obra && f.obra.trim() ? f.obra.trim().toUpperCase() : "todas") +
+    " · Insumo: " + esc(f.insumo && f.insumo.trim() ? f.insumo.trim().toUpperCase() : "todos") +
+    " · Estornadas: " + (f.estornadas === false ? "não incluídas" : "incluídas (riscadas)") +
+    " · Gerado em " + new Date().toLocaleString("pt-BR");
+  var css = "<style>@page{size:A4 landscape;margin:12mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:10.5px;color:#222;margin:0}" +
+    "h1{font-size:15px;color:#0f1f3d;margin:0 0 3px}.meta{color:#555;font-size:10px;margin-bottom:10px}" +
+    ".ob{background:#2a5298;color:#fff;padding:5px 8px;font-weight:700;font-size:11px;margin-top:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    "table{border-collapse:collapse;width:100%;font-size:10px}th{background:#e4e9f5;border:1px solid #c8d0e4;padding:4px 5px;text-align:left;font-size:9px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    "td{border:1px solid #d6dbe8;padding:4px 5px;vertical-align:top}.n{text-align:right}tr{page-break-inside:avoid}" +
+    "tr.est td{color:#999;text-decoration:line-through;background:#fafafa}tr.tot td{background:#f2f5fb;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    ".tg{font-size:8px;background:#fdecea;color:#a32d2d;border-radius:8px;padding:0 5px;text-decoration:none;display:inline-block}.rod{margin-top:10px;color:#777;font-size:9px}</style>";
+  function totaisPorUnid(lista) {
+    var t = {}, ordem = [];
+    lista.forEach(function (r) {
+      if (r.estornado) return;
+      var u = r.unid || "—";
+      if (!(u in t)) { t[u] = 0; ordem.push(u); }
+      t[u] += r.qt;
+    });
+    return ordem.map(function (u) { return almoxFmtNum(t[u]) + " " + esc(u); }).join(" · ") || "0";
+  }
+  var corpo = "";
+  if (f.visao === "resumo") {
+    var grupos = {}, ordemG = [];
+    regs.forEach(function (r) {
+      var nome = (r.descricao + (r.detalhe ? " — " + r.detalhe : "")).toUpperCase();
+      var k = nome + "|||" + (r.unid || "").toUpperCase();
+      if (!grupos[k]) { grupos[k] = { nome: nome, unid: r.unid || "", n: 0, est: 0, total: 0, obras: [] }; ordemG.push(k); }
+      var g = grupos[k];
+      if (r.estornado) { g.est++; return; }
+      g.n++; g.total += r.qt;
+      if (r.obra && g.obras.indexOf(r.obra) === -1) g.obras.push(r.obra);
+    });
+    ordemG.sort(function (a, b) { return grupos[a].nome < grupos[b].nome ? -1 : (grupos[a].nome > grupos[b].nome ? 1 : 0); });
+    var mostrarEst = f.estornadas !== false;
+    var linhasR = ordemG.map(function (k) {
+      var g = grupos[k];
+      return "<tr><td>" + esc(g.nome) + "</td><td>" + esc(g.unid) + "</td><td class=\"n\">" + g.n + "</td><td class=\"n\"><b>" + almoxFmtNum(g.total) + "</b></td>" +
+        (mostrarEst ? "<td class=\"n\">" + g.est + "</td>" : "") + "<td>" + esc(g.obras.join(" | ")) + "</td></tr>";
+    }).join("");
+    corpo = "<h1>RESUMO DO ALMOXARIFADO POR INSUMO</h1><div class=\"meta\">" + meta + "</div><table><tr><th>Insumo</th><th>Un.</th><th class=\"n\">Retiradas</th><th class=\"n\">Total retirado</th>" +
+      (mostrarEst ? "<th class=\"n\">Estornadas</th>" : "") + "<th>Obras</th></tr>" + linhasR + "</table>" +
+      "<div class=\"rod\">Unidades diferentes nunca são somadas entre si. Retiradas estornadas não entram nos totais.</div>";
+  } else {
+    var porObra = {}, ordemO = [];
+    regs.forEach(function (r) { var o = r.obra || "(sem obra)"; if (!porObra[o]) { porObra[o] = []; ordemO.push(o); } porObra[o].push(r); });
+    var blocos = ordemO.map(function (o) {
+      var lista = porObra[o];
+      var linhas = lista.map(function (r) {
+        return "<tr" + (r.estornado ? " class=\"est\"" : "") + "><td>" + almoxFmtData(r.data) + "</td><td>MP " + esc(r.mapaNum) + "</td><td>" + esc(r.itemNum) + "</td><td>" +
+          esc(r.descricao + (r.detalhe ? " — " + r.detalhe : "")) + "</td><td>" + esc(r.unid) + "</td><td class=\"n\">" + (r.estornado ? "" : "<b>") + almoxFmtNum(r.qt) + (r.estornado ? "" : "</b>") +
+          "</td><td>" + esc(r.por) + "</td><td>" + esc(r.obs) + (r.estornado ? " <span class=\"tg\">ESTORNADA</span>" : "") + "</td><td class=\"n\">" + almoxFmtNum(r.qtSolic) + "</td></tr>";
+      }).join("");
+      return "<div class=\"ob\">OBRA: " + esc(o) + "</div><table><tr><th>Data</th><th>Mapa</th><th>Item</th><th>Insumo</th><th>Un.</th><th class=\"n\">Qtd. retirada</th><th>Retirado por</th><th>Observação</th><th class=\"n\">Solicitado</th></tr>" +
+        linhas + "<tr class=\"tot\"><td colspan=\"5\">TOTAL DA OBRA (sem estornadas)</td><td class=\"n\" colspan=\"4\" style=\"text-align:left\">" + totaisPorUnid(lista) + "</td></tr></table>";
+    }).join("");
+    corpo = "<h1>RELATÓRIO DE ATENDIMENTO PELO ALMOXARIFADO</h1><div class=\"meta\">" + meta + "</div>" + blocos +
+      "<div class=\"rod\">Totais por unidade: unidades diferentes nunca são somadas entre si.</div>";
+  }
+  return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Relatório do Almoxarifado</title>" + css + "</head><body>" + corpo + "</body></html>";
+}
+function AlmoxRelatorioForm(_refAf) {
+  var cadastros = _refAf.cadastros || {}, f = _refAf.f, setF = _refAf.setF;
+  var upd = function (campo, valor) { setF(function (p) { var n = Object.assign({}, p); n[campo] = valor; return n; }); };
+  var pill = function (ativo) {
+    return { border: "1px solid " + (ativo ? "#2a5298" : "#bbb"), background: ativo ? "#2a5298" : "#fff", color: ativo ? "#fff" : "#333", borderRadius: 14, padding: "5px 12px", fontSize: 12, cursor: "pointer" };
+  };
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+    /*#__PURE__*/React.createElement("div", { style: SC.rDesc }, "Confere as retiradas do almoxarifado. Período vazio = traz TUDO."),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "DATA INICIAL DAS RETIRADAS (OPCIONAL)"),
+    /*#__PURE__*/React.createElement("input", { "data-almox-f": "inicio", type: "date", style: SC.inp, value: f.inicio, onChange: function (e) { upd("inicio", e.target.value); } }),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "DATA FINAL DAS RETIRADAS (OPCIONAL)"),
+    /*#__PURE__*/React.createElement("input", { "data-almox-f": "fim", type: "date", style: SC.inp, value: f.fim, onChange: function (e) { upd("fim", e.target.value); } }),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "OBRA (VAZIO = TODAS)"),
+    /*#__PURE__*/React.createElement(AutocompleteInput, {
+      value: f.obra,
+      onChange: function (v) { upd("obra", v); },
+      suggestions: cadastros.obras || [],
+      placeholder: "BUSCAR OU DIGITAR OBRA...",
+      showOnFocus: true,
+      xStyle: { marginBottom: 4 },
+      inputStyle: { border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none" }
+    }),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "INSUMO (VAZIO = TODOS)"),
+    /*#__PURE__*/React.createElement("input", { "data-almox-f": "insumo", style: SC.inp, value: f.insumo, placeholder: "DIGITE PARTE DO NOME DO INSUMO...", onChange: function (e) { upd("insumo", e.target.value.toUpperCase()); } }),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "COMO MOSTRAR"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "detalhado", onClick: function () { upd("visao", "detalhado"); }, style: pill(f.visao !== "resumo") }, "Detalhado (cada retirada)"),
+      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "resumo", onClick: function () { upd("visao", "resumo"); }, style: pill(f.visao === "resumo") }, "Resumo por insumo")),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "INCLUIR ESTORNADAS?"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+      /*#__PURE__*/React.createElement("span", { "data-almox-est": "sim", onClick: function () { upd("estornadas", true); }, style: pill(f.estornadas !== false) }, "Sim, riscadas"),
+      /*#__PURE__*/React.createElement("span", { "data-almox-est": "nao", onClick: function () { upd("estornadas", false); }, style: pill(f.estornadas === false) }, "Não")));
 }
 
 // ─── Map Editor ───────────────────────────────────────────────────────────────

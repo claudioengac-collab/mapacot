@@ -30,19 +30,38 @@ function fmtQtdSaldo(n) {
   var v = Math.round((Number(n) || 0) * 1000) / 1000;
   return v.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
 }
+// NOVO (pedido do Claudio, 06/10/2026 — atendimento pelo almoxarifado): parte do saldo de um item
+// pode ser atendida com material do almoxarifado (sem pedido de compra). Cada retirada fica em
+// mapa.almox[item.id] = [{ id, qt, data, por, obs, estornado, estornadoEm }]. Estornar NÃO apaga:
+// só marca "estornado" (some do saldo, mas continua no relatório para conferência). Isto não é
+// controle de estoque — só rastreia quanto de cada item foi atendido e por quem.
+function fmtDataAlmox(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2) + "/" + d.getFullYear();
+}
+function almoxSomaAtivas(lista) {
+  var t = 0;
+  (lista || []).forEach(function (r) { if (r && !r.estornado) t += Number(r.qt) || 0; });
+  return Math.round(t * 1000) / 1000;
+}
 function SaldoParcialSelo(_refSp) {
   var qtTotal = _refSp.qtTotal,
-    qtPedida = _refSp.qtPedida,
+    qtPedida = _refSp.qtPedida || 0,
+    qtAlmox = _refSp.qtAlmox || 0,
+    almox = _refSp.almox || [],
     unid = _refSp.unid,
     pedidos = _refSp.pedidos || [],
     onLongPress = _refSp.onLongPress;
-  var falta = Math.round((qtTotal - qtPedida) * 1000) / 1000;
-  var pct = Math.max(0, Math.min(100, (qtPedida / qtTotal) * 100));
-  var titulo = "PEDIDO PARCIAL — " + fmtQtdSaldo(qtPedida) + " de " + fmtQtdSaldo(qtTotal) + (unid ? " " + unid : "") + " (falta " + fmtQtdSaldo(falta) + ")" +
-    pedidos.map(function (p) { return "\n" + p.num + " · " + p.forn + " · " + fmtQtdSaldo(p.qt) + " un (" + p.status + ")"; }).join("");
+  var falta = Math.max(0, Math.round((qtTotal - qtPedida - qtAlmox) * 1000) / 1000);
+  var pctPed = Math.max(0, Math.min(100, (qtPedida / qtTotal) * 100));
+  var pctAlm = Math.max(0, Math.min(100 - pctPed, (qtAlmox / qtTotal) * 100));
+  var titulo = (qtAlmox > 0 ? "ATENDIMENTO PARCIAL" : "PEDIDO PARCIAL") + " — " + fmtQtdSaldo(qtPedida + qtAlmox) + " de " + fmtQtdSaldo(qtTotal) + (unid ? " " + unid : "") + " (falta " + fmtQtdSaldo(falta) + ")" +
+    pedidos.map(function (p) { return "\n" + p.num + " · " + p.forn + " · " + fmtQtdSaldo(p.qt) + " un (" + p.status + ")"; }).join("") +
+    almox.map(function (r) { return "\nALMOXARIFADO · " + fmtQtdSaldo(r.qt) + " un · " + fmtDataAlmox(r.data) + (r.por ? " · " + r.por : "") + (r.obs ? " · " + r.obs : ""); }).join("");
   // texto sempre em 1 linha por rótulo; a fonte encolhe um pouco se o número for grande (coluna QT. é estreita)
-  var txtPed = "PEDIDO " + fmtQtdSaldo(qtPedida), txtFalta = "FALTA " + fmtQtdSaldo(falta);
-  var _lenSaldo = Math.max(txtPed.length, txtFalta.length);
+  var txtPed = "PEDIDO " + fmtQtdSaldo(qtPedida), txtAlm = "ALMOX " + fmtQtdSaldo(qtAlmox), txtFalta = "FALTA " + fmtQtdSaldo(falta);
+  var _lenSaldo = Math.max(qtPedida > 0 ? txtPed.length : 0, qtAlmox > 0 ? txtAlm.length : 0, txtFalta.length);
   var fsSaldo = _lenSaldo <= 10 ? 8.5 : (_lenSaldo <= 12 ? 7.5 : 6.5);
   return /*#__PURE__*/React.createElement("span", {
     "data-saldo-parcial": "1",
@@ -65,10 +84,90 @@ function SaldoParcialSelo(_refSp) {
       background: "#fff7e0", padding: "2px 1px 3px", cursor: "help", textAlign: "center", lineHeight: 1.15,
       userSelect: "none", textDecoration: "none", whiteSpace: "nowrap", overflow: "hidden"
     }
-  }, /*#__PURE__*/React.createElement("span", { style: { display: "block", fontSize: fsSaldo, color: "#186818", fontWeight: 700 } }, txtPed),
-  /*#__PURE__*/React.createElement("span", { style: { display: "block", fontSize: fsSaldo, color: "#b34700", fontWeight: 800 } }, txtFalta),
-  /*#__PURE__*/React.createElement("span", { style: { display: "block", height: 4, borderRadius: 3, background: "#f3dca8", marginTop: 3, overflow: "hidden" } },
-    /*#__PURE__*/React.createElement("span", { style: { display: "block", height: "100%", width: pct + "%", background: "#2f9e44" } })));
+  }, qtPedida > 0 && /*#__PURE__*/React.createElement("span", { "data-selo-linha": "pedido", style: { display: "block", fontSize: fsSaldo, color: "#186818", fontWeight: 700 } }, txtPed),
+  qtAlmox > 0 && /*#__PURE__*/React.createElement("span", { "data-selo-linha": "almox", style: { display: "block", fontSize: fsSaldo, color: "#1a4aa0", fontWeight: 700 } }, txtAlm),
+  /*#__PURE__*/React.createElement("span", { "data-selo-linha": "falta", style: { display: "block", fontSize: fsSaldo, color: "#b34700", fontWeight: 800 } }, txtFalta),
+  /*#__PURE__*/React.createElement("span", { style: { display: "flex", height: 4, borderRadius: 3, background: "#f3dca8", marginTop: 3, overflow: "hidden" } },
+    /*#__PURE__*/React.createElement("span", { "data-barra": "pedido", style: { display: "block", height: "100%", width: pctPed + "%", background: "#2f9e44" } }),
+    /*#__PURE__*/React.createElement("span", { "data-barra": "almox", style: { display: "block", height: "100%", width: pctAlm + "%", background: "#2f6fe0" } })));
+}
+// Janela do ícone 📦: mostra solicitado / pedido / almoxarifado / falta e permite registrar ou
+// estornar retiradas do almoxarifado do item. Não mexe em pedidos.
+function ModalAlmox(_refAm) {
+  var item = _refAm.item, dados = _refAm.dados || {}, lista = _refAm.lista || [];
+  var onRegistrar = _refAm.onRegistrar, onEstornar = _refAm.onEstornar, onClose = _refAm.onClose;
+  var _aq = React.useState(""), qt = _aq[0], setQt = _aq[1];
+  var _ap = React.useState(""), por = _ap[0], setPor = _ap[1];
+  var _ao = React.useState(""), obs = _ao[0], setObs = _ao[1];
+  var qtTotal = dados.qtTotal || 0, qtPedida = dados.qtPedida || 0, qtAlmox = dados.qtAlmox || 0;
+  var falta = Math.max(0, Math.round((qtTotal - qtPedida - qtAlmox) * 1000) / 1000);
+  var excedente = Math.max(0, Math.round((qtPedida + qtAlmox - qtTotal) * 1000) / 1000);
+  function registrar() {
+    var n = parseNumBR(qt);
+    if (!n || n <= 0) { alert("INFORME UMA QUANTIDADE MAIOR QUE ZERO."); return; }
+    if (falta <= 0) { alert("ESTE ITEM JÁ ESTÁ 100% ATENDIDO. NÃO HÁ SALDO PARA REGISTRAR."); return; }
+    if (n > falta + 0.0000001) { alert("QUANTIDADE (" + fmtQtdSaldo(n) + ") MAIOR QUE O SALDO DO ITEM (" + fmtQtdSaldo(falta) + ")."); return; }
+    onRegistrar({ id: uid(), qt: n, data: new Date().toISOString(), por: por.trim().toUpperCase(), obs: obs.trim().toUpperCase(), estornado: false });
+    setQt(""); setObs("");
+  }
+  var kpi = function (rot, val, cor) {
+    return React.createElement("div", { style: { background: "#f6f8fc", border: "1px solid #e0e5f0", borderRadius: 6, padding: 6, textAlign: "center" } },
+      React.createElement("div", { style: { fontSize: 9, color: "#777", textTransform: "uppercase" } }, rot),
+      React.createElement("div", { "data-kpi": rot, style: { fontSize: 16, fontWeight: 700, color: cor } }, fmtQtdSaldo(val)));
+  };
+  var sec = function (t) { return React.createElement("div", { style: { fontSize: 10, fontWeight: 700, color: "#555", textTransform: "uppercase", margin: "12px 0 5px" } }, t); };
+  var lin = { display: "flex", gap: 8, alignItems: "center", fontSize: 12, padding: "5px 0", borderBottom: "1px solid #eee" };
+  var inpSt = { border: "1px solid #bbb", borderRadius: 4, padding: "6px 8px", fontSize: 12, width: "100%", boxSizing: "border-box" };
+  return React.createElement("div", {
+    "data-modal-almox": "1",
+    onClick: function (e) { if (e.target === e.currentTarget) onClose(); },
+    style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12, overscrollBehavior: "none" }
+  },
+    React.createElement("div", { style: { background: "#fff", borderRadius: 8, overflow: "hidden", width: "100%", maxWidth: 540, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" } },
+      React.createElement("div", { style: { background: "#2a5298", color: "#fff", padding: "11px 14px", fontWeight: 700, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } },
+        React.createElement("span", null, "📦 ATENDIMENTO — ITEM " + item.num + " · " + (item.descricao || "") + (item.detalhe ? " — " + item.detalhe : "")),
+        React.createElement("span", { "data-fechar-almox": "1", onClick: onClose, style: { cursor: "pointer", fontSize: 16 } }, "✕")),
+      React.createElement("div", { style: { padding: 14, overflowY: "auto", flex: 1 } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 } },
+          kpi("Solicitado", qtTotal, "#2a5298"), kpi("Pedido", qtPedida, "#186818"), kpi("Almox.", qtAlmox, "#1a4aa0"), kpi("Falta", falta, "#b34700")),
+        excedente > 0 && React.createElement("div", { style: { marginTop: 8, fontSize: 11, color: "#c0392b", background: "#FCEBEB", padding: "4px 8px", borderRadius: 4 } }, "⚠ Pedido + almoxarifado passam a quantidade solicitada em " + fmtQtdSaldo(excedente) + "."),
+        sec("Pedidos (só leitura — vêm da tela Pedidos)"),
+        (dados.pedidos || []).length === 0
+          ? React.createElement("div", { style: { fontSize: 11, color: "#999" } }, "Nenhum pedido para este item.")
+          : (dados.pedidos || []).map(function (p, i) {
+              return React.createElement("div", { key: i, style: lin },
+                React.createElement("span", { style: { flex: 1 } }, React.createElement("b", { style: { color: "#7c3aed" } }, p.num), " · " + p.forn + " · " + fmtQtdSaldo(p.qt) + " un"),
+                React.createElement("span", { style: { background: "#EAF3DE", color: "#3B6D11", padding: "1px 7px", borderRadius: 99, fontSize: 9 } }, p.status));
+            }),
+        sec("Atendido pelo almoxarifado"),
+        lista.length === 0
+          ? React.createElement("div", { "data-almox-vazio": "1", style: { fontSize: 11, color: "#999" } }, "Nenhuma retirada registrada.")
+          : lista.map(function (r) {
+              var est = !!r.estornado;
+              return React.createElement("div", { key: r.id, "data-almox-reg": est ? "estornada" : "ativa", style: Object.assign({}, lin, est ? { color: "#999", background: "#fafafa" } : {}) },
+                React.createElement("span", { style: { flex: 1, textDecoration: est ? "line-through" : "none" } },
+                  fmtDataAlmox(r.data) + " · ", React.createElement("b", null, fmtQtdSaldo(r.qt) + " un"),
+                  (r.por ? " · " + r.por : "") + (r.obs ? " · “" + r.obs + "”" : "")),
+                est
+                  ? React.createElement("span", { style: { background: "#fdecea", color: "#a32d2d", borderRadius: 8, padding: "0 6px", fontSize: 9 } }, "ESTORNADA")
+                  : React.createElement("span", {
+                      "data-estornar": "1",
+                      onClick: function () {
+                        if (!confirm("Estornar a retirada de " + fmtQtdSaldo(r.qt) + " un (" + fmtDataAlmox(r.data) + ")?\n\nEla continua registrada como ESTORNADA, mas deixa de contar no saldo.")) return;
+                        onEstornar(r.id);
+                      },
+                      style: { color: "#c0392b", fontSize: 12, cursor: "pointer" }
+                    }, "🗑 estornar"));
+            }),
+        sec("Registrar nova retirada"),
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "100px 1fr 1fr", gap: 8 } },
+          React.createElement("input", { "data-campo": "qt", value: qt, inputMode: "decimal", placeholder: "Qtd. (máx " + fmtQtdSaldo(falta) + ")", onChange: function (e) { setQt(e.target.value.replace(/[^0-9.,]/g, "")); }, style: inpSt }),
+          React.createElement("input", { "data-campo": "por", value: por, placeholder: "Retirado por", maxLength: 40, onChange: function (e) { setPor(e.target.value.toUpperCase()); }, style: Object.assign({}, inpSt, { textTransform: "uppercase" }) }),
+          React.createElement("input", { "data-campo": "obs", value: obs, placeholder: "Observação (OS...)", maxLength: 80, onChange: function (e) { setObs(e.target.value.toUpperCase()); }, style: Object.assign({}, inpSt, { textTransform: "uppercase" }) })),
+        React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 8, alignItems: "center" } },
+          React.createElement("button", { "data-saldo-todo": "1", onClick: function () { if (falta > 0) setQt(String(falta).replace(".", ",")); }, disabled: falta <= 0, style: { background: "#f0f0f0", border: "none", borderRadius: 4, padding: "7px 10px", fontSize: 11, cursor: falta > 0 ? "pointer" : "not-allowed", opacity: falta > 0 ? 1 : 0.5 } }, "Atender todo o saldo (" + fmtQtdSaldo(falta) + ")"),
+          React.createElement("span", { style: { flex: 1 } }),
+          React.createElement("button", { "data-registrar": "1", onClick: registrar, style: { background: "#1a4aa0", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "Registrar")))));
 }
 function AnexoClipBtn(_refClip) {
   var qtd = _refClip.qtd,
@@ -197,6 +296,7 @@ var _useState27 = useState(init),
   var _useStatePedidos=useState([]),pedidos=_slicedToArray(_useStatePedidos,2)[0],setPedidos=_slicedToArray(_useStatePedidos,2)[1];
   var _useStatePOFiltros=useState({obra:'',periodo:'',insumo:'',fornecedor:'',status:''}),pedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[0],setPedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[1];
   var _useStateTooltip=useState(null),tooltipItemId=_slicedToArray(_useStateTooltip,2)[0],setTooltipItemId=_slicedToArray(_useStateTooltip,2)[1];
+  var _useStateAlmoxItem=useState(null),almoxItemId=_slicedToArray(_useStateAlmoxItem,2)[0],setAlmoxItemId=_slicedToArray(_useStateAlmoxItem,2)[1];
   // ───────────────────────────────────────────────────────────────────────────
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
@@ -637,6 +737,26 @@ var _useState27 = useState(init),
       });
     });
   };
+  // Almoxarifado: registra / estorna retirada de um item (guardado em mapa.almox[itemId]). Estorno
+  // só marca a retirada como "estornado" — nunca apaga —, para o relatório poder conferir.
+  var almoxRegistrar = function almoxRegistrar(itemId, reg) {
+    try { logEventoDiag("ALMOX registrada: item " + itemId + " qt " + reg.qt + (reg.por ? " por " + reg.por : "")); } catch (e) {}
+    update(function (m) {
+      var a = _objectSpread({}, m.almox || {});
+      a[itemId] = (a[itemId] || []).concat([reg]);
+      return _objectSpread(_objectSpread({}, m), {}, { almox: a });
+    });
+  };
+  var almoxEstornar = function almoxEstornar(itemId, regId) {
+    try { logEventoDiag("ALMOX estornada: item " + itemId + " reg " + regId); } catch (e) {}
+    update(function (m) {
+      var a = _objectSpread({}, m.almox || {});
+      a[itemId] = (a[itemId] || []).map(function (r) {
+        return r.id === regId ? _objectSpread(_objectSpread({}, r), {}, { estornado: true, estornadoEm: new Date().toISOString() }) : r;
+      });
+      return _objectSpread(_objectSpread({}, m), {}, { almox: a });
+    });
+  };
   var addForn = function addForn() {
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
@@ -995,10 +1115,16 @@ var _useState27 = useState(init),
         pedidosVinculados.push({ num:'PO-'+String(po.numero).padStart(3,'0'), forn:po.fornecedor_nome, qt:it.qt_pedida, status:po.status });
       }
     });
+    // Almoxarifado (retiradas NÃO estornadas) conta para o "atendido" junto com os pedidos, mas
+    // qtPedida continua sendo SÓ pedidos (é o que a tela Pedidos e o PDF dela enxergam).
+    var _almoxAtivas = (((mapa && mapa.almox) || {})[item.id] || []).filter(function (r) { return r && !r.estornado; });
+    var qtAlmox = almoxSomaAtivas(_almoxAtivas);
     itensAtendidosMap[item.id] = {
-      atendido: qtTotal > 0 && qtPedida >= qtTotal,
+      atendido: qtTotal > 0 && (qtPedida + qtAlmox) >= qtTotal,
       qtTotal: qtTotal,
       qtPedida: qtPedida,
+      qtAlmox: qtAlmox,
+      almox: _almoxAtivas,
       pedidos: pedidosVinculados
     };
   });
@@ -1604,7 +1730,7 @@ var _useState27 = useState(init),
       var _dadosAtend = itensAtendidosMap[item.id]||{};
       var _isAtendido = !!_dadosAtend.atendido;
       var _tooltipTitle = _isAtendido
-        ? '\uD83D\uDD12 TOTALMENTE ATENDIDO\n' + (_dadosAtend.pedidos||[]).map(function(p){ return p.num+' \u00B7 '+p.forn+' \u00B7 '+p.qt+' un ('+p.status+')'; }).join('\n')
+        ? '\uD83D\uDD12 TOTALMENTE ATENDIDO\n' + (_dadosAtend.pedidos||[]).map(function(p){ return p.num+' \u00B7 '+p.forn+' \u00B7 '+p.qt+' un ('+p.status+')'; }).concat((_dadosAtend.almox||[]).map(function(r){ return 'ALMOXARIFADO \u00B7 '+fmtQtdSaldo(r.qt)+' un \u00B7 '+fmtDataAlmox(r.data)+(r.por?' \u00B7 '+r.por:''); })).join('\n')
         : '';
       // Handlers para células estáticas (long press tablet + hover desktop)
       var _cellProps = _isAtendido ? {
@@ -1652,7 +1778,13 @@ var _useState27 = useState(init),
         onClick: function(){ return toggleExcluido(item.id); },
         title: _isExcluido ? "Restaurar item ao mapa" : "Excluir permanentemente do mapa",
         style: { cursor:"pointer", fontSize:13, marginLeft:2, userSelect:"none", display:"block", color: _isExcluido ? "#c0392b" : "#bbb" }
-      }, _isExcluido ? "\uD83D\uDD12" : "\u2702")), /*#__PURE__*/React.createElement("td", {
+      }, _isExcluido ? "\uD83D\uDD12" : "\u2702"),
+      /*#__PURE__*/React.createElement("span", {
+        "data-btn-almox": "1",
+        onClick: function(){ setAlmoxItemId(item.id); },
+        title: "Atendimento do item (pedido + almoxarifado)",
+        style: { cursor:"pointer", fontSize:13, marginLeft:2, userSelect:"none", display:"block", opacity: (_dadosAtend.qtAlmox>0) ? 1 : 0.45 }
+      }, "\uD83D\uDCE6")), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           textAlign: "center",
           color: "#666",
@@ -1673,10 +1805,10 @@ var _useState27 = useState(init),
         // NOVO (06/10/2026 — saldo parcial): só aparece se há pedido E ainda sobra saldo. Sem
         // pedido (qtPedida 0) ou 100% atendido (esse caso nem chega aqui, usa o ramo travado acima)
         // o valor é undefined e o EC renderiza exatamente como antes.
-        extra: (!_isExcluido && _dadosAtend.qtTotal > 0 && _dadosAtend.qtPedida > 0 && _dadosAtend.qtPedida < _dadosAtend.qtTotal)
-          ? /*#__PURE__*/React.createElement(SaldoParcialSelo, {
-            qtTotal: _dadosAtend.qtTotal, qtPedida: _dadosAtend.qtPedida, unid: item.unid, pedidos: _dadosAtend.pedidos,
-            onLongPress: function () { setTooltipItemId(item.id); }
+        extra: (!_isExcluido && _dadosAtend.qtTotal > 0 && ((_dadosAtend.qtPedida||0) + (_dadosAtend.qtAlmox||0)) > 0 && ((_dadosAtend.qtPedida||0) + (_dadosAtend.qtAlmox||0)) < _dadosAtend.qtTotal)
+          ? React.createElement(SaldoParcialSelo, {
+            qtTotal: _dadosAtend.qtTotal, qtPedida: _dadosAtend.qtPedida, qtAlmox: _dadosAtend.qtAlmox, almox: _dadosAtend.almox, unid: item.unid, pedidos: _dadosAtend.pedidos,
+            onLongPress: function(){ setTooltipItemId(item.id); }
           })
           : undefined
       }), _isAtendido
@@ -2823,6 +2955,19 @@ var _useState27 = useState(init),
     },
     onIaUso: function(d){ setIaUsoDia(function(prev){ return { leituras: prev.leituras+1, custo: prev.custo+(d.custo||0) }; }); }
   }),
+  // ── JANELA DO ALMOXARIFADO (ícone 📦 da coluna COMPRA) ──────────────────────
+  almoxItemId && (function(){
+    var _itAlmox = (mapa.itens||[]).find(function(i){ return i.id === almoxItemId; });
+    if (!_itAlmox) return null;
+    return /*#__PURE__*/React.createElement(ModalAlmox, {
+      item: _itAlmox,
+      dados: itensAtendidosMap[almoxItemId] || {},
+      lista: ((mapa.almox||{})[almoxItemId]) || [],
+      onRegistrar: function(reg){ almoxRegistrar(almoxItemId, reg); },
+      onEstornar: function(regId){ almoxEstornar(almoxItemId, regId); },
+      onClose: function(){ setAlmoxItemId(null); }
+    });
+  })(),
   // ── TOOLTIP ITEM ATENDIDO ─────────────────────────────────────────────────
   tooltipItemId && /*#__PURE__*/React.createElement('div', {
     onClick: function(){ setTooltipItemId(null); },
@@ -2832,13 +2977,19 @@ var _useState27 = useState(init),
       style:{ background:'#fff',borderRadius:8,padding:'16px 20px',maxWidth:340,boxShadow:'0 8px 24px rgba(0,0,0,0.3)',border:'2px solid #3B6D11' }
     },
       /*#__PURE__*/React.createElement('div', { style:{fontWeight:'bold',fontSize:12,color:'#3B6D11',marginBottom:10} }, (itensAtendidosMap[tooltipItemId]&&!itensAtendidosMap[tooltipItemId].atendido)
-        ? ('PEDIDO PARCIAL \u2014 ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtPedida) + ' de ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtTotal) + ' (falta ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtTotal - itensAtendidosMap[tooltipItemId].qtPedida) + ')')
+        ? ((itensAtendidosMap[tooltipItemId].qtAlmox>0 ? 'ATENDIMENTO PARCIAL' : 'PEDIDO PARCIAL') + ' \u2014 ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtPedida + (itensAtendidosMap[tooltipItemId].qtAlmox||0)) + ' de ' + fmtQtdSaldo(itensAtendidosMap[tooltipItemId].qtTotal) + ' (falta ' + fmtQtdSaldo(Math.max(0, itensAtendidosMap[tooltipItemId].qtTotal - itensAtendidosMap[tooltipItemId].qtPedida - (itensAtendidosMap[tooltipItemId].qtAlmox||0))) + ')')
         : '\uD83D\uDD12 ITEM TOTALMENTE ATENDIDO'),
       (itensAtendidosMap[tooltipItemId]&&itensAtendidosMap[tooltipItemId].pedidos||[]).map(function(p, i){
         return /*#__PURE__*/React.createElement('div', { key:i, style:{fontSize:11,color:'#333',padding:'4px 0',borderBottom:'1px solid #eee'} },
           /*#__PURE__*/React.createElement('strong', { style:{color:'#7c3aed'} }, p.num),
           ' \u00B7 ' + p.forn + ' \u00B7 ' + p.qt + ' un',
           /*#__PURE__*/React.createElement('span', { style:{background:'#EAF3DE',color:'#3B6D11',padding:'1px 6px',borderRadius:99,fontSize:9,marginLeft:6} }, p.status)
+        );
+      }),
+      (itensAtendidosMap[tooltipItemId]&&itensAtendidosMap[tooltipItemId].almox||[]).map(function(r, i){
+        return /*#__PURE__*/React.createElement('div', { key:'al'+i, style:{fontSize:11,color:'#333',padding:'4px 0',borderBottom:'1px solid #eee'} },
+          /*#__PURE__*/React.createElement('strong', { style:{color:'#1a4aa0'} }, 'ALMOXARIFADO'),
+          ' \u00B7 ' + fmtQtdSaldo(r.qt) + ' un \u00B7 ' + fmtDataAlmox(r.data) + (r.por ? ' \u00B7 ' + r.por : '') + (r.obs ? ' \u00B7 ' + r.obs : '')
         );
       }),
       /*#__PURE__*/React.createElement('div', { style:{marginTop:10,fontSize:10,color:'#888',textAlign:'center'} }, 'Toque fora para fechar')
