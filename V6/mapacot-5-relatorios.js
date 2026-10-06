@@ -435,7 +435,9 @@ function gerarRelatorioAlmox(regs, f) {
     "table{border-collapse:collapse;width:100%;font-size:10px}th{background:#e4e9f5;border:1px solid #c8d0e4;padding:4px 5px;text-align:left;font-size:9px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
     "td{border:1px solid #d6dbe8;padding:4px 5px;vertical-align:top}.n{text-align:right}tr{page-break-inside:avoid}" +
     "tr.est td{color:#999;text-decoration:line-through;background:#fafafa}tr.tot td{background:#f2f5fb;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
-    ".tg{font-size:8px;background:#fdecea;color:#a32d2d;border-radius:8px;padding:0 5px;text-decoration:none;display:inline-block}.rod{margin-top:10px;color:#777;font-size:9px}</style>";
+    ".tg{font-size:8px;background:#fdecea;color:#a32d2d;border-radius:8px;padding:0 5px;text-decoration:none;display:inline-block}.rod{margin-top:10px;color:#777;font-size:9px}" +
+    ".dia{background:#2a5298;color:#fff;padding:5px 8px;font-weight:700;font-size:11px;margin-top:12px;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    ".dia.geral{background:#5b6f99}tr.mult td{background:#fffbe6;-webkit-print-color-adjust:exact;print-color-adjust:exact}.tg2{font-size:8px;background:#fff3c4;color:#7a5a00;border-radius:8px;padding:0 5px;display:inline-block;margin-left:4px}.ac{color:#555}.dia-wrap{page-break-inside:avoid}</style>";
   function totaisPorUnid(lista) {
     var t = {}, ordem = [];
     lista.forEach(function (r) {
@@ -446,8 +448,10 @@ function gerarRelatorioAlmox(regs, f) {
     });
     return ordem.map(function (u) { return almoxFmtNum(t[u]) + " " + esc(u); }).join(" · ") || "0";
   }
+  // Monta o corpo de UMA visão. A opção "todas" chama esta função 3 vezes e junta (cada uma em página nova).
+  function montarCorpo(visao) {
   var corpo = "";
-  if (f.visao === "resumo") {
+  if (visao === "resumo") {
     var grupos = {}, ordemG = [];
     regs.forEach(function (r) {
       var nome = (r.descricao + (r.detalhe ? " — " + r.detalhe : "")).toUpperCase();
@@ -468,6 +472,58 @@ function gerarRelatorioAlmox(regs, f) {
     corpo = "<h1>RESUMO DO ALMOXARIFADO POR INSUMO</h1><div class=\"meta\">" + meta + "</div><table><tr><th>Insumo</th><th>Un.</th><th class=\"n\">Retiradas</th><th class=\"n\">Total retirado</th>" +
       (mostrarEst ? "<th class=\"n\">Estornadas</th>" : "") + "<th>Obras</th></tr>" + linhasR + "</table>" +
       "<div class=\"rod\">Unidades diferentes nunca são somadas entre si. Retiradas estornadas não entram nos totais.</div>";
+  } else if (visao === "dia") {
+    // RESUMO POR DIA: um bloco por data (dia local do lançamento); dentro, uma linha por insumo+unidade.
+    // "Acumulado" = soma, por insumo+unidade, do primeiro dia do relatório até aquele dia (sem estornadas).
+    var diasMap = {}, ordemD = [];
+    regs.forEach(function (r) {
+      var dk = r.dk || "sem-data";
+      if (!diasMap[dk]) { diasMap[dk] = { regs: [] }; ordemD.push(dk); }
+      diasMap[dk].regs.push(r);
+    });
+    ordemD.sort(function (a, b) { return a < b ? -1 : (a > b ? 1 : 0); });
+    var SEMANA = ["DOMINGO", "SEGUNDA-FEIRA", "TERÇA-FEIRA", "QUARTA-FEIRA", "QUINTA-FEIRA", "SEXTA-FEIRA", "SÁBADO"];
+    var acumPor = {};
+    var blocosDia = ordemD.map(function (dk) {
+      var lista = diasMap[dk].regs;
+      var gr = {}, ordG = [], ests = [], nLanc = 0;
+      lista.forEach(function (r) {
+        var nome = (r.descricao + (r.detalhe ? " — " + r.detalhe : "")).toUpperCase();
+        var k = nome + "|||" + (r.unid || "").toUpperCase();
+        if (r.estornado) { ests.push({ nome: nome, r: r }); return; }
+        if (!gr[k]) { gr[k] = { nome: nome, unid: r.unid || "", n: 0, total: 0, obras: [] }; ordG.push(k); }
+        var g = gr[k];
+        g.n++; g.total += r.qt; nLanc++;
+        if (r.obra && g.obras.indexOf(r.obra) === -1) g.obras.push(r.obra);
+      });
+      ordG.sort(function (a, b) { return gr[a].nome < gr[b].nome ? -1 : (gr[a].nome > gr[b].nome ? 1 : (a < b ? -1 : (a > b ? 1 : 0))); });
+      ests.sort(function (a, b) { return a.nome < b.nome ? -1 : (a.nome > b.nome ? 1 : 0); });
+      var linhasD = ordG.map(function (k) {
+        var g = gr[k];
+        var antes = acumPor[k] || 0;
+        var depois = antes + g.total;
+        acumPor[k] = depois;
+        var acTxt = antes > 0 ? "<b>" + almoxFmtNum(depois) + "</b> <span style=\"color:#888\">(" + almoxFmtNum(antes) + " + " + almoxFmtNum(g.total) + ")</span>" : almoxFmtNum(depois);
+        return "<tr" + (g.n > 1 ? " class=\"mult\"" : "") + "><td>" + esc(g.nome) + (g.n > 1 ? " <span class=\"tg2\">" + g.n + " lançamentos</span>" : "") + "</td><td>" + esc(g.unid) +
+          "</td><td class=\"n\"><b>" + almoxFmtNum(g.total) + "</b></td><td class=\"n ac\">" + acTxt + "</td><td>" + esc(g.obras.join(" | ")) + "</td></tr>";
+      }).join("");
+      var linhasE = ests.map(function (e) {
+        return "<tr class=\"est\"><td>" + esc(e.nome) + " <span class=\"tg\">ESTORNADA</span></td><td>" + esc(e.r.unid) + "</td><td class=\"n\">" + almoxFmtNum(e.r.qt) +
+          "</td><td class=\"n\">—</td><td>" + esc(e.r.obra) + "</td></tr>";
+      }).join("");
+      var cab, dataTxt;
+      if (dk === "sem-data") { dataTxt = "SEM DATA"; }
+      else {
+        var dd = new Date(Number(dk.slice(0, 4)), Number(dk.slice(5, 7)) - 1, Number(dk.slice(8, 10)));
+        dataTxt = dk.slice(8, 10) + "/" + dk.slice(5, 7) + "/" + dk.slice(0, 4) + " — " + SEMANA[dd.getDay()];
+      }
+      cab = "<div class=\"dia\"><span>" + dataTxt + "</span><span>" + ordG.length + " insumo" + (ordG.length === 1 ? "" : "s") + " · " + nLanc + " lançamento" + (nLanc === 1 ? "" : "s") + "</span></div>";
+      return cab + "<table><tr><th>Insumo</th><th>Un.</th><th class=\"n\">Total do dia</th><th class=\"n\">Acumulado até este dia</th><th>Obras</th></tr>" + linhasD + linhasE +
+        "<tr class=\"tot\"><td colspan=\"2\">TOTAL DO DIA " + dataTxt.split(" ")[0] + " (sem estornadas)</td><td colspan=\"3\" style=\"text-align:right\">" + totaisPorUnid(lista) + "</td></tr></table>";
+    }).join("");
+    corpo = "<h1>RESUMO DO ALMOXARIFADO POR DIA</h1><div class=\"meta\">" + meta + "</div>" + blocosDia +
+      "<div class=\"dia geral\"><span>TOTAL GERAL DO PERÍODO (sem estornadas)</span><span>" + totaisPorUnid(regs) + "</span></div>" +
+      "<div class=\"rod\">Cada dia mostra só o que saiu naquele dia. “Acumulado” soma, por insumo, do primeiro dia do relatório até aquele dia. Unidades diferentes nunca são somadas entre si. Retiradas estornadas não entram nos totais.</div>";
   } else {
     var porObra = {}, ordemO = [];
     regs.forEach(function (r) { var o = r.obra || "(sem obra)"; if (!porObra[o]) { porObra[o] = []; ordemO.push(o); } porObra[o].push(r); });
@@ -484,7 +540,17 @@ function gerarRelatorioAlmox(regs, f) {
     corpo = "<h1>RELATÓRIO DE ATENDIMENTO PELO ALMOXARIFADO</h1><div class=\"meta\">" + meta + "</div>" + blocos +
       "<div class=\"rod\">Totais por unidade: unidades diferentes nunca são somadas entre si.</div>";
   }
-  return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Relatório do Almoxarifado</title>" + css + "</head><body>" + corpo + "</body></html>";
+  return corpo;
+  }
+  var corpoFinal;
+  if (f.visao === "todas") {
+    corpoFinal = montarCorpo("detalhado") +
+      "<div style=\"page-break-before:always\">" + montarCorpo("resumo") + "</div>" +
+      "<div style=\"page-break-before:always\">" + montarCorpo("dia") + "</div>";
+  } else {
+    corpoFinal = montarCorpo(f.visao);
+  }
+  return "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Relatório do Almoxarifado</title>" + css + "</head><body>" + corpoFinal + "</body></html>";
 }
 function AlmoxRelatorioForm(_refAf) {
   var cadastros = _refAf.cadastros || {}, f = _refAf.f, setF = _refAf.setF;
@@ -512,8 +578,10 @@ function AlmoxRelatorioForm(_refAf) {
     /*#__PURE__*/React.createElement("input", { "data-almox-f": "insumo", style: SC.inp, value: f.insumo, placeholder: "DIGITE PARTE DO NOME DO INSUMO...", onChange: function (e) { upd("insumo", e.target.value.toUpperCase()); } }),
     /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "COMO MOSTRAR"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
-      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "detalhado", onClick: function () { upd("visao", "detalhado"); }, style: pill(f.visao !== "resumo") }, "Detalhado (cada retirada)"),
-      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "resumo", onClick: function () { upd("visao", "resumo"); }, style: pill(f.visao === "resumo") }, "Resumo por insumo")),
+      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "detalhado", onClick: function () { upd("visao", "detalhado"); }, style: pill(f.visao !== "resumo" && f.visao !== "dia" && f.visao !== "todas") }, "Detalhado (cada retirada)"),
+      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "resumo", onClick: function () { upd("visao", "resumo"); }, style: pill(f.visao === "resumo") }, "Resumo por insumo"),
+      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "dia", onClick: function () { upd("visao", "dia"); }, style: pill(f.visao === "dia") }, "Resumo por dia"),
+      /*#__PURE__*/React.createElement("span", { "data-almox-visao": "todas", onClick: function () { upd("visao", "todas"); }, style: pill(f.visao === "todas") }, "Todas as vis\u00f5es (3 em 1)")),
     /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "INCLUIR ESTORNADAS?"),
     /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
       /*#__PURE__*/React.createElement("span", { "data-almox-est": "sim", onClick: function () { upd("estornadas", true); }, style: pill(f.estornadas !== false) }, "Sim, riscadas"),
