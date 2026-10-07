@@ -41,6 +41,12 @@ function ModalPedidoStep1(_ref_po1) {
     };
   });
 
+  // Disponível para pedir = total − já pedido − almoxarifado (nunca negativo). Item com disponível 0
+  // não pode entrar em um novo pedido (a caixinha fica desabilitada).
+  function pendDe(item){
+    var ps0 = poStatus[item.id]||{};
+    return Math.max(0, Math.round(((parseNumBR(item.qt)||0) - (ps0.qtPedida||0) - (ps0.qtAlmox||0))*1000)/1000);
+  }
   var qtSel = itensSelecionados.length;
   var _sFiltro = useState(''), filtroStep1 = _slicedToArray(_sFiltro,2)[0], setFiltroStep1 = _slicedToArray(_sFiltro,2)[1];
   // FIX 2: trim calculado uma vez só
@@ -108,9 +114,9 @@ function ModalPedidoStep1(_ref_po1) {
             /*#__PURE__*/React.createElement('tr', null,
               /*#__PURE__*/React.createElement('th', { style:Object.assign({},thStyle,{width:36}) },
                 /*#__PURE__*/React.createElement('input', { type:'checkbox',
-                  checked: itensFiltrados.length>0 && itensFiltrados.every(function(i){ return itensSelecionados.indexOf(i.id)>=0; }),
+                  checked: itensFiltrados.filter(function(i){ return pendDe(i)>0; }).length>0 && itensFiltrados.filter(function(i){ return pendDe(i)>0; }).every(function(i){ return itensSelecionados.indexOf(i.id)>=0; }),
                   onChange: function(e){
-                    var ids = itensFiltrados.map(function(i){ return i.id; });
+                    var ids = itensFiltrados.filter(function(i){ return pendDe(i)>0; }).map(function(i){ return i.id; });
                     if(e.target.checked){
                       // Adiciona filtrados aos já selecionados sem remover outros
                       var novos = itensSelecionados.slice();
@@ -150,16 +156,18 @@ function ModalPedidoStep1(_ref_po1) {
                 grupo.itens.map(function(item){
                   var ps = poStatus[item.id]||{};
                   var sel = itensSelecionados.indexOf(item.id)>=0;
-                  var qtPend = Math.max(0,(parseNumBR(item.qt)||0) - (ps.qtPedida||0) - (ps.qtAlmox||0));
-                  return /*#__PURE__*/React.createElement('tr', { key:item.id, style:{background:sel?'#f5f0ff':'transparent'} },
+                  var qtPend = pendDe(item);
+                  return /*#__PURE__*/React.createElement('tr', { key:item.id, style:{background:sel?'#f5f0ff':'transparent',opacity:qtPend<=0?0.6:1} },
                     /*#__PURE__*/React.createElement('td', {
                       style:{textAlign:'center',padding:'8px 4px',borderBottom:'1px solid #eee'}
                     },
                       /*#__PURE__*/React.createElement('input', {
                         type:'checkbox',
-                        checked:sel,
-                        onChange:function(){ onToggle(item.id); },
-                        style:{cursor:'pointer',accentColor:'#7c3aed',width:22,height:22,display:'block',margin:'0 auto'}
+                        checked:sel && qtPend>0,
+                        disabled:qtPend<=0,
+                        title: qtPend<=0 ? 'J\u00e1 totalmente atendido (pedido + almoxarifado) \u2014 n\u00e3o h\u00e1 quantidade dispon\u00edvel para pedir' : '',
+                        onChange:function(){ if(qtPend>0) onToggle(item.id); },
+                        style:{cursor:qtPend<=0?'not-allowed':'pointer',accentColor:'#7c3aed',width:22,height:22,display:'block',margin:'0 auto'}
                       })
                     ),
                     /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',fontWeight:'bold'} }, item.num),
@@ -311,7 +319,7 @@ function ModalPedidoStep2(_ref_po2) {
       if(it){ qtPedida+=Number(it.qt_pedida)||0; if(po.status==='recebido') qtAtendida+=Number(it.qt_pedida)||0; }
     });
     var qtAlmox=Number(item._qtAlmox)||0;
-    poStatus[item.id]={qtTotal:qtTotal,qtPedida:qtPedida,qtAtendida:qtAtendida,qtAlmox:qtAlmox,qtPend:Math.max(0,qtTotal-qtPedida-qtAlmox)};
+    poStatus[item.id]={qtTotal:qtTotal,qtPedida:qtPedida,qtAtendida:qtAtendida,qtAlmox:qtAlmox,qtPend:Math.max(0,Math.round((qtTotal-qtPedida-qtAlmox)*1000)/1000)};
   });
   // FIX (mesmo bug do item "removido do mapa"): pros itens do pedido que vieram de OUTRO mapa
   // (não cobertos pelo loop acima, que só percorre o mapa aberto agora), calcula um status
@@ -327,7 +335,54 @@ function ModalPedidoStep2(_ref_po2) {
     var qtPedida = Number(itOrig.qt_pedida)||0;
     var qtAtendida = modoEdicao ? 0 : qtPedida; // status "recebido" desse pedido específico não é visível aqui; aproximação conservadora
     poStatus[itemId]={qtTotal:qtTotal,qtPedida:qtPedida,qtAtendida:qtAtendida,qtPend:Math.max(0,qtTotal-qtPedida)};
+    // Cálculo EXATO (substitui a aproximação) quando o item de origem é encontrado em algum mapa
+    // conhecido: total do mapa dele − pedidos dos OUTROS POs − almoxarifado dele. Se não achar,
+    // mantém a aproximação acima e o item fica sem limite rígido (nunca trava um pedido legítimo).
+    var mOrigFb = mapasTodos.find(function(mm){ return mm && itOrig.mapa_id && mm.id===itOrig.mapa_id && (mm.itens||[]).some(function(i){ return i.id===itemId; }); })
+               || mapasTodos.find(function(mm){ return mm && (mm.itens||[]).some(function(i){ return i.id===itemId; }); });
+    if (mOrigFb) {
+      var itMapaFb = (mOrigFb.itens||[]).find(function(i){ return i.id===itemId; });
+      var totFb = parseNumBR(itMapaFb.qt)||0, pedFb = 0, recFb = 0, almFb = 0;
+      (pedidos||[]).filter(function(po){ return po.status!=='cancelado'; }).forEach(function(po){
+        var x=(po.itens||[]).find(function(i){ return i.item_id===itemId; });
+        if(x){ pedFb+=Number(x.qt_pedida)||0; if(po.status==='recebido') recFb+=Number(x.qt_pedida)||0; }
+      });
+      ((mOrigFb.almox||{})[itemId]||[]).forEach(function(r){ if(r && !r.estornado) almFb += Number(r.qt)||0; });
+      almFb = Math.round(almFb*1000)/1000;
+      poStatus[itemId]={qtTotal:totFb,qtPedida:pedFb,qtAtendida:recFb,qtAlmox:almFb,qtPend:Math.max(0,Math.round((totFb-pedFb-almFb)*1000)/1000),limiteExato:true};
+    }
   });
+
+  // LIMITE RÍGIDO por item: o pedido só pode ser gerado até o disponível (total − já pedido −
+  // almoxarifado). Item sem limite conhecido (null) não bloqueia. Ao EDITAR, uma quantidade que o
+  // pedido já tinha salva nunca é forçada a diminuir (pedidos antigos continuam editáveis) — só
+  // não pode AUMENTAR além do limite.
+  var arred3 = function(v){ return Math.round((Number(v)||0)*1000)/1000; };
+  var limiteMax = {};
+  itemIds.forEach(function(itemId){
+    var p0 = poStatus[itemId]; var lim = null;
+    if (p0) {
+      if ((itens||[]).some(function(i){ return i.id===itemId; }) || p0.limiteExato) lim = p0.qtPend;
+    }
+    if (lim!==null && modoEdicao) {
+      var o0 = itensPedidoOriginal.find(function(i){ return i.item_id===itemId; });
+      lim = Math.max(lim, o0 ? (Number(o0.qt_pedida)||0) : 0);
+    }
+    limiteMax[itemId] = lim;
+  });
+  function excessoDe(itemId){
+    var lim = limiteMax[itemId];
+    if (lim===null || lim===undefined) return null;
+    var q = arred3((config[itemId]||[]).reduce(function(sm,l){ return sm+(Number(l.qt)||0); },0));
+    return q > arred3(lim) ? { qt:q, lim:arred3(lim) } : null;
+  }
+  function rotuloItem(itemId){
+    var it = (itens||[]).find(function(i){ return i.id===itemId; });
+    var o1 = itensPedidoOriginal.find(function(i){ return i.item_id===itemId; });
+    var d = it ? ('ITEM '+it.num+' \u2014 '+(it.descricao||'')) : (o1 ? (o1.descricao||'') : String(itemId));
+    return d;
+  }
+  var itensEmExcesso = itemIds.filter(function(id){ return !!excessoDe(id); });
 
   // Calcular número de POs a gerar (por fornecedor único)
   var fornIds = new Set();
@@ -429,8 +484,10 @@ function ModalPedidoStep2(_ref_po2) {
           var mapaDoItem = resolverMapaDoItem(item);
           var linhas = config[itemId]||[{ fornId:'', fornNome:'', vlUnit:0, qt:'', obs:'' }];
           var qtDistrib = linhas.reduce(function(s,l){ return s+(Number(l.qt)||0); },0);
-          var qtOk = qtDistrib > 0 && qtDistrib === ps.qtPend;
-          var qtOver = qtDistrib > ps.qtPend;
+          var qtOk = qtDistrib > 0 && arred3(qtDistrib) === arred3(ps.qtPend);
+          var excItem = excessoDe(itemId);
+          var qtBloq = !!excItem;
+          var qtOver = !qtBloq && qtDistrib > ps.qtPend; // só aviso (limite desconhecido ou quantidade antiga do próprio pedido)
 
           return /*#__PURE__*/React.createElement('div', { key:itemId, style:{border:'1px solid #e0e0e0',borderRadius:6,overflow:'hidden',marginBottom:10} },
             // Header do item
@@ -493,6 +550,11 @@ function ModalPedidoStep2(_ref_po2) {
                 style:{background:'#f5f5f5',border:'1px dashed #bbb',color:'#888',padding:'5px 12px',borderRadius:4,fontSize:10,cursor:'pointer',width:'100%',marginTop:4,textAlign:'center'}
               }, '+ adicionar outro fornecedor para este item'),
               // Alerta de quantidade
+              qtBloq && /*#__PURE__*/React.createElement('div', { 'data-excesso':'1', style:{fontSize:9,color:'#fff',marginTop:4,background:'#c0392b',padding:'5px 8px',borderRadius:3,fontWeight:'bold'} },
+                excItem.lim>0
+                  ? '\u26D4 Qt. distribu\u00edda: '+excItem.qt+' \u2014 acima do dispon\u00edvel ('+excItem.lim+'). Reduza para no m\u00e1ximo '+excItem.lim+'. N\u00e3o \u00e9 poss\u00edvel gerar com essa quantidade.'
+                  : '\u26D4 Qt. distribu\u00edda: '+excItem.qt+' \u2014 este item n\u00e3o tem quantidade dispon\u00edvel (dispon\u00edvel 0). Zere a quantidade ou remova o item.'
+              ),
               qtOver && /*#__PURE__*/React.createElement('div', { style:{fontSize:9,color:'#c0392b',marginTop:4,background:'#FCEBEB',padding:'4px 8px',borderRadius:3} },
                 '\u26A0 Qt. distribuída: '+qtDistrib+' — maior que a pendente ('+ps.qtPend+'). Verifique.'
               ),
@@ -500,7 +562,7 @@ function ModalPedidoStep2(_ref_po2) {
                 '\u2714 Qt. distribuída: '+qtDistrib+' de '+ps.qtPend+' pendentes — OK'
               ),
               ps.qtPend===0 && /*#__PURE__*/React.createElement('div', { style:{fontSize:9,color:'#185FA5',marginTop:4,background:'#E6F1FB',padding:'4px 8px',borderRadius:3} },
-                '\u2139 Este item já está totalmente atendido (Qt. Pendente = 0). Pedido extra será gerado assim mesmo se configurado.'
+                '\u2139 Este item j\u00e1 est\u00e1 totalmente atendido (Qt. Pendente = 0). N\u00e3o \u00e9 poss\u00edvel gerar pedido deste item.'
               )
             )
           );
@@ -627,7 +689,9 @@ function ModalPedidoStep2(_ref_po2) {
       // ─────────────────────────────────────────────────────────────────────
       /*#__PURE__*/React.createElement('div', { style:ftrStyle },
         /*#__PURE__*/React.createElement('span', { style:{flex:1,fontSize:10,color:'#666'} },
-          nPOs>0 && /*#__PURE__*/React.createElement(React.Fragment, null, 'Ser\u00E3o gerados ', /*#__PURE__*/React.createElement('strong', {style:{color:'#7c3aed'}}, nPOs), ' pedido(s)')
+          itensEmExcesso.length>0
+            ? /*#__PURE__*/React.createElement('strong', { 'data-excesso-rodape':'1', style:{color:'#c0392b'} }, '\u26D4 '+itensEmExcesso.length+' item(ns) acima do dispon\u00edvel')
+            : (nPOs>0 && /*#__PURE__*/React.createElement(React.Fragment, null, 'Ser\u00E3o gerados ', /*#__PURE__*/React.createElement('strong', {style:{color:'#7c3aed'}}, nPOs), ' pedido(s)'))
         ),
                 /*#__PURE__*/React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,background:'#f9f6ff',border:'1px solid #d4b8ff',borderRadius:6,padding:'6px 10px',minWidth:200} },
           /*#__PURE__*/React.createElement('span', { style:{fontSize:10,color:'#7c3aed',whiteSpace:'nowrap',fontWeight:600} }, 'Pgto:'),
@@ -642,9 +706,18 @@ function ModalPedidoStep2(_ref_po2) {
         !modoEdicao && /*#__PURE__*/React.createElement('button', { onClick:onVoltar, style:{background:'#2a5298',color:'#fff',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, '\u2190 Voltar'),
         /*#__PURE__*/React.createElement('button', { onClick:onClose, style:{background:'#f0f0f0',border:'none',padding:'8px 16px',borderRadius:4,fontSize:11,cursor:'pointer'} }, 'Cancelar'),
         /*#__PURE__*/React.createElement('button', {
-          onClick: function(){ if(gerando) return; setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }, formaPagamento, obsPedido); },
-          disabled: gerando,
-          style:{background: gerando ? '#9d6fe8' : '#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor: gerando ? 'not-allowed' : 'pointer',fontWeight:'bold',opacity: gerando ? 0.7 : 1}
+          onClick: function(){
+            if(gerando) return;
+            // Trava dupla (além do botão desabilitado): recalcula na hora do clique.
+            if(itensEmExcesso.length>0){
+              alert('N\u00e3o \u00e9 poss\u00edvel gerar o pedido: quantidade acima do dispon\u00edvel.\n\n' + itensEmExcesso.map(function(id){ var e=excessoDe(id); return '\u2022 '+rotuloItem(id)+': digitado '+e.qt+', m\u00e1ximo dispon\u00edvel '+e.lim; }).join('\n') + '\n\nCorrija as quantidades e tente novamente.');
+              return;
+            }
+            setGerando(true); onGerar(config, poFinanceiro, function(){ setGerando(false); }, formaPagamento, obsPedido);
+          },
+          disabled: gerando || itensEmExcesso.length>0,
+          title: itensEmExcesso.length>0 ? 'H\u00e1 item com quantidade acima do dispon\u00edvel \u2014 corrija para gerar' : '',
+          style:{background: (gerando || itensEmExcesso.length>0) ? '#9d6fe8' : '#7c3aed',color:'#fff',border:'none',padding:'8px 18px',borderRadius:4,fontSize:11,cursor: (gerando || itensEmExcesso.length>0) ? 'not-allowed' : 'pointer',fontWeight:'bold',opacity: (gerando || itensEmExcesso.length>0) ? 0.5 : 1}
         }, gerando ? '\u23F3 Gerando...' : '\uD83D\uDED2 Gerar Pedidos')
       )
     )
