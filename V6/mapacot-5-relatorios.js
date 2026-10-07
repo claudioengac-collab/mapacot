@@ -437,7 +437,8 @@ function gerarRelatorioAlmox(regs, f) {
     "tr.est td{color:#999;text-decoration:line-through;background:#fafafa}tr.tot td{background:#f2f5fb;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
     ".tg{font-size:8px;background:#fdecea;color:#a32d2d;border-radius:8px;padding:0 5px;text-decoration:none;display:inline-block}.rod{margin-top:10px;color:#777;font-size:9px}" +
     ".dia{background:#2a5298;color:#fff;padding:5px 8px;font-weight:700;font-size:11px;margin-top:12px;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
-    ".dia.geral{background:#5b6f99}tr.mult td{background:#fffbe6;-webkit-print-color-adjust:exact;print-color-adjust:exact}.tg2{font-size:8px;background:#fff3c4;color:#7a5a00;border-radius:8px;padding:0 5px;display:inline-block;margin-left:4px}.ac{color:#555}.dia-wrap{page-break-inside:avoid}</style>";
+    ".dia.geral{background:#5b6f99}tr.mult td{background:#fffbe6;-webkit-print-color-adjust:exact;print-color-adjust:exact}table.fx{table-layout:fixed}table.fx td,table.fx th{overflow-wrap:anywhere}@media screen{.sec{margin-top:40px;padding-top:22px;border-top:4px solid #2a5298}}" +
+    ".tg2{font-size:8px;background:#fff3c4;color:#7a5a00;border-radius:8px;padding:0 5px;display:inline-block;margin-left:4px}.ac{color:#555}.dia-wrap{page-break-inside:avoid}</style>";
   function totaisPorUnid(lista) {
     var t = {}, ordem = [];
     lista.forEach(function (r) {
@@ -449,6 +450,9 @@ function gerarRelatorioAlmox(regs, f) {
     return ordem.map(function (u) { return almoxFmtNum(t[u]) + " " + esc(u); }).join(" · ") || "0";
   }
   // Monta o corpo de UMA visão. A opção "todas" chama esta função 3 vezes e junta (cada uma em página nova).
+  // Larguras fixas: as tabelas de obras/dias diferentes ficam com as colunas alinhadas entre si.
+  var cgDia = "<colgroup><col style=\"width:38%\"><col style=\"width:6%\"><col style=\"width:10%\"><col style=\"width:16%\"><col style=\"width:30%\"></colgroup>";
+  var cgDet = "<colgroup><col style=\"width:8%\"><col style=\"width:6%\"><col style=\"width:5%\"><col style=\"width:30%\"><col style=\"width:5%\"><col style=\"width:9%\"><col style=\"width:11%\"><col style=\"width:17%\"><col style=\"width:9%\"></colgroup>";
   function montarCorpo(visao) {
   var corpo = "";
   if (visao === "resumo") {
@@ -518,8 +522,8 @@ function gerarRelatorioAlmox(regs, f) {
         dataTxt = dk.slice(8, 10) + "/" + dk.slice(5, 7) + "/" + dk.slice(0, 4) + " — " + SEMANA[dd.getDay()];
       }
       cab = "<div class=\"dia\"><span>" + dataTxt + "</span><span>" + ordG.length + " insumo" + (ordG.length === 1 ? "" : "s") + " · " + nLanc + " lançamento" + (nLanc === 1 ? "" : "s") + "</span></div>";
-      return cab + "<table><tr><th>Insumo</th><th>Un.</th><th class=\"n\">Total do dia</th><th class=\"n\">Acumulado até este dia</th><th>Obras</th></tr>" + linhasD + linhasE +
-        "<tr class=\"tot\"><td colspan=\"2\">TOTAL DO DIA " + dataTxt.split(" ")[0] + " (sem estornadas)</td><td colspan=\"3\" style=\"text-align:right\">" + totaisPorUnid(lista) + "</td></tr></table>";
+      return "<div class=\"dia-wrap\">" + cab + "<table class=\"fx\">" + cgDia + "<tr><th>Insumo</th><th>Un.</th><th class=\"n\">Total do dia</th><th class=\"n\">Acumulado até este dia</th><th>Obras</th></tr>" + linhasD + linhasE +
+        "<tr class=\"tot\"><td colspan=\"2\">TOTAL DO DIA " + dataTxt.split(" ")[0] + " (sem estornadas)</td><td colspan=\"3\" style=\"text-align:right\">" + totaisPorUnid(lista) + "</td></tr></table></div>";
     }).join("");
     corpo = "<h1>RESUMO DO ALMOXARIFADO POR DIA</h1><div class=\"meta\">" + meta + "</div>" + blocosDia +
       "<div class=\"dia geral\"><span>TOTAL GERAL DO PERÍODO (sem estornadas)</span><span>" + totaisPorUnid(regs) + "</span></div>" +
@@ -534,7 +538,7 @@ function gerarRelatorioAlmox(regs, f) {
           esc(r.descricao + (r.detalhe ? " — " + r.detalhe : "")) + "</td><td>" + esc(r.unid) + "</td><td class=\"n\">" + (r.estornado ? "" : "<b>") + almoxFmtNum(r.qt) + (r.estornado ? "" : "</b>") +
           "</td><td>" + esc(r.por) + "</td><td>" + esc(r.obs) + (r.estornado ? " <span class=\"tg\">ESTORNADA</span>" : "") + "</td><td class=\"n\">" + almoxFmtNum(r.qtSolic) + "</td></tr>";
       }).join("");
-      return "<div class=\"ob\">OBRA: " + esc(o) + "</div><table><tr><th>Data</th><th>Mapa</th><th>Item</th><th>Insumo</th><th>Un.</th><th class=\"n\">Qtd. retirada</th><th>Retirado por</th><th>Observação</th><th class=\"n\">Solicitado</th></tr>" +
+      return "<div class=\"ob\">OBRA: " + esc(o) + "</div><table class=\"fx\">" + cgDet + "<tr><th>Data</th><th>Mapa</th><th>Item</th><th>Insumo</th><th>Un.</th><th class=\"n\">Qtd. retirada</th><th>Retirado por</th><th>Observação</th><th class=\"n\">Solicitado</th></tr>" +
         linhas + "<tr class=\"tot\"><td colspan=\"5\">TOTAL DA OBRA (sem estornadas)</td><td class=\"n\" colspan=\"4\" style=\"text-align:left\">" + totaisPorUnid(lista) + "</td></tr></table>";
     }).join("");
     corpo = "<h1>RELATÓRIO DE ATENDIMENTO PELO ALMOXARIFADO</h1><div class=\"meta\">" + meta + "</div>" + blocos +
@@ -545,8 +549,8 @@ function gerarRelatorioAlmox(regs, f) {
   var corpoFinal;
   if (f.visao === "todas") {
     corpoFinal = montarCorpo("detalhado") +
-      "<div style=\"page-break-before:always\">" + montarCorpo("resumo") + "</div>" +
-      "<div style=\"page-break-before:always\">" + montarCorpo("dia") + "</div>";
+      "<div class=\"sec\" style=\"page-break-before:always\">" + montarCorpo("resumo") + "</div>" +
+      "<div class=\"sec\" style=\"page-break-before:always\">" + montarCorpo("dia") + "</div>";
   } else {
     corpoFinal = montarCorpo(f.visao);
   }
