@@ -31,10 +31,13 @@ function ModalPedidoStep1(_ref_po1) {
         if (po.status==='recebido') qtAtendida += Number(it.qt_pedida)||0;
       }
     });
-    poStatus[item.id] = { qtTotal:qtTotal, qtPedida:qtPedida, qtAtendida:qtAtendida,
-      label: qtPedida===0?'SEM PEDIDO': qtPedida>=qtTotal?'ATENDIDO':'PARCIAL',
-      color: qtPedida===0?'#999': qtPedida>=qtTotal?'#3B6D11':'#185FA5',
-      bg: qtPedida===0?'#f0f0f0': qtPedida>=qtTotal?'#EAF3DE':'#E6F1FB'
+    // Almoxarifado (derivado, só leitura): cobre o total junto com os pedidos.
+    var qtAlmox = Number(item._qtAlmox)||0;
+    var cob = qtPedida + qtAlmox;
+    poStatus[item.id] = { qtTotal:qtTotal, qtPedida:qtPedida, qtAtendida:qtAtendida, qtAlmox:qtAlmox,
+      label: cob===0?'SEM PEDIDO': cob>=qtTotal?'ATENDIDO':'PARCIAL',
+      color: cob===0?'#999': cob>=qtTotal?'#3B6D11':'#185FA5',
+      bg: cob===0?'#f0f0f0': cob>=qtTotal?'#EAF3DE':'#E6F1FB'
     };
   });
 
@@ -120,7 +123,7 @@ function ModalPedidoStep1(_ref_po1) {
                   },
                   style:{cursor:'pointer'} })
               ),
-              ['ITEM','DESCRIÇÃO / DETALHE','QT. TOTAL','JÁ PEDIDA','PENDENTE','PO STATUS'].map(function(h,i){
+              ['ITEM','DESCRIÇÃO / DETALHE','QT. TOTAL','JÁ PEDIDA','ALMOX.','PENDENTE','PO STATUS'].map(function(h,i){
                 return /*#__PURE__*/React.createElement('th', { key:i, style:Object.assign({},thStyle,{textAlign:i>1?'center':'left'}) }, h);
               })
             )
@@ -128,7 +131,7 @@ function ModalPedidoStep1(_ref_po1) {
           /*#__PURE__*/React.createElement('tbody', null,
             itensFiltrados.length === 0
               ? /*#__PURE__*/React.createElement('tr', null,
-                  /*#__PURE__*/React.createElement('td', { colSpan:7, style:{textAlign:'center',padding:24,color:'#888',fontSize:11} },
+                  /*#__PURE__*/React.createElement('td', { colSpan:8, style:{textAlign:'center',padding:24,color:'#888',fontSize:11} },
                     '\uD83D\uDD0D Nenhum insumo encontrado para "' + termoBusca + '"'
                   )
                 )
@@ -140,14 +143,14 @@ function ModalPedidoStep1(_ref_po1) {
               var ehMapaAtual = mapa && grupo.mapaId === mapa.id;
               return /*#__PURE__*/React.createElement(React.Fragment, { key:grupo.mapaId },
                 /*#__PURE__*/React.createElement('tr', null,
-                  /*#__PURE__*/React.createElement('td', { colSpan:7, style:{padding:'8px 6px 4px',fontWeight:800,fontSize:10.5,color:'#5b21b6',background:'#faf8ff',borderTop: '2px solid #e4d6ff'} },
+                  /*#__PURE__*/React.createElement('td', { colSpan:8, style:{padding:'8px 6px 4px',fontWeight:800,fontSize:10.5,color:'#5b21b6',background:'#faf8ff',borderTop: '2px solid #e4d6ff'} },
                     '\u25BE MAPA ' + (grupo.numero!=null?grupo.numero:'?') + (ehMapaAtual ? ' (este que voc\u00ea abriu)' : '')
                   )
                 ),
                 grupo.itens.map(function(item){
                   var ps = poStatus[item.id]||{};
                   var sel = itensSelecionados.indexOf(item.id)>=0;
-                  var qtPend = Math.max(0,(parseNumBR(item.qt)||0) - (ps.qtPedida||0));
+                  var qtPend = Math.max(0,(parseNumBR(item.qt)||0) - (ps.qtPedida||0) - (ps.qtAlmox||0));
                   return /*#__PURE__*/React.createElement('tr', { key:item.id, style:{background:sel?'#f5f0ff':'transparent'} },
                     /*#__PURE__*/React.createElement('td', {
                       style:{textAlign:'center',padding:'8px 4px',borderBottom:'1px solid #eee'}
@@ -167,6 +170,7 @@ function ModalPedidoStep1(_ref_po1) {
                     ),
                     /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee'} }, (item.qt||0)+' '+(item.unid||'')),
                     /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',color:'#185FA5',fontWeight:'bold'} }, ps.qtPedida||0),
+                    /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',color:(ps.qtAlmox>0?'#7c3aed':'#bbb'),fontWeight:'bold'} }, ps.qtAlmox>0 ? '\uD83D\uDCE6 '+ps.qtAlmox : '\u2014'),
                     /*#__PURE__*/React.createElement('td', { style:{textAlign:'center',padding:'6px 8px',borderBottom:'1px solid #eee',color:qtPend>0?'#b06000':'#3B6D11',fontWeight:'bold'} }, qtPend),
                     /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
                       /*#__PURE__*/React.createElement('span', { style:{background:ps.bg,color:ps.color,padding:'2px 8px',borderRadius:99,fontSize:9,fontWeight:'bold'} }, ps.label||'')
@@ -306,7 +310,8 @@ function ModalPedidoStep2(_ref_po2) {
       var it=(po.itens||[]).find(function(i){ return i.item_id===item.id; });
       if(it){ qtPedida+=Number(it.qt_pedida)||0; if(po.status==='recebido') qtAtendida+=Number(it.qt_pedida)||0; }
     });
-    poStatus[item.id]={qtTotal:qtTotal,qtPedida:qtPedida,qtAtendida:qtAtendida,qtPend:Math.max(0,qtTotal-qtPedida)};
+    var qtAlmox=Number(item._qtAlmox)||0;
+    poStatus[item.id]={qtTotal:qtTotal,qtPedida:qtPedida,qtAtendida:qtAtendida,qtAlmox:qtAlmox,qtPend:Math.max(0,qtTotal-qtPedida-qtAlmox)};
   });
   // FIX (mesmo bug do item "removido do mapa"): pros itens do pedido que vieram de OUTRO mapa
   // (não cobertos pelo loop acima, que só percorre o mapa aberto agora), calcula um status
@@ -444,8 +449,8 @@ function ModalPedidoStep2(_ref_po2) {
             ),
             // Qt boxes
             /*#__PURE__*/React.createElement('div', { style:{display:'grid',gridTemplateColumns:'repeat(2,1fr)',borderBottom:'1px solid #eee'} },
-              [['Qt. Inicial',ps.qtTotal,'#2a5298'],['Qt. Atendida',ps.qtAtendida,'#3B6D11'],['Qt. Pendente',ps.qtPend,'#b06000'],['Tot. Atendida?',ps.qtPend===0?'✅ SIM':'NÃO',ps.qtPend===0?'#3B6D11':'#b06000']].map(function(b,i){
-                return /*#__PURE__*/React.createElement('div', { key:i, style:{padding:'6px 10px',textAlign:'center',borderRight:i<3?'1px solid #eee':'none'} },
+              [['Qt. Inicial',ps.qtTotal,'#2a5298']].concat(ps.qtAlmox>0?[['Qt. Almox.','\uD83D\uDCE6 '+ps.qtAlmox,'#7c3aed']]:[]).concat([['Qt. Atendida',ps.qtAtendida,'#3B6D11'],['Qt. Pendente',ps.qtPend,'#b06000'],['Tot. Atendida?',ps.qtPend===0?'✅ SIM':'NÃO',ps.qtPend===0?'#3B6D11':'#b06000']]).map(function(b,i,arr){
+                return /*#__PURE__*/React.createElement('div', { key:i, style:{padding:'6px 10px',textAlign:'center',borderRight:i<arr.length-1?'1px solid #eee':'none'} },
                   /*#__PURE__*/React.createElement('div', { style:{fontSize:8,color:'#888',textTransform:'uppercase',marginBottom:2} }, b[0]),
                   /*#__PURE__*/React.createElement('div', { style:{fontSize:14,fontWeight:'bold',color:b[2]} }, b[1])
                 );

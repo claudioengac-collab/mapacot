@@ -1083,14 +1083,20 @@ var _useState27 = useState(init),
   // antes — são só informativos, não interferem em nenhum campo já usado pelo resto do sistema.
   // Quando "mapasAdicionaisPO" está vazio (o caso mais comum, um só mapa), esta lista é
   // idêntica a "itensAtivos" — o fluxo de um único mapa continua funcionando exatamente igual.
+  // Almoxarifado: quantidade ATIVA (sem estornos) já atendida por retirada/transferência de cada
+  // item. Só leitura de mapa.almox — campo derivado, nunca gravado no pedido (o pedido salva os
+  // campos um a um). Item sem almox => 0 => comportamento idêntico ao anterior.
+  var _qtAlmoxDe = function(m, it){
+    return almoxSomaAtivas(((m && m.almox) || {})[it.id]);
+  };
   var itensCombinadosPO = itensAtivos.map(function(it){
-    return Object.assign({}, it, { _mapaOrigemId: mapa.id, _mapaOrigemNumero: mapa.numero });
+    return Object.assign({}, it, { _mapaOrigemId: mapa.id, _mapaOrigemNumero: mapa.numero, _qtAlmox: _qtAlmoxDe(mapa, it) });
   });
   mapasAdicionaisPO.forEach(function(mapaId){
     var m = (mapas||[]).find(function(mm){ return mm && mm.id === mapaId; });
     if (!m) return;
     (m.itens||[]).filter(function(it){ return !it.excluido; }).forEach(function(it){
-      itensCombinadosPO.push(Object.assign({}, it, { _mapaOrigemId: m.id, _mapaOrigemNumero: m.numero }));
+      itensCombinadosPO.push(Object.assign({}, it, { _mapaOrigemId: m.id, _mapaOrigemNumero: m.numero, _qtAlmox: _qtAlmoxDe(m, it) }));
     });
   });
   // ── V4 CSS — Mapa de itens totalmente atendidos por pedidos ───────────────
@@ -3211,7 +3217,7 @@ var _useState27 = useState(init),
   }),
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
-    itens: (mapa && mapa.itens)||[],
+    itens: ((mapa && mapa.itens)||[]).map(function(it){ return Object.assign({}, it, { _qtAlmox: _qtAlmoxDe(mapa, it) }); }),
     itensPedidoOriginal: poEmEdicao.itens||[],
     mapas: mapas,
     // FIX CRÍTICO: excluir o próprio pedido do cálculo de "já pedido" — senão o sistema

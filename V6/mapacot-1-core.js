@@ -1812,8 +1812,10 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
           var dadosMapa = fromAtend || fromId || fromDesc || {};
           qtDoItem = (dadosMapa.qtTotal!==undefined && dadosMapa.qtTotal!==null) ? Number(dadosMapa.qtTotal)||0 : null;
         }
-        iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||'',qT:qtDoItem,qP:0,qA:0,vl:0,fn:{}};
+        iM[k]={desc:it.descricao||'',det:it.detalhe||'',unid:it.unid||'',qT:qtDoItem,qP:0,qA:0,vl:0,fn:{},ids:{},qAlmox:0};
       }
+      // Almoxarifado (só leitura): soma uma vez por item_id distinto; item sem registro => 0.
+      if(it.item_id && !iM[k].ids[it.item_id]){ iM[k].ids[it.item_id]=1; iM[k].qAlmox+=Number((itensAtendMap[it.item_id]||{}).qtAlmox)||0; }
       var q=Number(it.qt_pedida)||0;
       iM[k].qP+=q; iM[k].vl+=Number(it.vl_total)||0;
       if(po.status!=='cancelado') iM[k].qA+=q; // Comprometida = qualquer PO ativo
@@ -1821,10 +1823,11 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
       iM[k].fn[po.fornecedor_nome]=(iM[k].fn[po.fornecedor_nome]||0)+q;
     });
   });
+  var temAlmox=Object.values(iM).some(function(x){ return x.qAlmox>0; });
   var iR=Object.values(iM).sort(function(a,b){ return a.desc.localeCompare(b.desc); }).map(function(ins,i){
     var qd=ins.qA-(ins.qR||0); var pc=ins.qA>0?Math.round((ins.qR||0)/ins.qA*100):0; // qd = comprometida mas nao recebida
     var qTotalStr = (ins.qT!==null && ins.qT!==undefined) ? String(ins.qT) : '\u2014';
-    var qPend = (ins.qT!==null && ins.qT!==undefined) ? Math.max(0, ins.qT - ins.qA) : null;
+    var qPend = (ins.qT!==null && ins.qT!==undefined) ? Math.max(0, ins.qT - ins.qA - ins.qAlmox) : null;
     var qPendStr = qPend!==null ? String(qPend) : '\u2014';
     var qPendColor = qPend===null ? '#888' : qPend>0 ? '#c0392b' : '#3B6D11';
     // FIX 5: Sem espaço quando unidade está vazia
@@ -1834,6 +1837,7 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
       +'<td style="text-align:center">'+esc(ins.unid)+'</td>'
       +'<td style="text-align:center;font-weight:bold;color:#2a5298">'+qTotalStr+'</td>'
       +'<td style="text-align:center;font-weight:bold;color:#3B6D11">'+ins.qA+'</td>'
+      +(temAlmox?'<td style="text-align:center;font-weight:bold;color:#1a4aa0">'+(ins.qAlmox>0?ins.qAlmox:'\u2014')+'</td>':'')
       +'<td style="text-align:center;font-weight:bold;color:'+qPendColor+'">'+qPendStr+'</td>'
       +'<td style="text-align:center;font-weight:bold;color:#3B6D11">'+(ins.qR||0)+'</td>'
       +'<td style="text-align:center;font-weight:bold;color:'+(qd>0?'#185FA5':'#3B6D11')+'">'+qd+'</td>'
@@ -1874,7 +1878,9 @@ var buildRelatorioPDF = function(pedidosFilt, rf, itensDoMapa, itensAtendMap) {
     +'<h3 style="color:#7c3aed;border-bottom:2px solid #7c3aed">CONSOLIDADO POR INSUMO</h3>'
     +(Object.keys(iM).length===0?'<p style="color:#888;text-align:center;padding:20px">Sem insumos para exibir.</p>'
       :'<table><thead><tr><th class="p">Insumo / Detalhe</th><th class="p" style="text-align:center">Un.</th>'
-      +'<th class="p" style="text-align:center">Qt.Total</th><th class="p" style="text-align:center">Qt.Atendida</th><th class="p" style="text-align:center;background:#5b21b6">Qt.Pendente</th>'
+      +'<th class="p" style="text-align:center">Qt.Total</th><th class="p" style="text-align:center">Qt.Atendida</th>'
+      +(temAlmox?'<th class="p" style="text-align:center;background:#1a4aa0">Qt.Almox.</th>':'')
+      +'<th class="p" style="text-align:center;background:#5b21b6">Qt.Pendente</th>'
       +'<th class="p" style="text-align:center">Qt.Recebida</th><th class="p" style="text-align:center">Qt.A Receber</th><th class="p" style="text-align:center">% Recebido</th>'
       +'<th class="p" style="text-align:right">Vl.Total</th><th class="p">Fornecedores</th>'
       +'</tr></thead><tbody>'+iR+'</tbody></table>')
