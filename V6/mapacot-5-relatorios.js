@@ -437,7 +437,7 @@ function gerarRelatorioAlmox(regs, f) {
     "tr.est td{color:#999;text-decoration:line-through;background:#fafafa}tr.tot td{background:#f2f5fb;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
     ".tg{font-size:8px;background:#fdecea;color:#a32d2d;border-radius:8px;padding:0 5px;text-decoration:none;display:inline-block}.rod{margin-top:10px;color:#777;font-size:9px}" +
     ".dia{background:#2a5298;color:#fff;padding:5px 8px;font-weight:700;font-size:11px;margin-top:12px;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
-    ".dia.geral{background:#5b6f99}tr.mult td{background:#fffbe6;-webkit-print-color-adjust:exact;print-color-adjust:exact}table.fx{table-layout:fixed}table.fx td,table.fx th{overflow-wrap:anywhere}@media screen{.sec{margin-top:40px;padding-top:22px;border-top:4px solid #2a5298}}" +
+    ".dia.geral{background:#5b6f99}tr.mult td{background:#fffbe6;-webkit-print-color-adjust:exact;print-color-adjust:exact}table.fx{table-layout:fixed}table.fx td,table.fx th{overflow-wrap:anywhere}@media screen{html{background:#e9edf5}body{max-width:1240px;margin:18px auto;padding:22px 30px 30px;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.18);font-size:12px}table{font-size:11.5px}th{font-size:10px}.meta{font-size:11px}.rod{font-size:10.5px}.sec{margin-top:40px;padding-top:22px;border-top:4px solid #2a5298}}" +
     ".tg2{font-size:8px;background:#fff3c4;color:#7a5a00;border-radius:8px;padding:0 5px;display:inline-block;margin-left:4px}.ac{color:#555}.dia-wrap{page-break-inside:avoid}</style>";
   function totaisPorUnid(lista) {
     var t = {}, ordem = [];
