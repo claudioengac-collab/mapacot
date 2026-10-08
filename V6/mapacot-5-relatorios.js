@@ -396,16 +396,38 @@ function coletarRetiradasAlmox(mapas, f) {
       if (!regs || !regs.length) return;
       var txtItem = ((it.descricao || "") + " " + (it.detalhe || "")).toUpperCase();
       if (insF && txtItem.indexOf(insF) === -1) return;
-      regs.forEach(function (r) {
+      // PENDENTE (só almoxarifado): acumulado, retirada por retirada, de TODAS as retiradas do item
+      // (calculado ANTES dos filtros de período/obra/insumo/estornadas, senão o número sairia errado).
+      // Estornadas nunca entram na soma. Não consulta pedidos.
+      var _qtSolicItem = parseNumBR(it.qt) || 0;
+      var _ordem = [];
+      regs.forEach(function (r, ix) { if (r) _ordem.push({ r: r, ix: ix }); });
+      _ordem.sort(function (a, b) {
+        var da = a.r.data || "", db = b.r.data || "";
+        if (da !== db) return da < db ? -1 : 1;
+        return a.ix - b.ix;
+      });
+      var _acum = 0, _acumPorReg = {};
+      _ordem.forEach(function (o) {
+        if (!o.r.estornado) _acum = Math.round((_acum + (Number(o.r.qt) || 0)) * 1000) / 1000;
+        _acumPorReg[o.ix] = o.r.estornado ? null : _acum;
+      });
+      regs.forEach(function (r, ix) {
         if (!r) return;
         if (r.estornado && f.estornadas === false) return;
         var dk = almoxDataLocalKey(r.data);
         if (f.inicio && (!dk || dk < f.inicio)) return;
         if (f.fim && (!dk || dk > f.fim)) return;
+        var _at = _acumPorReg[ix];
         out.push({
           obra: m.obra || "", mapaNum: m.numero, itemNum: it.num, descricao: it.descricao || "", detalhe: it.detalhe || "",
-          unid: it.unid || "", qtSolic: parseNumBR(it.qt) || 0, qt: Number(r.qt) || 0, data: r.data, dk: dk,
-          por: r.por || "", obs: r.obs || "", estornado: !!r.estornado
+          unid: it.unid || "", qtSolic: _qtSolicItem, qt: Number(r.qt) || 0, data: r.data, dk: dk,
+          por: r.por || "", obs: r.obs || "", estornado: !!r.estornado,
+          chave: String(m.id || m.numero) + "|" + String(it.id),
+          itemExcluido: !!it.excluido,
+          atend: (_at === null || _at === undefined) ? null : _at,
+          pend: (_at === null || _at === undefined) ? null : Math.max(0, Math.round((_qtSolicItem - _at) * 1000) / 1000),
+          excede: (_at === null || _at === undefined) ? 0 : Math.max(0, Math.round((_at - _qtSolicItem) * 1000) / 1000)
         });
       });
     });
@@ -438,7 +460,7 @@ function gerarRelatorioAlmox(regs, f) {
     ".tg{font-size:8px;background:#fdecea;color:#a32d2d;border-radius:8px;padding:0 5px;text-decoration:none;display:inline-block}.rod{margin-top:10px;color:#777;font-size:9px}" +
     ".dia{background:#2a5298;color:#fff;padding:5px 8px;font-weight:700;font-size:11px;margin-top:12px;display:flex;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
     ".dia.geral{background:#5b6f99}tr.mult td{background:#fffbe6;-webkit-print-color-adjust:exact;print-color-adjust:exact}table.fx{table-layout:fixed}table.fx td,table.fx th{overflow-wrap:anywhere}@media screen{html{background:#e9edf5}body{max-width:1240px;margin:18px auto;padding:22px 30px 30px;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.18);font-size:12px}table{font-size:11.5px}th{font-size:10px}.meta{font-size:11px}.rod{font-size:10.5px}.sec{margin-top:40px;padding-top:22px;border-top:4px solid #2a5298}}" +
-    ".tg2{font-size:8px;background:#fff3c4;color:#7a5a00;border-radius:8px;padding:0 5px;display:inline-block;margin-left:4px}.ac{color:#555}.dia-wrap{page-break-inside:avoid}</style>";
+    ".pp{color:#b34700;font-weight:700}.pz{color:#3b6d11;font-weight:700}.exc{font-size:8px;background:#e3f0ff;color:#0b5fa5;border-radius:8px;padding:0 5px;display:inline-block;margin-left:3px}.tg2{font-size:8px;background:#fff3c4;color:#7a5a00;border-radius:8px;padding:0 5px;display:inline-block;margin-left:4px}.ac{color:#555}.dia-wrap{page-break-inside:avoid}</style>";
   function totaisPorUnid(lista) {
     var t = {}, ordem = [];
     lista.forEach(function (r) {
@@ -449,10 +471,33 @@ function gerarRelatorioAlmox(regs, f) {
     });
     return ordem.map(function (u) { return almoxFmtNum(t[u]) + " " + esc(u); }).join(" · ") || "0";
   }
+  function celulaPend(r) {
+    if (r.estornado) return "<td class=\"n\">\u2014</td>";
+    if (r.itemExcluido) return "<td class=\"n\">\u2014 <span class=\"tg2\">ITEM EXCLU\u00cdDO</span></td>";
+    if (r.pend === null || r.pend === undefined) return "<td class=\"n\">\u2014</td>";
+    if (r.pend > 0) return "<td class=\"n\"><span class=\"pp\">" + almoxFmtNum(r.pend) + "</span></td>";
+    return "<td class=\"n\"><span class=\"pz\">\u2714 0</span>" + (r.excede > 0 ? "<span class=\"exc\">EXCEDE +" + almoxFmtNum(r.excede) + "</span>" : "") + "</td>";
+  }
+  // Total do pendente da obra: posição FINAL de cada item (última retirada não estornada), por unidade.
+  function pendentesPorUnid(lista) {
+    var ult = {}, ordemK = [];
+    lista.forEach(function (r) {
+      if (r.estornado || r.itemExcluido || r.pend === null || r.pend === undefined) return;
+      if (!(r.chave in ult)) ordemK.push(r.chave);
+      ult[r.chave] = r;
+    });
+    var t = {}, ordemU = [];
+    ordemK.forEach(function (k) {
+      var r = ult[k], u = r.unid || "\u2014";
+      if (!(u in t)) { t[u] = 0; ordemU.push(u); }
+      t[u] = Math.round((t[u] + r.pend) * 1000) / 1000;
+    });
+    return ordemU.map(function (u) { return almoxFmtNum(t[u]) + " " + esc(u); }).join(" \u00b7 ") || "0";
+  }
   // Monta o corpo de UMA visão. A opção "todas" chama esta função 3 vezes e junta (cada uma em página nova).
   // Larguras fixas: as tabelas de obras/dias diferentes ficam com as colunas alinhadas entre si.
   var cgDia = "<colgroup><col style=\"width:38%\"><col style=\"width:6%\"><col style=\"width:10%\"><col style=\"width:16%\"><col style=\"width:30%\"></colgroup>";
-  var cgDet = "<colgroup><col style=\"width:8%\"><col style=\"width:6%\"><col style=\"width:5%\"><col style=\"width:30%\"><col style=\"width:5%\"><col style=\"width:9%\"><col style=\"width:11%\"><col style=\"width:17%\"><col style=\"width:9%\"></colgroup>";
+  var cgDet = "<colgroup><col style=\"width:8%\"><col style=\"width:6%\"><col style=\"width:5%\"><col style=\"width:26%\"><col style=\"width:5%\"><col style=\"width:8%\"><col style=\"width:10%\"><col style=\"width:15%\"><col style=\"width:8%\"><col style=\"width:9%\"></colgroup>";
   function montarCorpo(visao) {
   var corpo = "";
   if (visao === "resumo") {
@@ -536,13 +581,13 @@ function gerarRelatorioAlmox(regs, f) {
       var linhas = lista.map(function (r) {
         return "<tr" + (r.estornado ? " class=\"est\"" : "") + "><td>" + almoxFmtData(r.data) + "</td><td>MP " + esc(r.mapaNum) + "</td><td>" + esc(r.itemNum) + "</td><td>" +
           esc(r.descricao + (r.detalhe ? " — " + r.detalhe : "")) + "</td><td>" + esc(r.unid) + "</td><td class=\"n\">" + (r.estornado ? "" : "<b>") + almoxFmtNum(r.qt) + (r.estornado ? "" : "</b>") +
-          "</td><td>" + esc(r.por) + "</td><td>" + esc(r.obs) + (r.estornado ? " <span class=\"tg\">ESTORNADA</span>" : "") + "</td><td class=\"n\">" + almoxFmtNum(r.qtSolic) + "</td></tr>";
+          "</td><td>" + esc(r.por) + "</td><td>" + esc(r.obs) + (r.estornado ? " <span class=\"tg\">ESTORNADA</span>" : "") + "</td><td class=\"n\">" + almoxFmtNum(r.qtSolic) + "</td>" + celulaPend(r) + "</tr>";
       }).join("");
-      return "<div class=\"ob\">OBRA: " + esc(o) + "</div><table class=\"fx\">" + cgDet + "<tr><th>Data</th><th>Mapa</th><th>Item</th><th>Insumo</th><th>Un.</th><th class=\"n\">Qtd. retirada</th><th>Retirado por</th><th>Observação</th><th class=\"n\">Solicitado</th></tr>" +
-        linhas + "<tr class=\"tot\"><td colspan=\"5\">TOTAL DA OBRA (sem estornadas)</td><td class=\"n\" colspan=\"4\" style=\"text-align:left\">" + totaisPorUnid(lista) + "</td></tr></table>";
+      return "<div class=\"ob\">OBRA: " + esc(o) + "</div><table class=\"fx\">" + cgDet + "<tr><th>Data</th><th>Mapa</th><th>Item</th><th>Insumo</th><th>Un.</th><th class=\"n\">Qtd. retirada</th><th>Retirado por</th><th>Observação</th><th class=\"n\">Solicitado</th><th class=\"n\">Pendente</th></tr>" +
+        linhas + "<tr class=\"tot\"><td colspan=\"5\">TOTAL DA OBRA (sem estornadas)</td><td class=\"n\" colspan=\"5\" style=\"text-align:left\">Retirado: " + totaisPorUnid(lista) + " &nbsp;|&nbsp; Pendente: " + pendentesPorUnid(lista) + "</td></tr></table>";
     }).join("");
     corpo = "<h1>RELATÓRIO DE ATENDIMENTO PELO ALMOXARIFADO</h1><div class=\"meta\">" + meta + "</div>" + blocos +
-      "<div class=\"rod\">Totais por unidade: unidades diferentes nunca são somadas entre si.</div>";
+      "<div class=\"rod\">Totais por unidade: unidades diferentes nunca são somadas entre si.<br>Pendente = Solicitado \u2212 total j\u00e1 retirado do item no almoxarifado (acumulado at\u00e9 esta retirada; estornadas n\u00e3o contam). N\u00e3o considera pedidos de compra.</div>";
   }
   return corpo;
   }
