@@ -169,6 +169,235 @@ function ModalAlmox(_refAm) {
           React.createElement("span", { style: { flex: 1 } }),
           React.createElement("button", { "data-registrar": "1", onClick: registrar, style: { background: "#1a4aa0", color: "#fff", border: "none", borderRadius: 4, padding: "8px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "Registrar")))));
 }
+// NOVO (pedido do Claudio, 08/10/2026 — transferência do almoxarifado em LOTE): o ícone 📦 abre
+// uma janela com TODOS os itens do mapa; marcam-se os que saem do almoxarifado, ajusta-se a
+// quantidade de cada um e "Transferir" grava tudo de uma vez (uma retirada por item, no MESMO
+// formato de mapa.almox já existente, mais o campo "lote"). A janela de um item (ModalAlmox, logo
+// acima) continua intacta e abre pelo link "histórico" de cada linha (estorno / pedidos do item).
+// Regra de saldo idêntica à da janela de um item: quantidade nunca passa de
+// solicitado − pedido − almoxarifado ativo.
+function almoxFaltaItem(dados) {
+  var d = dados || {};
+  return Math.max(0, Math.round(((d.qtTotal || 0) - (d.qtPedida || 0) - (d.qtAlmox || 0)) * 1000) / 1000);
+}
+function ModalAlmoxLote(_refLt) {
+  var h = React.createElement;
+  var todosItens = _refLt.itens || [], dadosMap = _refLt.dadosMap || {}, almox = _refLt.almox || {};
+  var titulo = _refLt.titulo || "", itemFoco = _refLt.itemFoco || null;
+  var onTransferir = _refLt.onTransferir, onHistorico = _refLt.onHistorico, onClose = _refLt.onClose;
+  // Itens excluídos (✂) não entram na lista; os "ocultos" (👁) só estão escondidos na tela, entram.
+  var itens = todosItens.filter(function (i) { return i && !i.excluido; });
+  var _e = React.useState(function () {
+    var s = {}, q = {};
+    if (itemFoco) {
+      var fl = almoxFaltaItem(dadosMap[itemFoco]);
+      var existe = itens.some(function (i) { return i.id === itemFoco; });
+      if (existe && fl > 0) { s[itemFoco] = true; q[itemFoco] = String(fl).replace(".", ","); }
+    }
+    return { sel: s, qtd: q };
+  });
+  var est = _e[0], setEst = _e[1];
+  var _b = React.useState(""), busca = _b[0], setBusca = _b[1];
+  var _so = React.useState(false), soSaldo = _so[0], setSoSaldo = _so[1];
+  var _p = React.useState(""), por = _p[0], setPor = _p[1];
+  var _o = React.useState(""), obs = _o[0], setObs = _o[1];
+  var _w = React.useState(typeof window !== "undefined" ? window.innerWidth : 1200), larg = _w[0], setLarg = _w[1];
+  var enviandoRef = React.useRef(false);
+  // Depois de transferir, a janela fica ~0,35 s com o botão travado ("Gravando…") antes de fechar:
+  // um duplo clique cai no botão travado em vez de "atravessar" para o mapa que está por trás.
+  var _en = React.useState(false), enviando = _en[0], setEnviando = _en[1];
+  var listaRef = React.useRef(null);
+  React.useEffect(function () {
+    var f = function () { setLarg(window.innerWidth); };
+    window.addEventListener("resize", f);
+    return function () { window.removeEventListener("resize", f); };
+  }, []);
+  React.useEffect(function () {
+    try {
+      var el = listaRef.current && listaRef.current.querySelector('[data-lote-foco="1"]');
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "center" });
+    } catch (e) {}
+  }, []);
+  var compacto = larg < 640;
+
+  var linhas = itens.map(function (it) {
+    var d = dadosMap[it.id] || {};
+    var falta = almoxFaltaItem(d);
+    var semQt = !(d.qtTotal > 0);
+    var off = semQt || falta <= 0;
+    var on = !!est.sel[it.id] && !off;
+    var v = on ? parseNumBR(est.qtd[it.id]) : null;
+    var erro = "";
+    if (on) {
+      if (isNaN(v) || !(v > 0)) erro = "Informe a quantidade";
+      else if (v > falta + 0.0000001) erro = "Máx. " + fmtQtdSaldo(falta);
+    }
+    return { it: it, d: d, falta: falta, semQt: semQt, off: off, on: on, v: v, erro: erro, nHist: ((almox[it.id]) || []).length };
+  });
+  var termo = busca.trim().toUpperCase();
+  var visiveis = linhas.filter(function (l) {
+    if (soSaldo && l.off) return false;
+    if (!termo) return true;
+    return ((l.it.descricao || "") + " " + (l.it.detalhe || "") + " " + (l.it.num != null ? l.it.num : "")).toUpperCase().indexOf(termo) >= 0;
+  });
+  var nComSaldo = linhas.filter(function (l) { return !l.off; }).length;
+  var marcados = linhas.filter(function (l) { return l.on; });
+  var temErro = marcados.some(function (l) { return !!l.erro; });
+  var porUnid = {}, ordemUnid = [];
+  marcados.forEach(function (l) {
+    if (l.erro) return;
+    var u = (l.it.unid || "").trim().toUpperCase() || "(SEM UN.)";
+    if (!(u in porUnid)) { porUnid[u] = 0; ordemUnid.push(u); }
+    porUnid[u] = Math.round((porUnid[u] + l.v) * 1000) / 1000;
+  });
+
+  function marcar(id, on, falta) {
+    setEst(function (p) {
+      var s = Object.assign({}, p.sel), q = Object.assign({}, p.qtd);
+      s[id] = !!on;
+      if (on && (q[id] === undefined || q[id] === null || q[id] === "")) q[id] = String(falta).replace(".", ",");
+      return { sel: s, qtd: q };
+    });
+  }
+  function digitar(id, v) {
+    var limpo = String(v).replace(/[^0-9,]/g, "");
+    var i = limpo.indexOf(",");
+    if (i >= 0) limpo = limpo.slice(0, i + 1) + limpo.slice(i + 1).replace(/,/g, "");
+    setEst(function (p) { var q = Object.assign({}, p.qtd); q[id] = limpo; return { sel: p.sel, qtd: q }; });
+  }
+  function marcarTodos() {
+    setEst(function (p) {
+      var s = Object.assign({}, p.sel), q = Object.assign({}, p.qtd);
+      visiveis.forEach(function (l) {
+        if (l.off) return;
+        s[l.it.id] = true;
+        if (q[l.it.id] === undefined || q[l.it.id] === null || q[l.it.id] === "") q[l.it.id] = String(l.falta).replace(".", ",");
+      });
+      return { sel: s, qtd: q };
+    });
+  }
+  function limpar() { setEst({ sel: {}, qtd: {} }); }
+  function transferir() {
+    if (enviandoRef.current) return;
+    var ok = linhas.filter(function (l) { return l.on && !l.erro; });
+    if (!ok.length || temErro) return;
+    enviandoRef.current = true;
+    setEnviando(true);
+    var agora = new Date().toISOString(), lote = uid();
+    var porT = por.trim().toUpperCase(), obsT = obs.trim().toUpperCase();
+    onTransferir(ok.map(function (l) {
+      return { itemId: l.it.id, reg: { id: uid(), qt: l.v, data: agora, por: porT, obs: obsT, estornado: false, lote: lote } };
+    }));
+    setTimeout(function () { onClose(); }, 350);
+  }
+
+  var inpSt = { border: "1px solid #bbb", borderRadius: 4, padding: "6px 8px", fontSize: 12, boxSizing: "border-box" };
+  var thSt = { position: "sticky", top: 0, background: "#eef2fa", color: "#2a5298", fontSize: 9, padding: "6px 5px", textAlign: "center", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: "1px solid #d5dbea", zIndex: 1 };
+  var tdSt = { padding: 5, borderBottom: "1px solid #eee", textAlign: "center", verticalAlign: "middle" };
+  var btnCinza = { background: "#f0f0f0", border: "none", borderRadius: 4, padding: "7px 10px", fontSize: 11, cursor: "pointer", color: "#333" };
+  var corLinha = function (l) { return l.erro ? "#fff1f0" : (l.on ? "#eaf3ff" : (l.off ? "#fafafa" : "#fff")); };
+  var pillAtendido = function (l) {
+    return h("span", { "data-lote-atendido": "1", style: { background: "#e7f3df", color: "#3b6d11", padding: "1px 8px", borderRadius: 99, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap" } }, l.semQt ? "SEM QT." : "✔ 100% ATENDIDO");
+  };
+  var linkHist = function (l) {
+    if (!(l.nHist > 0)) return null;
+    return h("span", { "data-lote-hist": l.it.id, onClick: function () { onHistorico(l.it.id); }, title: "Abre a janela do item (retiradas e estorno)", style: { color: "#2a5298", fontSize: 11, cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" } }, "histórico (" + l.nHist + ")");
+  };
+  var campoQt = function (l, estiloExtra) {
+    return h("input", {
+      "data-lote-qt": l.it.id, value: l.on ? (est.qtd[l.it.id] || "") : "", disabled: !l.on, inputMode: "decimal",
+      placeholder: l.on ? "0" : "",
+      onChange: function (e) { digitar(l.it.id, e.target.value); },
+      style: Object.assign({}, inpSt, { width: 84, textAlign: "center", borderColor: l.erro ? "#c0392b" : "#bbb", background: l.on ? "#fff" : "#f3f3f3" }, estiloExtra || {})
+    });
+  };
+  var chk = function (l) {
+    return h("input", {
+      type: "checkbox", "data-lote-chk": l.it.id, checked: l.on, disabled: l.off,
+      onChange: function (e) { marcar(l.it.id, e.target.checked, l.falta); },
+      style: { width: 16, height: 16, cursor: l.off ? "not-allowed" : "pointer", accentColor: "#1a4aa0" }
+    });
+  };
+  var descr = function (l) {
+    return h("div", { style: { textAlign: "left" } },
+      h("b", { style: { fontSize: 12 } }, l.it.descricao || "(sem descrição)"),
+      l.it.detalhe ? h("div", { style: { fontSize: 9, color: "#888" } }, l.it.detalhe) : null);
+  };
+
+  var corpoLista;
+  if (visiveis.length === 0) {
+    corpoLista = h("div", { "data-lote-vazio": "1", style: { padding: 18, color: "#999", textAlign: "center", fontSize: 12 } }, "Nenhum item encontrado.");
+  } else if (!compacto) {
+    corpoLista = h("table", { style: { borderCollapse: "collapse", width: "100%", fontSize: 12 } },
+      h("thead", null, h("tr", null,
+        h("th", { style: Object.assign({}, thSt, { width: 34 }) }, ""), h("th", { style: thSt }, "Nº"),
+        h("th", { style: Object.assign({}, thSt, { textAlign: "left" }) }, "Insumo"), h("th", { style: thSt }, "UN"),
+        h("th", { style: thSt }, "Solic."), h("th", { style: thSt }, "Pedido"), h("th", { style: thSt }, "Almox."),
+        h("th", { style: thSt }, "Falta"), h("th", { style: thSt }, "Qtd. a transferir"), h("th", { style: thSt }, ""))),
+      h("tbody", null, visiveis.map(function (l) {
+        var foco = l.it.id === itemFoco;
+        var cor = l.off ? { color: "#999" } : {};
+        return h("tr", { key: l.it.id, "data-lote-linha": l.it.id, "data-lote-foco": foco ? "1" : undefined, "data-lote-erro": l.erro ? "1" : undefined, style: { background: corLinha(l) } },
+          h("td", { style: Object.assign({}, tdSt, foco ? { boxShadow: "inset 4px 0 0 #e8a200" } : {}) }, chk(l)),
+          h("td", { style: Object.assign({}, tdSt, cor) }, l.it.num),
+          h("td", { style: Object.assign({}, tdSt, cor, { textAlign: "left" }) }, descr(l)),
+          h("td", { style: Object.assign({}, tdSt, cor) }, l.it.unid || ""),
+          h("td", { style: Object.assign({}, tdSt, cor) }, fmtQtdSaldo(l.d.qtTotal || 0)),
+          h("td", { style: Object.assign({}, tdSt, { color: l.d.qtPedida > 0 ? "#186818" : "#999", fontWeight: 700 }) }, l.d.qtPedida > 0 ? fmtQtdSaldo(l.d.qtPedida) : "—"),
+          h("td", { style: Object.assign({}, tdSt, { color: l.d.qtAlmox > 0 ? "#1a4aa0" : "#999", fontWeight: 700 }) }, l.d.qtAlmox > 0 ? fmtQtdSaldo(l.d.qtAlmox) : "—"),
+          h("td", { "data-lote-falta": String(l.falta), style: tdSt }, l.off ? pillAtendido(l) : h("span", { style: { color: "#b34700", fontWeight: 800 } }, fmtQtdSaldo(l.falta))),
+          h("td", { style: tdSt }, l.off ? null : h(React.Fragment, null, campoQt(l), l.erro ? h("span", { "data-lote-msg": "1", style: { display: "block", color: "#c0392b", fontSize: 10, marginTop: 2 } }, l.erro) : null)),
+          h("td", { style: tdSt }, linkHist(l)));
+      })));
+  } else {
+    corpoLista = visiveis.map(function (l) {
+      var foco = l.it.id === itemFoco;
+      return h("div", { key: l.it.id, "data-lote-linha": l.it.id, "data-lote-foco": foco ? "1" : undefined, "data-lote-erro": l.erro ? "1" : undefined,
+        style: { display: "grid", gridTemplateColumns: "22px 1fr 92px", gap: "4px 8px", padding: "8px 10px", borderBottom: "1px solid #eee", alignItems: "center", background: corLinha(l), color: l.off ? "#999" : "#222", boxShadow: foco ? "inset 4px 0 0 #e8a200" : "none" } },
+        chk(l),
+        h("div", { style: { fontSize: 12, lineHeight: 1.25 } }, h("b", null, l.it.num + " · " + (l.it.descricao || "(sem descrição)")), l.it.detalhe ? h("div", { style: { fontSize: 9, color: "#888" } }, l.it.detalhe) : null),
+        h("div", { style: { gridRow: "1 / 3", gridColumn: 3, textAlign: "center" } },
+          l.off ? pillAtendido(l) : h(React.Fragment, null, campoQt(l, { width: "100%", fontSize: 13 }), h("small", { "data-lote-msg": l.erro ? "1" : undefined, style: { display: "block", fontSize: 9, color: l.erro ? "#c0392b" : "#777" } }, l.erro || ((l.it.unid || "") + " · máx " + fmtQtdSaldo(l.falta))))),
+        h("div", { style: { gridColumn: 2, fontSize: 10, color: "#555" } },
+          "Solic. " + fmtQtdSaldo(l.d.qtTotal || 0) + " · Pedido " + fmtQtdSaldo(l.d.qtPedida || 0) + " · Almox. " + fmtQtdSaldo(l.d.qtAlmox || 0) + " · ",
+          h("b", { "data-lote-falta": String(l.falta), style: { color: "#b34700" } }, "Falta " + fmtQtdSaldo(l.falta)), l.nHist > 0 ? " · " : null, linkHist(l)));
+    });
+  }
+
+  var rotuloBtn = marcados.length === 0 ? "Transferir" : "Transferir " + marcados.length + (marcados.length === 1 ? " item" : " itens");
+  var txtTotais = marcados.length === 0 ? "Nenhum item marcado."
+    : marcados.length + (marcados.length === 1 ? " item marcado" : " itens marcados") + (ordemUnid.length ? " · Total: " : "");
+  var btnOff = marcados.length === 0 || temErro || enviando;
+  return h("div", {
+    "data-modal-almox-lote": "1",
+    style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9400, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: compacto ? 6 : 12, overscrollBehavior: "none" }
+  },
+    h("div", { style: { background: "#fff", borderRadius: 8, overflow: "hidden", width: "100%", maxWidth: 900, maxHeight: "94vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" } },
+      h("div", { style: { background: "#2a5298", color: "#fff", padding: "11px 14px", fontWeight: 700, fontSize: compacto ? 11 : 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flex: "none" } },
+        h("span", null, "📦 TRANSFERÊNCIA DO ALMOXARIFADO" + (titulo ? " — " + titulo : "")),
+        h("span", { "data-fechar-lote": "1", onClick: onClose, style: { cursor: "pointer", fontSize: 16 } }, "✕")),
+      !compacto && h("div", { style: { padding: "8px 14px", background: "#f6f8fc", borderBottom: "1px solid #e0e5f0", color: "#445", fontSize: 11, flex: "none" } },
+        "Marque os itens que saem do almoxarifado e confira a quantidade de cada um. Ao clicar em ", h("b", null, "Transferir"), ", tudo é gravado ", h("b", null, "de uma vez"), " (ou nada é gravado, se algo estiver errado)."),
+      h("div", { style: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", padding: compacto ? "8px 10px" : "8px 14px", borderBottom: "1px solid #eee", flex: "none" } },
+        h("input", { "data-lote-busca": "1", value: busca, placeholder: "🔎 Buscar item…", onChange: function (e) { setBusca(e.target.value.toUpperCase()); }, style: Object.assign({}, inpSt, { flex: 1, minWidth: compacto ? "100%" : 200, textTransform: "uppercase" }) }),
+        h("label", { style: { fontSize: 11, color: "#444", display: "flex", gap: 5, alignItems: "center", cursor: "pointer" } },
+          h("input", { type: "checkbox", "data-lote-so-saldo": "1", checked: soSaldo, onChange: function (e) { setSoSaldo(e.target.checked); } }),
+          "Mostrar só itens com saldo (" + nComSaldo + " de " + linhas.length + ")"),
+        h("button", { "data-lote-marcar-todos": "1", onClick: marcarTodos, style: btnCinza }, "Marcar todos com saldo"),
+        h("button", { "data-lote-limpar": "1", onClick: limpar, style: btnCinza }, "Limpar seleção")),
+      h("div", { ref: listaRef, "data-lote-lista": "1", style: { overflow: "auto", flex: "1 1 auto", minHeight: 0 } }, corpoLista),
+      temErro && h("div", { "data-lote-erro-geral": "1", style: { background: "#fcebeb", color: "#c0392b", padding: "6px 14px", fontSize: 11, flex: "none" } }, "⚠ Corrija as linhas em vermelho para poder transferir. Nada é gravado enquanto houver erro."),
+      h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: compacto ? "8px 10px" : "10px 14px", borderTop: "1px solid #eee", background: "#fafbfe", flex: "none" } },
+        h("div", null, h("small", { style: { display: "block", fontSize: 9, color: "#777", marginBottom: 2, textTransform: "uppercase", fontWeight: 700 } }, compacto ? "Retirado por" : "Retirado por (vale para todos os marcados)"),
+          h("input", { "data-lote-por": "1", value: por, maxLength: 40, placeholder: "Retirado por", onChange: function (e) { setPor(e.target.value.toUpperCase()); }, style: Object.assign({}, inpSt, { width: "100%", textTransform: "uppercase" }) })),
+        h("div", null, h("small", { style: { display: "block", fontSize: 9, color: "#777", marginBottom: 2, textTransform: "uppercase", fontWeight: 700 } }, compacto ? "Observação" : "Observação (vale para todos os marcados)"),
+          h("input", { "data-lote-obs": "1", value: obs, maxLength: 80, placeholder: "Observação (OS...)", onChange: function (e) { setObs(e.target.value.toUpperCase()); }, style: Object.assign({}, inpSt, { width: "100%", textTransform: "uppercase" }) }))),
+      h("div", { style: { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", padding: compacto ? "8px 10px" : "10px 14px", borderTop: "1px solid #ddd", background: "#fff", flex: "none" } },
+        h("div", { "data-lote-totais": "1", style: { flex: compacto ? "1 1 100%" : 1, fontSize: 12, color: "#223" } }, txtTotais,
+          ordemUnid.map(function (u, i) { return h("span", { key: u }, i > 0 ? " · " : "", h("b", { style: { color: "#1a4aa0" } }, fmtQtdSaldo(porUnid[u]) + " " + u)); })),
+        h("button", { "data-lote-cancelar": "1", onClick: onClose, style: { background: "#f0f0f0", color: "#333", border: "none", borderRadius: 4, padding: "9px 14px", fontSize: 12, cursor: "pointer", flex: compacto ? 1 : "none" } }, "Cancelar"),
+        h("button", { "data-lote-transferir": "1", onClick: transferir, disabled: btnOff, style: { background: btnOff ? "#9db3d6" : "#1a4aa0", color: "#fff", border: "none", borderRadius: 4, padding: "9px 18px", fontSize: 12, fontWeight: 700, cursor: btnOff ? "not-allowed" : "pointer", flex: compacto ? 2 : "none" } }, enviando ? "Gravando…" : rotuloBtn))));
+}
 function AnexoClipBtn(_refClip) {
   var qtd = _refClip.qtd,
     onClick = _refClip.onClick,
@@ -297,6 +526,8 @@ var _useState27 = useState(init),
   var _useStatePOFiltros=useState({obra:'',periodo:'',insumo:'',fornecedor:'',status:''}),pedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[0],setPedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[1];
   var _useStateTooltip=useState(null),tooltipItemId=_slicedToArray(_useStateTooltip,2)[0],setTooltipItemId=_slicedToArray(_useStateTooltip,2)[1];
   var _useStateAlmoxItem=useState(null),almoxItemId=_slicedToArray(_useStateAlmoxItem,2)[0],setAlmoxItemId=_slicedToArray(_useStateAlmoxItem,2)[1];
+  // Janela de transferência em lote (📦): null = fechada; { foco: id do item clicado }.
+  var _useStateAlmoxLote=useState(null),almoxLote=_slicedToArray(_useStateAlmoxLote,2)[0],setAlmoxLote=_slicedToArray(_useStateAlmoxLote,2)[1];
   // ───────────────────────────────────────────────────────────────────────────
   var _useStateIAD=useState({leituras:0,custo:0}),iaUsoDia=_slicedToArray(_useStateIAD,2)[0],setIaUsoDia=_slicedToArray(_useStateIAD,2)[1];
   useEffect(function(){ sbGetIaUsoDia().then(function(d){ setIaUsoDia(d); }); },[]);
@@ -744,6 +975,23 @@ var _useState27 = useState(init),
     update(function (m) {
       var a = _objectSpread({}, m.almox || {});
       a[itemId] = (a[itemId] || []).concat([reg]);
+      return _objectSpread(_objectSpread({}, m), {}, { almox: a });
+    });
+  };
+  // Lote: grava várias retiradas (uma por item) numa ÚNICA atualização do mapa => um único
+  // salvamento, tudo ou nada. lista = [{ itemId, reg }]. Itens que não existem mais no mapa são
+  // ignorados (defesa; a janela só lista itens existentes).
+  var almoxRegistrarLote = function almoxRegistrarLote(lista) {
+    if (!lista || !lista.length) return;
+    try { logEventoDiag("ALMOX lote registrado: " + lista.length + " item(ns)" + ((lista[0].reg && lista[0].reg.por) ? " por " + lista[0].reg.por : "")); } catch (e) {}
+    update(function (m) {
+      var a = _objectSpread({}, m.almox || {});
+      var ids = {};
+      (m.itens || []).forEach(function (i) { ids[i.id] = true; });
+      lista.forEach(function (x) {
+        if (!x || !ids[x.itemId]) return;
+        a[x.itemId] = (a[x.itemId] || []).concat([x.reg]);
+      });
       return _objectSpread(_objectSpread({}, m), {}, { almox: a });
     });
   };
@@ -1787,7 +2035,9 @@ var _useState27 = useState(init),
       }, _isExcluido ? "\uD83D\uDD12" : "\u2702"),
       /*#__PURE__*/React.createElement("span", {
         "data-btn-almox": "1",
-        onClick: function(){ setAlmoxItemId(item.id); },
+        // Item excluído (✂): continua abrindo a janela de um item (como antes), porque ele não
+        // aparece na lista do lote; assim o histórico/estorno dele segue acessível.
+        onClick: function(){ if (_isExcluido) setAlmoxItemId(item.id); else setAlmoxLote({ foco: item.id }); },
         title: "Atendimento do item (pedido + almoxarifado)",
         style: { cursor:"pointer", fontSize:13, marginLeft:2, userSelect:"none", display:"block", opacity: (_dadosAtend.qtAlmox>0) ? 1 : 0.45 }
       }, "\uD83D\uDCE6")), /*#__PURE__*/React.createElement("td", {
@@ -2960,6 +3210,17 @@ var _useState27 = useState(init),
       setShowLerIA(false);
     },
     onIaUso: function(d){ setIaUsoDia(function(prev){ return { leituras: prev.leituras+1, custo: prev.custo+(d.custo||0) }; }); }
+  }),
+  // ── JANELA DE TRANSFERÊNCIA EM LOTE (ícone 📦) ─────────────────────────────
+  almoxLote && /*#__PURE__*/React.createElement(ModalAlmoxLote, {
+    itens: mapa.itens || [],
+    dadosMap: itensAtendidosMap,
+    almox: mapa.almox || {},
+    titulo: "MAPA " + (mapa.numero != null ? mapa.numero : "") + (mapa.obra ? " · " + mapa.obra : ""),
+    itemFoco: almoxLote.foco,
+    onTransferir: function(lista){ almoxRegistrarLote(lista); },
+    onHistorico: function(itemId){ setAlmoxItemId(itemId); },
+    onClose: function(){ setAlmoxLote(null); }
   }),
   // ── JANELA DO ALMOXARIFADO (ícone 📦 da coluna COMPRA) ──────────────────────
   almoxItemId && (function(){
