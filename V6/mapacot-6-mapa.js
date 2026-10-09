@@ -505,6 +505,11 @@ var _useState27 = useState(init),
   var _useStatePOEdit=useState(null),poEmEdicao=_slicedToArray(_useStatePOEdit,2)[0],setPoEmEdicao=_slicedToArray(_useStatePOEdit,2)[1];
   var _useStatePOEShow=useState(false),showPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[0],setShowPedidoEdicao=_slicedToArray(_useStatePOEShow,2)[1];
   var _useStateCfgEd=useState({}),configEdicao=_slicedToArray(_useStateCfgEd,2)[0],setConfigEdicao=_slicedToArray(_useStateCfgEd,2)[1];
+  // NOVO (pedido do Claudio, 09/10/2026 — adicionar itens esquecidos a um pedido já criado): itens
+  // trazidos nesta edição (ainda NÃO gravados) e se a janela de escolha está aberta. Só existem
+  // enquanto a edição está aberta; zerados ao abrir, fechar e ao gravar. Nada disso vai para o banco.
+  var _useStateNovosEd=useState([]),itensNovosEdicao=_slicedToArray(_useStateNovosEd,2)[0],setItensNovosEdicao=_slicedToArray(_useStateNovosEd,2)[1];
+  var _useStateAddPO=useState(false),showAdicionarItensPO=_slicedToArray(_useStateAddPO,2)[0],setShowAdicionarItensPO=_slicedToArray(_useStateAddPO,2)[1];
   // FIX (pedido do Claudio, implementação alinhada com layout aprovado): rastreia quais OUTROS
   // mapas (da mesma obra) foram incluídos na seleção de itens do pedido em andamento. Fica vazio
   // ([]) na maior parte do tempo — só é usado enquanto o modal de criar pedido está aberto, e é
@@ -1350,6 +1355,23 @@ var _useState27 = useState(init),
     (m.itens||[]).filter(function(it){ return !it.excluido; }).forEach(function(it){
       itensCombinadosPO.push(Object.assign({}, it, { _mapaOrigemId: m.id, _mapaOrigemNumero: m.numero, _qtAlmox: _qtAlmoxDe(m, it) }));
     });
+  });
+  // NOVO (09/10/2026 — itens esquecidos): o mapa ABERTO entra na lista com os dados ao vivo (não a cópia
+  // salva); cada item trazido na edição é resolvido de novo a cada tela (descrição, quantidade, preço e
+  // almoxarifado sempre atuais). Sem item novo, "itensEdicaoComNovos" é idêntico ao que a edição sempre usou.
+  var mapasComAberto = (mapas||[]).map(function(m){ return (m && mapa && m.id === mapa.id) ? mapa : m; });
+  var novosEdicao = (itensNovosEdicao||[]).map(function(r){
+    var m = mapasComAberto.find(function(mm){ return mm && mm.id === r.mapaId; });
+    var it = m ? (m.itens||[]).find(function(i){ return i.id === r.id; }) : null;
+    return it ? { item: it, mapa: m } : null;
+  }).filter(Boolean);
+  var novosEdicaoPorId = {};
+  novosEdicao.forEach(function(x){ novosEdicaoPorId[x.item.id] = x; });
+  var itensEdicaoComNovos = ((mapa && mapa.itens)||[]).map(function(it){ return Object.assign({}, it, { _qtAlmox: _qtAlmoxDe(mapa, it) }); });
+  novosEdicao.forEach(function(x){
+    if (!itensEdicaoComNovos.some(function(i){ return i.id === x.item.id; })) {
+      itensEdicaoComNovos.push(Object.assign({}, x.item, { _mapaOrigemId: x.mapa.id, _mapaOrigemNumero: x.mapa.numero, _qtAlmox: _qtAlmoxDe(x.mapa, x.item) }));
+    }
   });
   // ── V4 CSS — Mapa de itens totalmente atendidos por pedidos ───────────────
   var itensAtendidosMap = {};
@@ -3520,8 +3542,15 @@ var _useState27 = useState(init),
   }),
   showPedidoEdicao && poEmEdicao && /*#__PURE__*/React.createElement(ModalPedidoStep2, {
     mapa: mapa,
-    itens: ((mapa && mapa.itens)||[]).map(function(it){ return Object.assign({}, it, { _qtAlmox: _qtAlmoxDe(mapa, it) }); }),
+    itens: itensEdicaoComNovos,
     itensPedidoOriginal: poEmEdicao.itens||[],
+    poEdicao: poEmEdicao,
+    itensNovosIds: novosEdicao.map(function(x){ return x.item.id; }),
+    onAdicionarItens: function(){
+      // atualiza os pedidos ao abrir (só troca a lista se a leitura deu certo — nunca zera por falha)
+      sbGetPedidosComStatus().then(function(res){ if (res && res.ok) setPedidos(res.lista||[]); });
+      setShowAdicionarItensPO(true);
+    },
     mapas: mapas,
     // FIX CRÍTICO: excluir o próprio pedido do cálculo de "já pedido" — senão o sistema
     // conta a quantidade que está sendo editada como se já tivesse sido processada,
@@ -3535,12 +3564,44 @@ var _useState27 = useState(init),
     poFinanceiro: poFinanceiro,
     onFinanceiro: setPoFinanceiro,
     onVoltar: function(){},
-    onClose: function(){ setShowPedidoEdicao(false); setPoEmEdicao(null); setPoFinanceiro({}); setConfigEdicao({}); },
+    onClose: function(){ setShowPedidoEdicao(false); setPoEmEdicao(null); setPoFinanceiro({}); setConfigEdicao({}); setItensNovosEdicao([]); setShowAdicionarItensPO(false); },
     onGerar: function(config, finConfig, onDone, formaPagamento, obsPedido){
       // Modo edição: recalcula itens e total a partir do config atual (igual ao fluxo novo)
       var itensEditados = [];
       var sub = 0;
       Object.keys(config).forEach(function(itemId){
+        // NOVO (09/10/2026 — itens esquecidos): item trazido nesta edição. Grava com os dados do PRÓPRIO
+        // item e do mapa DELE (mapa_id/mapa_numero), mesmo que não seja o mapa aberto agora — o ramo
+        // antigo abaixo descartaria em silêncio um item que não está no mapa aberto.
+        var novoRef = novosEdicaoPorId[itemId];
+        if (novoRef) {
+          (config[itemId]||[]).forEach(function(linha){
+            if(!linha.qt || Number(linha.qt)<=0) return;
+            var vlUnitN = Number(linha.vlUnit)||0;
+            var qtNN = Number(linha.qt)||0;
+            var vlTotN = vlUnitN * qtNN;
+            sub += vlTotN;
+            var existenteN = itensEditados.find(function(i){ return i.item_id === itemId; });
+            if (existenteN) {
+              existenteN.qt_pedida += qtNN;
+              existenteN.vl_total += vlTotN;
+            } else {
+              itensEditados.push({
+                item_id: itemId,
+                descricao: novoRef.item.descricao||'',
+                detalhe: novoRef.item.detalhe||'',
+                unid: novoRef.item.unid||'',
+                qt_pedida: qtNN,
+                qt_total: parseNumBR(novoRef.item.qt)||0,
+                vl_unit: vlUnitN,
+                vl_total: vlTotN,
+                mapa_id: novoRef.mapa.id,
+                mapa_numero: novoRef.mapa.numero
+              });
+            }
+          });
+          return;
+        }
         var item = ((mapa && mapa.itens)||[]).find(function(i){ return i.id===itemId; });
         if(!item) {
           // FIX (2ª parte do mesmo bug — achado ao testar a correção anterior): item de outro
@@ -3613,6 +3674,13 @@ var _useState27 = useState(init),
           }
         });
       });
+      var _novosParaSalvar = Object.keys(config).filter(function(id){ return !!novosEdicaoPorId[id]; });
+      var _semQt = _novosParaSalvar.filter(function(id){ return !(config[id]||[]).some(function(l){ return Number(l.qt) > 0; }); });
+      if (_semQt.length) {
+        if(onDone) onDone();
+        alert('Item novo sem quantidade:\n\n' + _semQt.map(function(id){ return '• ' + (novosEdicaoPorId[id].item.descricao || id); }).join('\n') + '\n\nInforme a quantidade ou remova o item do pedido.');
+        return;
+      }
         if(itensEditados.length === 0){
           if(onDone) onDone();
           alert('\u274C O pedido deve ter pelo menos um insumo. Adicione itens antes de salvar.');
@@ -3641,13 +3709,16 @@ var _useState27 = useState(init),
         forma_pagamento: formaPagamento||'',
         observacao: observacaoFinal
       };
-      logEventoDiag("PEDIDO editado: PO-" + String(poEmEdicao.numero).padStart(3,'0'));
+      var _executarSalvar = function(){
+      logEventoDiag("PEDIDO editado: PO-" + String(poEmEdicao.numero).padStart(3,'0') + (_novosParaSalvar.length ? " (+" + _novosParaSalvar.length + " item(ns) novo(s))" : ""));
       sbUpdatePedido(poEmEdicao.id, campos).then(function(){
         sbGetPedidos().then(function(d){ setPedidos(d||[]); });
         setShowPedidoEdicao(false);
         setPoEmEdicao(null);
         setPoFinanceiro({});
         setConfigEdicao({});
+        setItensNovosEdicao([]);
+        setShowAdicionarItensPO(false);
         if(onDone) onDone();
         alert('\u2705 Pedido PO-'+String(poEmEdicao.numero).padStart(3,'0')+' atualizado com sucesso!');
       }).catch(function(e){
@@ -3655,6 +3726,70 @@ var _useState27 = useState(init),
         logEventoDiag("\u2716 ERRO ao editar pedido PO-" + String(poEmEdicao.numero).padStart(3,'0') + ": " + (e && e.message ? e.message : "falha de conex\u00e3o"));
         alert('\u274C Erro ao salvar edi\u00e7\u00e3o do pedido. Verifique sua conex\u00e3o e tente novamente.');
       });
+      };
+      // Sem item novo: grava na hora, exatamente como sempre foi.
+      if (!_novosParaSalvar.length) { _executarSalvar(); return; }
+      // NOVO (09/10/2026 — itens esquecidos): com item novo, confere os pedidos DE NOVO antes de gravar
+      // (outra pessoa pode ter pedido o mesmo item enquanto esta tela estava aberta). Falhou a leitura
+      // ou ficou acima do disponível: NADA é gravado.
+      var _nomesNovos = _novosParaSalvar.map(function(id){ return novosEdicaoPorId[id].item.descricao || id; });
+      sbGetPedidosComStatus().then(function(res){
+        if (!res || !res.ok) {
+          if(onDone) onDone();
+          logEventoDiag("✖ Edição do PO-" + String(poEmEdicao.numero).padStart(3,'0') + " NÃO gravada: não foi possível conferir os pedidos");
+          alert('Não foi possível conferir os pedidos mais recentes (sem conexão ou falha ao ler).\n\nPor segurança, NADA foi gravado.\n\nVerifique a internet e clique em Gerar Pedidos de novo.');
+          return;
+        }
+        var outros = (res.lista||[]).filter(function(p){ return p.id !== poEmEdicao.id; });
+        var excessos = [];
+        _novosParaSalvar.forEach(function(id){
+          var ref = novosEdicaoPorId[id];
+          var d = apDisponivel(ref.mapa, ref.item, outros);
+          var q = apArred3((config[id]||[]).reduce(function(sm,l){ return sm+(Number(l.qt)||0); },0));
+          if (q > d.disp) excessos.push({ desc: ref.item.descricao || id, qt: q, disp: d.disp });
+        });
+        if (excessos.length) {
+          setPedidos(res.lista||[]);
+          if(onDone) onDone();
+          alert('Quantidade mudou — nada foi gravado.\n\nOs pedidos foram conferidos agora, antes de salvar:\n\n' + excessos.map(function(e){ return '• ' + e.desc + ': você digitou ' + e.qt + ', mas só há ' + e.disp + ' disponível(is) (outro pedido ou retirada do almoxarifado foi feito).'; }).join('\n') + '\n\nAjuste a quantidade e tente de novo.');
+          return;
+        }
+        if (poEmEdicao.status === 'emitido') {
+          if (!confirm('O PO-' + String(poEmEdicao.numero).padStart(3,'0') + ' já foi EMITIDO (enviado ao fornecedor).\n\nVocê está adicionando ' + _nomesNovos.length + ' item(ns): ' + _nomesNovos.join(', ') + '.\n\nDepois de salvar, será preciso enviar de novo o PDF atualizado para ' + (poEmEdicao.fornecedor_nome || 'o fornecedor') + '.\n\nSalvar mesmo assim?')) {
+            if(onDone) onDone();
+            return;
+          }
+        }
+        _executarSalvar();
+      });
+    }
+  }),
+  // NOVO (09/10/2026 — itens esquecidos): janela para escolher os itens a adicionar ao pedido em edição.
+  showAdicionarItensPO && poEmEdicao && /*#__PURE__*/React.createElement(ModalAdicionarItensPedido, {
+    po: poEmEdicao,
+    mapas: mapasComAberto,
+    pedidosSemEste: (pedidos||[]).filter(function(p){ return p.id !== poEmEdicao.id; }),
+    noPedido: (function(){
+      var o = {};
+      Object.keys(configEdicao||{}).forEach(function(id){ o[id] = apArred3((configEdicao[id]||[]).reduce(function(sm,l){ return sm+(Number(l.qt)||0); },0)); });
+      return o;
+    })(),
+    onClose: function(){ setShowAdicionarItensPO(false); },
+    onConfirmar: function(lista){
+      setItensNovosEdicao(function(prev){
+        var n = prev.slice();
+        lista.forEach(function(x){ if (!n.some(function(r){ return r.id === x.item.id; })) n.push({ id: x.item.id, mapaId: x.mapa.id }); });
+        return n;
+      });
+      setConfigEdicao(function(prev){
+        var n = Object.assign({}, prev);
+        lista.forEach(function(x){
+          if (n[x.item.id]) return; // já está no pedido: nunca sobrescreve
+          n[x.item.id] = [{ fornId: poEmEdicao.fornecedor_id, fornNome: poEmEdicao.fornecedor_nome, vlUnit: x.preco, qt: String(x.disp), obs: '' }];
+        });
+        return n;
+      });
+      setShowAdicionarItensPO(false);
     }
   }),
   showPedidos && /*#__PURE__*/React.createElement(TelaPedidos, {
@@ -3680,6 +3815,8 @@ var _useState27 = useState(init),
         cfgEd[it.item_id] = [{ fornId: po.fornecedor_id, fornNome: po.fornecedor_nome, qt: String(it.qt_pedida||''), vlUnit: it.vl_unit||0 }];
       });
       setConfigEdicao(cfgEd);
+      setItensNovosEdicao([]);
+      setShowAdicionarItensPO(false);
       setShowPedidos(false);
       setShowPedidoEdicao(true);
     },
