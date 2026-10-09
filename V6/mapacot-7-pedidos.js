@@ -730,6 +730,12 @@ function TelaPedidos(_ref_tp) {
   var onUpdateStatus=_ref_tp.onUpdateStatus, onPDF=_ref_tp.onPDF, onEditarPedido=_ref_tp.onEditarPedido||function(){};
 
   var _sF=useState({obra:[],de:'',ate:'',insumo:[],fornecedor:[],status:[]}),filtros=_slicedToArray(_sF,2)[0],setFiltros=_slicedToArray(_sF,2)[1];
+  // NOVO (pedido do Claudio, 08/10/2026 — opção A aprovada no layout "Ver Pedidos só do mapa"): esta
+  // tela abre mostrando só os pedidos DESTE mapa; um botão mostra a lista geral (todos os pedidos
+  // do sistema), igual era antes. A escolha NÃO é lembrada: toda vez que a tela abre, começa em
+  // "mapa" (o estado nasce junto com a tela). Só muda o que aparece na lista e nos 5 quadros — os
+  // PDFs ("Relatorio PDF" e "Imprimir Pedidos Completos") continuam usando os próprios filtros.
+  var _sMD=useState('mapa'),modoLista=_slicedToArray(_sMD,2)[0],setModoLista=_slicedToArray(_sMD,2)[1];
   var _sRM=useState(false),showRelModal=_slicedToArray(_sRM,2)[0],setShowRelModal=_slicedToArray(_sRM,2)[1];
   var _sRF=useState({obra:[],de:'',ate:'',insumo:[],status:[]}),relFiltros=_slicedToArray(_sRF,2)[0],setRelFiltros=_slicedToArray(_sRF,2)[1];
   // FIX (pedido do Claudio — imprimir vários pedidos completos, filtrados por obra e período,
@@ -835,7 +841,30 @@ function TelaPedidos(_ref_tp) {
     );
   }
 
-  var pedidosFiltrados = (pedidos||[]).filter(function(po){
+  // "Pedido deste mapa" = foi gerado a partir deste mapa (po.mapa_id) OU tem algum item deste mapa
+  // (item_id — único no sistema, o mesmo vínculo que o "cadeado" de item atendido já usa). Vale
+  // para pedidos antigos e para pedidos com itens de mais de um mapa. Sem mapa aberto, comporta-se
+  // como antes (lista geral, sem o botão).
+  var temMapaAberto = !!(mapa && mapa.id);
+  var idsItensDoMapa = {};
+  (itensDoMapa||[]).forEach(function(i){ if (i && i.id) idsItensDoMapa[i.id] = true; });
+  ((mapa && mapa.itens)||[]).forEach(function(i){ if (i && i.id) idsItensDoMapa[i.id] = true; });
+  function origemPO(po){
+    var itensPO = (po && po.itens) || [];
+    var doMapa = temMapaAberto && (po.mapa_id === mapa.id || itensPO.some(function(it){ return !!idsItensDoMapa[it.item_id]; }));
+    var numeros = [], temOutro = false;
+    itensPO.forEach(function(it){
+      var meu = !!idsItensDoMapa[it.item_id] || (temMapaAberto && it.mapa_id === mapa.id);
+      if (meu) return;
+      temOutro = true;
+      if (it.mapa_numero != null && numeros.indexOf(it.mapa_numero) < 0) numeros.push(it.mapa_numero);
+    });
+    return { doMapa: doMapa, temOutro: temOutro, numeros: numeros };
+  }
+  var pedidosDoMapaN = temMapaAberto ? (pedidos||[]).filter(function(po){ return origemPO(po).doMapa; }).length : 0;
+  var pedidosBase = (temMapaAberto && modoLista==='mapa') ? (pedidos||[]).filter(function(po){ return origemPO(po).doMapa; }) : (pedidos||[]);
+
+  var pedidosFiltrados = pedidosBase.filter(function(po){
     if (filtros.status.length && filtros.status.indexOf(po.status) < 0) return false;
     if (filtros.obra.length && filtros.obra.indexOf(po.obra) < 0) return false;
     if (filtros.fornecedor.length && filtros.fornecedor.indexOf(po.fornecedor_nome) < 0) return false;
@@ -891,6 +920,17 @@ function TelaPedidos(_ref_tp) {
       ),
       // Filtros
       /*#__PURE__*/React.createElement('div', { style:{display:'flex',gap:8,padding:'10px 14px',background:'#f5f5f5',borderBottom:'1px solid #eee',flexWrap:'wrap',alignItems:'flex-start'} },
+        temMapaAberto && /*#__PURE__*/React.createElement('div', { 'data-ped-seg':'1', style:{display:'flex',flexDirection:'column',gap:3} },
+          /*#__PURE__*/React.createElement('label', { style:{fontSize:8,color:'#888',textTransform:'uppercase',fontWeight:'bold'} }, 'Mostrar'),
+          /*#__PURE__*/React.createElement('div', { style:{display:'flex',border:'1px solid #7c3aed',borderRadius:6,overflow:'hidden',background:'#fff'} },
+            [['mapa','\uD83D\uDCCD S\u00F3 deste mapa (MP '+(mapa.numero!=null?mapa.numero:'?')+')'],['todos','\uD83C\uDF10 Todos os pedidos']].map(function(b){
+              var ativo = modoLista===b[0];
+              return /*#__PURE__*/React.createElement('button', { key:b[0], 'data-ped-modo':b[0], 'aria-pressed':ativo?'true':'false',
+                onClick:function(){ setModoLista(b[0]); setDropdownAberto(null); },
+                style:{border:'none',background:ativo?'#7c3aed':'#fff',color:ativo?'#fff':'#7c3aed',padding:'6px 11px',fontSize:10,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'} }, b[1]);
+            })
+          )
+        ),
         multiSelect({ chave:'principal_obra', label:'Obra', opcoes:obrasComPedido, selecionados:filtros.obra, comBusca:obrasComPedido.length>8, minWidth:150, labelPlural:'as',
           aoMudar:function(novo){ setFiltros(function(prev){ return Object.assign({},prev,{obra:novo}); }); } }),
         multiSelect({ chave:'principal_insumo', label:'Insumo', opcoes:insumosComPedido, selecionados:filtros.insumo, comBusca:true, labelPlural:'os',
@@ -924,7 +964,14 @@ function TelaPedidos(_ref_tp) {
       // Tabela
       /*#__PURE__*/React.createElement('div', { style:{overflowY:'auto',flex:1} },
         pedidosFiltrados.length===0
-          ? /*#__PURE__*/React.createElement('div', { style:{padding:40,textAlign:'center',color:'#888',fontSize:12} }, 'Nenhum pedido encontrado.')
+          ? ((temMapaAberto && modoLista==='mapa' && pedidosDoMapaN===0)
+            ? /*#__PURE__*/React.createElement('div', { 'data-ped-vazio-mapa':'1', style:{padding:'34px 16px',textAlign:'center',color:'#666',fontSize:12} },
+                /*#__PURE__*/React.createElement('div', { style:{fontSize:13,fontWeight:'bold',color:'#333',marginBottom:6} }, 'Nenhum pedido foi gerado neste mapa (MP N\u00BA '+(mapa.numero!=null?mapa.numero:'?')+') ainda.'),
+                /*#__PURE__*/React.createElement('div', null, 'Quando voc\u00EA usar "Criar Pedido" aqui, ele aparece nesta lista.'),
+                (pedidos||[]).length>0 && /*#__PURE__*/React.createElement('div', { style:{marginTop:12} },
+                  (pedidos||[]).length===1 ? 'Existe 1 pedido de outro mapa no sistema \u2014 ' : 'Existem '+(pedidos||[]).length+' pedidos de outros mapas no sistema \u2014 ',
+                  /*#__PURE__*/React.createElement('span', { 'data-ped-ver-todos':'1', onClick:function(){ setModoLista('todos'); }, style:{color:'#7c3aed',textDecoration:'underline',cursor:'pointer',fontWeight:'bold'} }, 'ver todos os pedidos'), '.'))
+            : /*#__PURE__*/React.createElement('div', { style:{padding:40,textAlign:'center',color:'#888',fontSize:12} }, 'Nenhum pedido encontrado.'))
           : /*#__PURE__*/React.createElement('table', { style:{width:'100%',borderCollapse:'collapse',fontSize:10} },
             /*#__PURE__*/React.createElement('thead', null,
               /*#__PURE__*/React.createElement('tr', null,
@@ -945,7 +992,18 @@ function TelaPedidos(_ref_tp) {
                 var detPrincipal = itensPO.length>0?itensPO[0].detalhe:'';
                 var totalFmt = 'R$ '+fmtBRL(po.total);
                 return /*#__PURE__*/React.createElement('tr', { key:po.id, style:{background:ri%2===0?'#fff':'#f9f9f9',opacity:po.status==='cancelado'?.55:1} },
-                  /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',textAlign:'center',fontWeight:'bold',color:'#7c3aed',borderBottom:'1px solid #eee'} }, num),
+                  /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',textAlign:'center',fontWeight:'bold',color:'#7c3aed',borderBottom:'1px solid #eee'} }, num,
+                    (function(){
+                      if (!temMapaAberto) return null;
+                      var og = origemPO(po), txt = '', verde = false;
+                      var outros = og.numeros.length ? og.numeros.map(function(n){ return 'MP '+n; }).join(' + ') : 'outro mapa';
+                      if (modoLista==='todos') {
+                        if (og.doMapa) { txt = 'deste mapa (MP '+(mapa.numero!=null?mapa.numero:'?')+')'+(og.temOutro?' + '+outros:''); verde = true; }
+                        else txt = outros;
+                      } else if (og.temOutro) { txt = 'inclui itens de '+outros; verde = true; }
+                      if (!txt) return null;
+                      return /*#__PURE__*/React.createElement('div', { 'data-ped-origem':og.doMapa?'mapa':'outro', style:{fontSize:8,fontWeight:600,marginTop:2,color:verde?'#3b6d11':'#777',lineHeight:1.2} }, txt);
+                    })()),
                   /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',fontSize:9,borderBottom:'1px solid #eee'} }, po.obra||''),
                   /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',fontSize:9,borderBottom:'1px solid #eee'} }, po.fornecedor_nome||''),
                   /*#__PURE__*/React.createElement('td', { style:{padding:'6px 8px',borderBottom:'1px solid #eee'} },
