@@ -523,6 +523,10 @@ var _useState27 = useState(init),
   var _useStatePOCfg=useState({}),pedidoConfig=_slicedToArray(_useStatePOCfg,2)[0],setPedidoConfig=_slicedToArray(_useStatePOCfg,2)[1];
   var _useStatePOFin=useState({}),poFinanceiro=_slicedToArray(_useStatePOFin,2)[0],setPoFinanceiro=_slicedToArray(_useStatePOFin,2)[1];
   var _useStatePedidos=useState([]),pedidos=_slicedToArray(_useStatePedidos,2)[0],setPedidos=_slicedToArray(_useStatePedidos,2)[1];
+  // NOVO (09/10/2026 — atendimento no Resumo): visão do Resumo. "comprar" (padrão) = o que FALTA
+  // comprar × menor preço; "solicitado" = Qt. cheia do item (como era antes). Só aparece o
+  // interruptor quando o mapa tem algum item com pedido e/ou almoxarifado.
+  var _useStateModoAtend=useState('comprar'),modoAtend=_slicedToArray(_useStateModoAtend,2)[0],setModoAtend=_slicedToArray(_useStateModoAtend,2)[1];
   var _useStatePOFiltros=useState({obra:'',periodo:'',insumo:'',fornecedor:'',status:''}),pedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[0],setPedidoFiltros=_slicedToArray(_useStatePOFiltros,2)[1];
   var _useStateTooltip=useState(null),tooltipItemId=_slicedToArray(_useStateTooltip,2)[0],setTooltipItemId=_slicedToArray(_useStateTooltip,2)[1];
   var _useStateAlmoxItem=useState(null),almoxItemId=_slicedToArray(_useStateAlmoxItem,2)[0],setAlmoxItemId=_slicedToArray(_useStateAlmoxItem,2)[1];
@@ -1383,6 +1387,43 @@ var _useState27 = useState(init),
     };
   });
   // ─────────────────────────────────────────────────────────────────────────
+  // NOVO (09/10/2026 — atendimento no Resumo): o Resumo (VL. TOTAL de cada item, TOTAL e VALOR
+  // LÍQUIDO) passa a descontar o que já foi atendido (pedidos + almoxarifado) quando a visão é
+  // "A comprar": falta × menor preço. Usa os MESMOS números do selo PEDIDO/ALMOX/FALTA
+  // (itensAtendidosMap, acima) e a mesma função do PDF (qtBaseDe, arquivo 1) — por isso tela e
+  // PDF não divergem. Nada disto é gravado: cancelou pedido / estornou almoxarifado, o valor volta.
+  var temAtendTela = itensAtivos.some(function (it) { return atendTemAtend(itensAtendidosMap[it.id]); });
+  var modoComprarTela = temAtendTela && modoAtend === 'comprar';
+  var mapaAtendTela = temAtendTela ? { modo: modoComprarTela ? 'comprar' : 'solicitado', porItem: itensAtendidosMap } : undefined;
+  // item riscado (✂) fica fora da conta, como sempre: usa a Qt. cheia (só aparece riscado)
+  var qtBaseTela = function (item) { return item.excluido ? undefined : qtBaseDe({ _atend: mapaAtendTela }, item); };
+  var _totZeroOkTela = modoComprarTela && itensAtivos.some(function (it) { return calcResumo(it, fornecedoresVisiveis, precos).vlUnit !== null; });
+  var fmtTotalResumo = function (v) { return v > 0 || (v === 0 && _totZeroOkTela) ? fmtMoney(v) : "—"; };
+  // legenda pequena sob o VL. TOTAL do item: "falta 5 × 6,97" (ou "100% atendido")
+  var legendaFaltaTela = function (item, r) {
+    if (!modoComprarTela || item.excluido || r.vlUnit === null) return null;
+    var sA = itensAtendidosMap[item.id];
+    if (!atendTemAtend(sA)) return null;
+    var f = atendFalta(sA);
+    return /*#__PURE__*/React.createElement("div", {
+      "data-resumo-falta": f > 0 ? "1" : "0",
+      style: { fontSize: 9, fontWeight: 400, color: f > 0 ? "#6b7a99" : "#186818", marginTop: 2, whiteSpace: "nowrap" }
+    }, f > 0 ? "falta " + fmtQtdSaldo(f) + " \u00d7 " + fmtMoney(r.vlUnit) : "100% atendido");
+  };
+  // interruptor (mesma ideia do "Ver Pedidos"): só quando existe atendimento no mapa
+  var interruptorAtend = !temAtendTela ? null : /*#__PURE__*/React.createElement("span", {
+    "data-atend-seg": "1",
+    title: "Muda só o valor do RESUMO (VL. TOTAL, TOTAL e VALOR L\u00cdQUIDO). Colunas dos fornecedores, OR\u00c7AMENTO, Dashboard e An\u00e1lise continuam na cota\u00e7\u00e3o cheia.",
+    style: { display: "inline-flex", marginTop: 4, borderRadius: 5, overflow: "hidden", border: "1px solid rgba(255,255,255,0.55)" }
+  }, [{ k: "comprar", t: "\uD83D\uDED2 A comprar (falta)" }, { k: "solicitado", t: "\uD83D\uDCCB Solicitado (cheio)" }].map(function (o) {
+    var on = modoAtend === o.k;
+    return /*#__PURE__*/React.createElement("button", {
+      key: o.k, type: "button", "data-atend-modo": o.k, "aria-pressed": on ? "true" : "false",
+      onClick: function (e) { e.stopPropagation(); setModoAtend(o.k); },
+      style: { border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700, padding: "3px 8px", whiteSpace: "nowrap", fontFamily: "inherit",
+        background: on ? "#fff" : "transparent", color: on ? "#1a3a6a" : "#fff" }
+    }, o.t);
+  }));
   var totalBruto = function totalBruto(fid) {
     return itensAtivos.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
@@ -1407,7 +1448,7 @@ var _useState27 = useState(init),
     return minId;
   }();
   var resumoTotal = itensAtivos.reduce(function (acc, item) {
-    var r = calcResumo(item, fornecedoresVisiveis, precos);
+    var r = calcResumo(item, fornecedoresVisiveis, precos, qtBaseTela(item));
     return acc + (r.vlTotal || 0);
   }, 0);
   var calcVLResumo = function calcVLResumo() {
@@ -1710,7 +1751,7 @@ var _useState27 = useState(init),
         borderLeft: "2px solid rgba(255,255,255,0.25)",
         borderRight: "2px solid rgba(255,255,255,0.25)"
       })
-    }, "RESUMO"), /*#__PURE__*/React.createElement("th", {
+    }, "RESUMO", interruptorAtend ? /*#__PURE__*/React.createElement("div", null, interruptorAtend) : null), /*#__PURE__*/React.createElement("th", {
       colSpan: emptyChunk ? 1 : visibleChunk.length,
       style: _objectSpread(_objectSpread({}, thC), {}, {
         textAlign: "center",
@@ -1972,7 +2013,7 @@ var _useState27 = useState(init),
         fontSize: 12
       }
     }, "NENHUM ITEM \u2014 CLIQUE EM \"+ ADICIONAR ITEM\"")), filteredItens.map(function (item, idx) {
-      var resumo = calcResumo(item, fornecedoresVisiveis, precos);
+      var resumo = calcResumo(item, fornecedoresVisiveis, precos, qtBaseTela(item));
       var _allPrices = [];
       fornecedoresVisiveis.forEach(function(f) { var _v = parseMoney(precos[item.id + "_" + f.id]); if (_v !== null && _v > 0) _allPrices.push(_v); });
       var _sortedUniq = _allPrices.filter(function(v, i, arr) { return arr.indexOf(v) === i; }).sort(function(a, b) { return a - b; });
@@ -2177,7 +2218,7 @@ var _useState27 = useState(init),
           background: "#f0f4ff",
           verticalAlign: "top"
         })
-      }, resumo.vlTotal !== null ? fmtMoney(resumo.vlTotal) : ""), /*#__PURE__*/React.createElement("td", {
+      }, resumo.vlTotal !== null ? fmtMoney(resumo.vlTotal) : "", legendaFaltaTela(item, resumo)), /*#__PURE__*/React.createElement("td", {
         style: _objectSpread(_objectSpread({}, SC.td), {}, {
           fontSize: 11,
           background: "#f0f4ff",
@@ -2361,7 +2402,7 @@ var _useState27 = useState(init),
         borderLeft: "none",
         borderRight: "none"
       })
-    }, resumoTotal > 0 ? fmtMoney(resumoTotal) : "—"), /*#__PURE__*/React.createElement("td", {
+    }, fmtTotalResumo(resumoTotal)), /*#__PURE__*/React.createElement("td", {
       style: _objectSpread(_objectSpread({}, SC.td), {}, {
         background: "#e8eeff",
         borderLeft: "none",
@@ -2424,7 +2465,7 @@ var _useState27 = useState(init),
               borderLeft: "none",
               borderRight: "none"
             })
-          }, vl > 0 ? fmtMoney(vl) : "—"), /*#__PURE__*/React.createElement("td", {
+          }, fmtTotalResumo(vl)), /*#__PURE__*/React.createElement("td", {
             style: _objectSpread(_objectSpread({}, SC.td), {}, {
               background: bg,
               borderLeft: "none",
@@ -2877,6 +2918,7 @@ var _useState27 = useState(init),
     onClick: function onClick() {
       logEventoDiag("PDF gerado: mapa " + (mapa.numero != null ? mapa.numero : "?") + (showDashboard ? " + Dashboard" : "") + (inclAnalise ? " + An\u00e1lise" : ""));
       var mapaVis = Object.assign({}, mapa, { itens: itensAtivos, fornecedores: fornecedoresVisiveis, orcOculto: orcOculto });
+      if (mapaAtendTela) mapaVis._atend = mapaAtendTela; // PDF sai como a tela (atendimento + visão escolhida); só em memória
       var htmlMapa = buildMapaHTML(mapaVis, clock, orcamentos, associacoes);
       var extraParts = '';
       if (showDashboard) extraParts += '<div style="page-break-before:always;">' + buildDashboardHTML(mapaVis, clock, orcamentos, associacoes) + '</div>';

@@ -1121,6 +1121,17 @@ var sbGetPedidos = function() {
     })
     .catch(function(){ window.avisarErroSalvamento('Não foi possível carregar os pedidos. Verifique sua conexão.'); return []; });
 };
+// NOVO (09/10/2026 — relatórios com atendimento): igual a sbGetPedidos, mas devolve se a leitura deu
+// certo ({ ok, lista }). Os relatórios precisam saber a diferença entre "não há pedidos" e "não
+// consegui ler os pedidos" — no segundo caso não podem fingir que nada foi atendido.
+var sbGetPedidosComStatus = function() {
+  return fetch(SUPABASE_URL + '/rest/v1/pedidos?select=*&order=numero.desc&limit=1000', { headers: SB, cache: 'no-store' })
+    .then(function(r){
+      if (!r.ok) return { ok: false, lista: [] };
+      return r.json().then(function(d){ return { ok: true, lista: d || [] }; });
+    })
+    .catch(function(){ return { ok: false, lista: [] }; });
+};
 var sbSavePedido = function(po) {
   return fetch(SUPABASE_URL + '/rest/v1/pedidos', {
     method: 'POST', headers: SB, body: JSON.stringify(po)
@@ -1470,7 +1481,11 @@ var emptyForn = function emptyForn() {
     nome: ""
   };
 };
-var calcResumo = function calcResumo(item, fns, precos) {
+// NOVO (pedido do Claudio, 09/10/2026 — atendimento no Resumo): o 4º parâmetro (qtBase) é OPCIONAL.
+// Sem ele, a conta é EXATAMENTE a de sempre (menor preço × Qt. do item). Com ele (só quando o item
+// já tem pedido e/ou retirada do almoxarifado e a visão é "A comprar"), o total passa a ser
+// menor preço × o que ainda FALTA comprar. O preço unitário e o fornecedor escolhido não mudam.
+var calcResumo = function calcResumo(item, fns, precos, qtBase) {
   if (!fns.length) return {
     vlUnit: null,
     vlTotal: null,
@@ -1487,13 +1502,108 @@ var calcResumo = function calcResumo(item, fns, precos) {
       minFornId = f.id;
     }
   });
-  var qt = parseNumBR(item.qt);
+  var _temBase = qtBase !== undefined && qtBase !== null;
+  var qt = _temBase ? Number(qtBase) : parseNumBR(item.qt);
   return {
     vlUnit: minVal,
-    vlTotal: minVal !== null && !isNaN(qt) && qt > 0 ? minVal * qt : null,
+    vlTotal: minVal !== null && !isNaN(qt) && (_temBase ? qt >= 0 : qt > 0) ? minVal * qt : null,
     forn: minForn,
     minFornId: minFornId
   };
+};
+
+// ─── ATENDIMENTO (almoxarifado + pedidos) — motor central ───────────────────────────────────
+// Regra única: ATENDIDO = pedidos NÃO cancelados que citam o item (qualquer fornecedor e até de
+// outro mapa, pois item.id é único) + retiradas do almoxarifado NÃO estornadas.
+// FALTA = Qt. do item − atendido (nunca negativo). Nada disto é gravado: é calculado na hora,
+// então cancelar um pedido ou estornar uma retirada devolve o valor sozinho.
+// (A tela do mapa tem a sua própria conta equivalente para o selo PEDIDO/ALMOX/FALTA; os testes
+// provam que os dois dão sempre o mesmo número.)
+var atendArred3 = function atendArred3(n) {
+  return Math.round((Number(n) || 0) * 1000) / 1000;
+};
+var atendFalta = function atendFalta(s) {
+  return Math.max(0, atendArred3((s.qtTotal || 0) - (s.qtPedida || 0) - (s.qtAlmox || 0)));
+};
+var atendFmtQtd = function atendFmtQtd(n) {
+  return atendArred3(n).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+};
+// pedidos: lista como vem de sbGetPedidos(). Devolve { [item.id]: { qtTotal, qtPedida, qtAlmox, falta, atendido } }
+var saldoItensDoMapa = function saldoItensDoMapa(mapa, pedidos) {
+  var porItem = Object.create(null);
+  (pedidos || []).forEach(function (po) {
+    if (!po || po.status === "cancelado") return;
+    var visto = Object.create(null);
+    (po.itens || []).forEach(function (i) {
+      if (!i || i.item_id === undefined || i.item_id === null || visto[i.item_id]) return;
+      visto[i.item_id] = true; // só a 1ª linha do item dentro de cada pedido (igual à tela)
+      porItem[i.item_id] = (porItem[i.item_id] || 0) + (Number(i.qt_pedida) || 0);
+    });
+  });
+  var out = {};
+  ((mapa && mapa.itens) || []).forEach(function (item) {
+    var qtTotal = parseNumBR(item.qt) || 0;
+    var qtPedida = porItem[item.id] || 0;
+    var qtAlmox = 0;
+    (((mapa && mapa.almox) || {})[item.id] || []).forEach(function (r) {
+      if (r && !r.estornado) qtAlmox += Number(r.qt) || 0;
+    });
+    qtAlmox = atendArred3(qtAlmox);
+    var s = { qtTotal: qtTotal, qtPedida: qtPedida, qtAlmox: qtAlmox };
+    s.falta = atendFalta(s);
+    s.atendido = qtTotal > 0 && (qtPedida + qtAlmox) >= qtTotal;
+    out[item.id] = s;
+  });
+  return out;
+};
+// O item tem algum atendimento (pedido e/ou almoxarifado)?
+var atendTemAtend = function atendTemAtend(s) {
+  return !!s && (s.qtTotal || 0) > 0 && ((s.qtPedida || 0) > 0 || (s.qtAlmox || 0) > 0);
+};
+// Quantidade que entra no Resumo deste item: só existe (≠ undefined) na visão "A comprar" e quando
+// o item tem atendimento. Em qualquer outro caso devolve undefined => calcResumo usa a Qt. cheia.
+// mapa._atend = { modo: "comprar" | "solicitado", porItem: { [item.id]: {qtTotal,qtPedida,qtAlmox} } }
+// (campo só de trabalho, montado na hora; nunca é salvo no banco).
+var qtBaseDe = function qtBaseDe(mapa, item) {
+  var a = mapa && mapa._atend;
+  if (!a || a.modo !== "comprar" || !a.porItem) return undefined;
+  var s = a.porItem[item.id];
+  if (!atendTemAtend(s)) return undefined;
+  return atendFalta(s);
+};
+// Cópias dos mapas para os RELATÓRIOS Período/Obra: sem os itens riscados (✂ — a tela e o PDF do mapa
+// já os ignoram) e, se a lista de pedidos foi lida (opts.pedidos), com "_atend" anexado SOMENTE nos
+// mapas que têm algum item atendido. Não altera os mapas originais (nunca vai para o banco).
+// opts = { pedidos: [...] | null, modo: "comprar" | "solicitado" }
+var prepararMapasRelatorio = function prepararMapasRelatorio(mapas, opts) {
+  return (mapas || []).map(function (m) {
+    var itens = (m.itens || []).filter(function (it) { return !it.excluido; });
+    var copia = Object.assign({}, m, { itens: itens });
+    if (opts && opts.pedidos) {
+      var eng = saldoItensDoMapa(copia, opts.pedidos);
+      if (itens.some(function (it) { return atendTemAtend(eng[it.id]); })) {
+        copia._atend = { modo: opts.modo === "solicitado" ? "solicitado" : "comprar", porItem: eng };
+      }
+    }
+    return copia;
+  });
+};
+// Indicador do CARTÃO na lista de mapas: de quantos itens (não riscados) quantos já estão 100% atendidos
+// e quantos parcialmente. Devolve null quando não há o que mostrar: pedidos ainda não lidos, leitura que
+// falhou (pedidosLista.ok === false) ou nenhum item com atendimento. pedidosLista = { ok, lista }.
+var atendResumoCartao = function atendResumoCartao(mapa, pedidosLista) {
+  if (!mapa || !pedidosLista || !pedidosLista.ok) return null;
+  var itens = (mapa.itens || []).filter(function (it) { return !it.excluido; });
+  if (!itens.length) return null;
+  var eng = saldoItensDoMapa(Object.assign({}, mapa, { itens: itens }), pedidosLista.lista || []);
+  var n = 0, p = 0;
+  itens.forEach(function (it) {
+    var s = eng[it.id];
+    if (!atendTemAtend(s)) return;
+    if (s.atendido) n++; else p++;
+  });
+  if (n + p === 0) return null;
+  return { n: n, p: p, m: itens.length };
 };
 
 // ─── Themes ───────────────────────────────────────────────────────────────────
@@ -2128,6 +2238,38 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
   var precos = mapa.precos || {};
   var detalhes = mapa.detalhes || {};
   var rodape = mapa.rodape || {};
+  // NOVO (09/10/2026 — atendimento no PDF): quando o mapa chega com "_atend" (montado na hora pela
+  // tela do mapa; nunca é gravado), o PDF mostra o atendimento junto da Qt. (PEDIDO / ALMOX /
+  // FALTA) e o Resumo segue o interruptor ("comprar" = falta × menor preço; "solicitado" = Qt.
+  // cheia). Sem "_atend" nada disto aparece e o PDF sai exatamente como sempre.
+  var _atend = mapa._atend && mapa._atend.porItem ? mapa._atend : null;
+  var _modoComprarPdf = !!_atend && _atend.modo === "comprar";
+  var _temAtendPdf = !!_atend && itens.some(function (it) { return atendTemAtend(_atend.porItem[it.id]); });
+  var _qtBPdf = function (item) { return qtBaseDe(mapa, item); };
+  var _totZeroOk = _modoComprarPdf && _temAtendPdf && itens.some(function (it) { return calcResumo(it, fns, precos).vlUnit !== null; });
+  var _fmtTotalPdf = function (v) { return v > 0 || (v === 0 && _totZeroOk) ? fmtMoney(v) : "\u2014"; };
+  var _notaModoPdf = function () {
+    return _temAtendPdf ? "<div style=\"font-size:8px;font-weight:400;\">VALORES: " + (_modoComprarPdf ? "A COMPRAR (FALTA)" : "SOLICITADO (CHEIO)") + "</div>" : "";
+  };
+  var _atendQtPdf = function (item) {
+    var s = _atend ? _atend.porItem[item.id] : null;
+    if (!_atend || !atendTemAtend(s)) return "";
+    var falta = atendFalta(s);
+    var lin = function (txt, cor, peso) { return "<div style=\"font-size:7px;font-weight:" + peso + ";color:" + cor + ";line-height:1.25;white-space:nowrap;\">" + txt + "</div>"; };
+    return "<div data-pdf-atend=\"1\" style=\"margin-top:2px;border-top:1px dotted #c9b27a;padding-top:2px;\">"
+      + ((s.qtPedida || 0) > 0 ? lin("PEDIDO " + atendFmtQtd(s.qtPedida), "#186818", 700) : "")
+      + ((s.qtAlmox || 0) > 0 ? lin("ALMOX " + atendFmtQtd(s.qtAlmox), "#1a4aa0", 700) : "")
+      + (falta > 0 ? lin("FALTA " + atendFmtQtd(falta), "#b34700", 800) : lin("100% ATENDIDO", "#186818", 800))
+      + "</div>";
+  };
+  var _atendCapPdf = function (item, r) {
+    if (!_modoComprarPdf || r.vlUnit === null) return "";
+    var s = _atend.porItem[item.id];
+    if (!atendTemAtend(s)) return "";
+    var falta = atendFalta(s);
+    return "<div data-pdf-falta=\"1\" style=\"font-size:8px;font-weight:400;color:" + (falta > 0 ? "#6b7a99" : "#186818") + ";white-space:nowrap;\">"
+      + (falta > 0 ? "falta " + atendFmtQtd(falta) + " \u00d7 " + fmtMoney(r.vlUnit) : "100% atendido") + "</div>";
+  };
   var totalBruto = function totalBruto(fid) {
     return itens.reduce(function (acc, item) {
       var v = parseMoney(precos["".concat(item.id, "_").concat(fid)]);
@@ -2152,7 +2294,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     return minId;
   }();
   var resumoTotal = itens.reduce(function (acc, item) {
-    var r = calcResumo(item, fns, precos);
+    var r = calcResumo(item, fns, precos, _qtBPdf(item));
     return acc + (r.vlTotal || 0);
   }, 0);
   // ── Página 0 ──────────────────────────────────────────────────────────
@@ -2166,7 +2308,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var hC0=T.hdr,sC0=T.sub,oeS0='background:#fffbee;',reS0='background:#eef2ff;';
     var rowsP0 = itens.map(function(item,ix) {
       var bg0=ix%2===0?'':'background:#f7f9fc;';
-      var r0=calcResumo(item,fns,precos);
+      var r0=calcResumo(item,fns,precos,_qtBPdf(item));
       var a0=mapaAssocs.find(function(a){return a.itemMapaId===item.id;});
       var oi0=a0?obraOrcItens.find(function(o){return o.codigo===a0.orcItemCodigo;}):null;
       var vo0=oi0?(parseFloat(oi0.valorUnitario||oi0.vl_unitario)||0)*(parseFloat(a0&&a0.fator)||1):null;
@@ -2189,17 +2331,17 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
              :'\u2014')+'</td>';
       var resC0=r0.vlUnit!==null
         ?'<td style="border:1px solid #ccc;'+reS0+'text-align:right;">R$ '+fmtMoney(r0.vlUnit)+'</td>'
-         +'<td style="border:1px solid #ccc;'+reS0+'text-align:right;font-weight:bold;">R$ '+fmtMoney(r0.vlTotal||0)+'</td>'
+         +'<td style="border:1px solid #ccc;'+reS0+'text-align:right;font-weight:bold;">R$ '+fmtMoney(r0.vlTotal||0)+_atendCapPdf(item,r0)+'</td>'
          +'<td style="border:1px solid #ccc;'+reS0+'font-size:9px;">'+(r0.forn||'')+'</td>'
         :'<td style="border:1px solid #ccc;'+reS0+'"></td><td style="border:1px solid #ccc;'+reS0+'"></td><td style="border:1px solid #ccc;'+reS0+'font-size:9px;"></td>';
       return '<tr style="'+bg0+'">'
         +'<td style="border:1px solid #ccc;text-align:center;color:#666;">'+item.num+'</td>'
-        +'<td style="border:1px solid #ccc;text-align:center;">'+(item.qt||'')+'</td>'
+        +'<td style="border:1px solid #ccc;text-align:center;">'+(item.qt||'')+_atendQtPdf(item)+'</td>'
         +'<td style="border:1px solid #ccc;text-align:center;">'+(item.unid||'')+'</td>'
         +'<td style="border:1px solid #ccc;">'+desc0+'</td>'
         +orcC0+resC0+'</tr>';
     }).join('');
-    var rTot0=itens.reduce(function(ac,it){var r=calcResumo(it,fns,precos);return ac+(r.vlTotal||0);},0);
+    var rTot0=itens.reduce(function(ac,it){var r=calcResumo(it,fns,precos,_qtBPdf(it));return ac+(r.vlTotal||0);},0);
     var orcRes0=itens.reduce(function(ac,it){
       var r=calcResumo(it,fns,precos);
       var qt=parseFloat(String(it.qt).replace(',','.'))||0;
@@ -2257,7 +2399,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         +'<td style="border:1px solid #ccc;border-left:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
         +'<td style="border:1px solid #ccc;border-right:2px solid #e0bf30;'+oeS0+'text-align:center;color:#ccc;">\u2014</td>'
         +'<td style="border:1px solid #ccc;border-right:none;'+reS0+'"></td>'
-        +'<td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'text-align:right;font-weight:700;color:#1a56b0;">'+(vlLiq0>0?'R$ '+fmtMoney(vlLiq0):'\u2014')+'</td>'
+        +'<td style="border:1px solid #ccc;border-left:none;border-right:none;'+reS0+'text-align:right;font-weight:700;color:#1a56b0;">'+(vlLiq0>0||(vlLiq0===0&&_totZeroOk)?'R$ '+fmtMoney(vlLiq0):'\u2014')+'</td>'
         +'<td style="border:1px solid #ccc;border-left:none;'+reS0+'"></td></tr>'
       // FIX (pedido do Claudio — revisão do PDF do mapa): faltava esta linha aqui, na página de
       // resumo consolidado (mostrada quando há muitos fornecedores). Mesmo padrão estrutural da
@@ -2293,7 +2435,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
           +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC0+';color:#fff;">UNID.</th>'
           +'<th rowspan="2" style="border:1px solid #999;padding:4px 5px;text-align:left;background:'+hC0+';color:#fff;">DESCRI\u00c7\u00c3O</th>'
           +'<th colspan="2" style="border:1px solid #999;padding:4px 5px;text-align:center;background:#b87800;color:#fff;font-weight:700;">OR\u00c7AMENTO</th>'
-          +'<th colspan="3" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC0+';color:#fff;font-weight:700;">RESUMO \u2014 FORNECEDOR SELECIONADO</th>'
+          +'<th colspan="3" style="border:1px solid #999;padding:4px 5px;text-align:center;background:'+hC0+';color:#fff;font-weight:700;">RESUMO \u2014 FORNECEDOR SELECIONADO'+_notaModoPdf()+'</th>'
         +'</tr><tr>'
           +'<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:#d48800;color:#fff;font-size:9px;">VL. OR\u00c7ADO<br><span style=\'font-weight:400;\'>por unid. compra</span></th>'
           +'<th style="border:1px solid #999;padding:4px 5px;text-align:center;background:#d48800;color:#fff;font-size:9px;">RESULTADO<br><span style=\'font-weight:400;\'>vs. melhor pre\u00e7o</span></th>'
@@ -2354,7 +2496,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var isFirst = ci === 0 && (!temPagina0 || !showOrcPdf);
     var emptyChunk = chunk.length === 0;
     var itemRows = itens.map(function (item, idx) {
-      var r = calcResumo(item, fns, precos);
+      var r = calcResumo(item, fns, precos, _qtBPdf(item));
       var bg = idx % 2 === 0 ? "#fff" : "#f7f9fc";
       var _pdfPrices = [];
       fns.forEach(function(f) { var _v = parseMoney(precos[item.id + "_" + f.id]); if (_v !== null && _v > 0) _pdfPrices.push(_v); });
@@ -2369,8 +2511,8 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
         var isPdfRank3 = !isMin && !isPdfRank2 && _pdfRank3 !== null && unit !== null && unit > 0 && unit === _pdfRank3;
         return "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:".concat(isMin ? bestColor : isPdfRank2 ? "#ffe4b0" : isPdfRank3 ? "#ffcece" : bg, ";font-weight:").concat(isMin ? "bold" : isPdfRank2 ? "bold" : isPdfRank3 ? "bold" : "normal", ";color:").concat(isMin ? "#1a5a1a" : isPdfRank2 ? "#a05000" : isPdfRank3 ? "#a01010" : "#222", ";\">").concat(unit !== null ? fmtMoney(unit) : "").concat(detalhes[key] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[key] + "</div>" : "", "</td>");
       }).join("");
-      var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
-      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(esc(item.descricao) || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;word-break:break-word;\">\u21b3 " + esc(item.detalhe) + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
+      var resumoCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;background:#eef2ff;\">".concat(r.vlUnit !== null ? fmtMoney(r.vlUnit) : "").concat(r.minFornId && detalhes[item.id + "_" + r.minFornId] ? "<div style=\"font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;word-break:break-word;\">\u21b3 " + detalhes[item.id + "_" + r.minFornId] + "</div>" : "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">").concat(r.vlTotal !== null ? fmtMoney(r.vlTotal) : "", _atendCapPdf(item, r), "</td><td style=\"border:1px solid #ccc;padding:4px 6px;font-size:9px;background:#eef2ff;\">").concat(r.forn || "", "</td>") : "";
+      return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;color:#666;\">").concat(item.num, "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.qt || "", _atendQtPdf(item), "</td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:center;\">").concat(item.unid || "", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;\">").concat(esc(item.descricao) || "", (item.detalhe ? "<div style=\"margin-top:3px;font-size:8px;color:#4a6888;border-top:1px dotted #c0cce0;padding-top:2px;word-break:break-word;\">\u21b3 " + esc(item.detalhe) + "</div>" : ""), "</td>").concat(resumoCells).concat(fornCells, "</tr>");
     }).join("");
     var rodapeRows = RODAPE_ROWS.map(function (row) {
       var resumoCell = isFirst ? function () {
@@ -2382,7 +2524,7 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
           var fret = parseMoney(rr.frete) || 0;
           var outr = parseMoney(rr.outros) || 0;
           var vl = resumoTotal - desc + imp + fret + outr;
-          val = vl > 0 ? fmtMoney(vl) : "—";
+          val = _fmtTotalPdf(vl);
         } else {
           var raw = rr[row.key] || "";
           val = row.money ? raw ? fmtMoney(parseMoney(raw)) || raw : "" : raw;
@@ -2414,14 +2556,14 @@ var buildMapaHTML = function buildMapaHTML(mapa) {
     var fornSubHdrs = emptyChunk ? th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;")) : chunk.map(function () {
       return th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"));
     }).join("");
-    var resumaTotCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">".concat(resumoTotal > 0 ? fmtMoney(resumoTotal) : "—", "</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>") : "";
+    var resumaTotCells = isFirst ? "<td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td><td style=\"border:1px solid #ccc;padding:4px 6px;text-align:right;font-weight:bold;background:#eef2ff;\">".concat(_fmtTotalPdf(resumoTotal), "</td><td style=\"border:1px solid #ccc;padding:4px 6px;background:#eef2ff;\"></td>") : "";
     // LAYOUT APROVADO: 3%(IT) 8%(QT) 5%(UN) — % uniformes em todos os cenários
     var colsBase = isFirst
       ? "<col style=\"width:3%\"/><col style=\"width:8%\"/><col style=\"width:5%\"/><col style=\"width:18%\"//>" 
       : "<col style=\"width:3%\"/><col style=\"width:8%\"/><col style=\"width:5%\"/><col style=\"width:24%\"//>";
     return "<table style=\"border-collapse:collapse;width:100%;table-layout:fixed;font-size:10px;margin-bottom:0;\"><colgroup>".concat(colsBase).concat(isFirst ? "<col style=\"width:7%\"/><col style=\"width:9%\"/><col style=\"width:11%\"/>" : "", " ").concat(chunk.map(function () {
       return "<col style=\"width:".concat(isFirst ? emptyChunk ? 39 : Math.floor(39 / Math.max(chunk.length, 1)) : Math.floor(60 / Math.max(chunk.length, 1)), "%\"/>");
-    }).join(""), "</colgroup><thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(isFirst ? "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:".concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO</th>") : "").concat(fornHdrs, "</tr><tr>").concat(isFirst ? "".concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;"))) : "", " ").concat(fornSubHdrs, "</tr></thead><tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>").concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
+    }).join(""), "</colgroup><thead><tr><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">ITEM</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">QT.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;background:").concat(hdrColor, ";color:#fff;\">UNID.</th><th rowspan=\"2\" style=\"border:1px solid #999;padding:4px 5px;text-align:left;background:").concat(hdrColor, ";color:#fff;overflow:hidden;\">DESCRI\xC7\xC3O</th>").concat(isFirst ? "<th colspan=\"3\" style=\"border:1px solid #999;padding:4px 5px;text-align:center;font-weight:bold;background:".concat(hdrColor, ";color:#fff;\">RESUMO \u2014 FORNECEDOR SELECIONADO").concat(_notaModoPdf(), "</th>") : "").concat(fornHdrs, "</tr><tr>").concat(isFirst ? "".concat(th("VL. UNIT.", "background:".concat(subColor, ";text-align:right;"))).concat(th("VL. TOTAL", "background:".concat(subColor, ";text-align:right;"))).concat(th("FORNECEDOR", "background:".concat(subColor, ";font-size:9px;"))) : "", " ").concat(fornSubHdrs, "</tr></thead><tbody>").concat(itemRows, "<tr style=\"background:").concat(subColor, ";\"><td colspan=\"4\" style=\"border:1px solid #ccc;padding:4px 10px;font-weight:700;\">TOTAL</td>").concat(resumaTotCells).concat(totalFornCells, "</tr>").concat(rodapeRows, "</tbody></table>");
   };
   var obsGeralHTML = mapa.obsGeral ? "<div style=\"margin-top:14px;border:1.5px solid ".concat(hdrColor, ";border-radius:4px;overflow:hidden;\"><div style=\"background:").concat(hdrColor, ";color:#fff;padding:7px 12px;font-weight:700;font-size:11px;letter-spacing:0.4px;\">OBSERVACAO GERAL DO MAPA</div><div style=\"padding:10px 12px;font-size:11px;white-space:pre-wrap;background:#fff;\">").concat(esc((mapa.obsGeral || "").toUpperCase()), "</div></div>") : "";
   var pagesHTML = chunks.map(function (chunk, ci) {
@@ -3002,7 +3144,7 @@ var abrirPDF = function abrirPDF(html) {
 };
 
 // ─── Report PDFs ──────────────────────────────────────────────────────────────
-var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim, orcamentos, associacoes) {
+var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim, orcamentos, associacoes, opts) {
   // FIX: esc() local para evitar XSS/quebra de layout com nomes contendo < > & "
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   var de = new Date(inicio + "T00:00:00"),
@@ -3015,18 +3157,29 @@ var gerarRelatorioPeriodo = function gerarRelatorioPeriodo(mapas, inicio, fim, o
     alert("NENHUM MAPA NO PERÍODO.");
     return;
   }
-  var rows = filtrados.map(function (m, i) {
+  // NOVO (09/10/2026): o relatório passa a ser igual à tela — não conta item riscado (✂) — e, quando os
+  // pedidos foram lidos, mostra o atendimento (ATENDIDO / A COMPRAR) e o total conforme o interruptor.
+  var prep = prepararMapasRelatorio(filtrados, opts);
+  var temAtendRel = prep.some(function (m) { return !!m._atend; });
+  var modoRelTxt = opts && opts.modo === "solicitado" ? "SOLICITADO (CHEIO)" : "A COMPRAR (FALTA)";
+  var rows = prep.map(function (m, i) {
     var _m$itens;
     var bg = i % 2 === 0 ? "#fff" : "#f5f7fc";
-    var rt = (m.itens || []).reduce(function (a, item) {
-      var r = calcResumo(item, m.fornecedores || [], m.precos || {});
-      return a + (r.vlTotal || 0);
-    }, 0);
-    return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(m.numero || "—", "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.nome || "").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.obra || "—").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.responsavel || "—").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(fmtDate(new Date(m.criadoEm)), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(((_m$itens = m.itens) === null || _m$itens === void 0 ? void 0 : _m$itens.length) || 0, "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:right;font-weight:bold;\">").concat(rt > 0 ? fmtMoney(rt) : "—", "</td></tr>");
+    var vlCheio = 0, vlFalta = 0; // cheio = Qt. do item × menor preço; falta = o que ainda falta comprar × menor preço
+    (m.itens || []).forEach(function (item) {
+      var rC = calcResumo(item, m.fornecedores || [], m.precos || {});
+      vlCheio += rC.vlTotal || 0;
+      var sA = m._atend ? m._atend.porItem[item.id] : null;
+      vlFalta += (atendTemAtend(sA) ? calcResumo(item, m.fornecedores || [], m.precos || {}, atendFalta(sA)).vlTotal : rC.vlTotal) || 0;
+    });
+    var rt = m._atend && m._atend.modo === "comprar" ? vlFalta : vlCheio;
+    var vlAtendido = Math.max(0, Math.round((vlCheio - vlFalta) * 100) / 100);
+    var colsAtend = temAtendRel ? "<td style=\"border:1px solid #ddd;padding:5px 7px;text-align:right;color:#186818;\">".concat(m._atend ? fmtMoney(vlAtendido) : "—", "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:right;color:#b34700;\">").concat(vlFalta > 0 || (m._atend && vlCheio > 0) ? fmtMoney(vlFalta) : "—", "</td>") : "";
+    return "<tr style=\"background:".concat(bg, ";\"><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(m.numero || "—", "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.nome || "").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.obra || "—").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;\">").concat(esc((m.responsavel || "—").toUpperCase()), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(fmtDate(new Date(m.criadoEm)), "</td><td style=\"border:1px solid #ddd;padding:5px 7px;text-align:center;\">").concat(((_m$itens = m.itens) === null || _m$itens === void 0 ? void 0 : _m$itens.length) || 0, "</td>").concat(colsAtend, "<td style=\"border:1px solid #ddd;padding:5px 7px;text-align:right;font-weight:bold;\">").concat(rt > 0 || (rt === 0 && m._atend && m._atend.modo === "comprar" && vlCheio > 0) ? fmtMoney(rt) : "—", "</td></tr>");
   }).join("");
-  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:10px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO DE MAPAS POR PER\xCDODO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">PER\xCDODO: ".concat(fmtDate(de), " A ").concat(fmtDate(ate), " \u2014 ").concat(filtrados.length, " MAPA(S)</div></div><table style=\"border-collapse:collapse;width:100%;font-size:11px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">NOME</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">RESPONS\xC1VEL</th><th style=\"border:1px solid #999;padding:5px 7px;width:80px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;width:55px;\">ITENS</th><th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">TOTAL RESUMO</th></tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
+  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body><div style=\"background:#2a5298;padding:10px 14px;border-radius:4px 4px 0 0;\"><div style=\"font-size:14px;font-weight:bold;color:#fff;\">RELAT\xD3RIO DE MAPAS POR PER\xCDODO</div><div style=\"font-size:10px;color:rgba(255,255,255,0.85);margin-top:2px;\">PER\xCDODO: ".concat(fmtDate(de), " A ").concat(fmtDate(ate), " \u2014 ").concat(filtrados.length, " MAPA(S)").concat(temAtendRel ? " \u00b7 VALORES: " + modoRelTxt : "", "</div></div><table style=\"border-collapse:collapse;width:100%;font-size:11px;\"><thead><tr style=\"background:#c5d8f0;\"><th style=\"border:1px solid #999;padding:5px 7px;width:46px;\">MP N\xBA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">NOME</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">OBRA</th><th style=\"border:1px solid #999;padding:5px 7px;text-align:left;\">RESPONS\xC1VEL</th><th style=\"border:1px solid #999;padding:5px 7px;width:80px;\">DATA</th><th style=\"border:1px solid #999;padding:5px 7px;width:55px;\">ITENS</th>").concat(temAtendRel ? "<th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">ATENDIDO</th><th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">A COMPRAR</th>" : "", "<th style=\"border:1px solid #999;padding:5px 7px;width:100px;text-align:right;\">TOTAL RESUMO").concat(temAtendRel ? "<div style=\"font-size:8px;font-weight:400;\">" + modoRelTxt + "</div>" : "", "</th></tr></thead><tbody>").concat(rows, "</tbody></table></body></html>"));
 };
-var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes) {
+var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes, opts) {
   var filtrados = mapasComCurrent.filter(function (m) {
     return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
   });
@@ -3035,7 +3188,9 @@ var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orca
     return;
   }
   var now = new Date();
-  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>".concat(filtrados.map(function (m, i) {
+  // NOVO (09/10/2026): cada mapa sai como no PDF do botão do mapa (sem itens riscados e com o atendimento)
+  var prep = prepararMapasRelatorio(filtrados, opts);
+  abrirPDF("<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><style>@page{size:A4 landscape;margin:8mm;}body{font-family:Arial,sans-serif;font-size:11px;text-transform:uppercase;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}</style></head><body>".concat(prep.map(function (m, i) {
     var body = buildMapaHTML(m, now, orcamentos, associacoes).replace(/[\s\S]*<body>/, "").replace(/<\/body>[\s\S]*/, "");
     return "<div style=\"".concat(i > 0 ? "page-break-before:always;" : "", "\">").concat(body, "</div>");
   }).join(""), "</body></html>"));
@@ -3046,7 +3201,7 @@ var gerarRelatorioObra = function gerarRelatorioObra(mapasComCurrent, obra, orca
 // mesmas de antes — só que agora rodam uma vez PARA CADA insumo marcado, cada um com sua própria
 // seção no mesmo PDF (mapas/fornecedores diferentes por insumo, então cada seção tem sua própria
 // tabela, em vez de misturar tudo numa tabela só).
-var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumosLista) {
+var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumosLista, opts) {
   // FIX: esc() local para evitar XSS/quebra de layout com nomes/descrições contendo < > & "
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   // FIX: corta o texto de verdade (no código, não via CSS) — garante altura de linha previsível
@@ -3054,6 +3209,16 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
   // CSS que corta visualmente (line-clamp), mas esse tipo de regra é conhecida por falhar
   // especificamente na hora de imprimir em alguns casos, mesmo funcionando bem na tela.
   function truncar(s, max){ s = String(s||''); return s.length > max ? s.slice(0, max - 1).trim() + '\u2026' : s; }
+  // NOVO (09/10/2026): com os pedidos lidos (opts.pedidos), cada seção ganha as colunas ATENDIDO (pedido /
+  // almoxarifado) e FALTA — só nas seções em que algum item tem atendimento; as outras saem como sempre.
+  var _engInsumo = []; // cache por mapa (comparando o próprio objeto, nunca por id)
+  function engDoMapa(mapa) {
+    if (!opts || !opts.pedidos) return null;
+    for (var q = 0; q < _engInsumo.length; q++) if (_engInsumo[q].m === mapa) return _engInsumo[q].e;
+    var e = saldoItensDoMapa(mapa, opts.pedidos);
+    _engInsumo.push({ m: mapa, e: e });
+    return e;
+  }
 
   // Monta a tabela de UM insumo (mesma lógica de sempre) — retorna null se não achou nada para
   // esse insumo específico, para que a seção dele seja pulada silenciosamente no PDF final.
@@ -3067,6 +3232,7 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
     });
     if (!resultados.length) return null;
 
+    var temAtendSecao = resultados.some(function (r0) { var e0 = engDoMapa(r0.mapa); return !!e0 && atendTemAtend(e0[r0.item.id]); });
     var allForns = Array.from(new Set(
       resultados.flatMap(function(r) {
         return (r.mapa.fornecedores || [])
@@ -3106,6 +3272,20 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
              + "</td>";
       }).join("");
 
+      var colsAtendInsumo = "";
+      if (temAtendSecao) {
+        var eA = engDoMapa(mapa), sA = eA ? eA[item.id] : null;
+        var linhasA = "";
+        if (atendTemAtend(sA)) {
+          if (sA.qtPedida > 0) linhasA += "<div style=\"color:#186818;font-weight:700;white-space:nowrap;\">PEDIDO " + atendFmtQtd(sA.qtPedida) + "</div>";
+          if (sA.qtAlmox > 0) linhasA += "<div style=\"color:#1a4aa0;font-weight:700;white-space:nowrap;\">ALMOX " + atendFmtQtd(sA.qtAlmox) + "</div>";
+        }
+        var celFalta;
+        if (atendTemAtend(sA)) celFalta = atendFalta(sA) > 0 ? "<span style=\"color:#b34700;font-weight:800;\">" + atendFmtQtd(atendFalta(sA)) + "</span>" : "<span style=\"color:#186818;font-weight:800;\">ATENDIDO</span>";
+        else celFalta = "<span style=\"color:#999;\">" + esc(item.qt || "") + "</span>";
+        colsAtendInsumo = "<td style=\"text-align:center;width:56px;font-size:8px;line-height:1.3;\">" + (linhasA || "<span style=\"color:#ccc;\">\u2014</span>") + "</td>"
+          + "<td style=\"text-align:center;width:44px;font-size:9px;\">" + celFalta + "</td>";
+      }
       return "<tr" + rowCls + ">"
         + "<td style=\"text-align:center;width:28px;\">"  + esc(mapa.numero||"\u2014") + "</td>"
         + "<td style=\"width:95px;font-size:9px;line-height:1.3;\">" + esc(truncar((mapa.obra||"\u2014").toUpperCase(), 36)) + "</td>"
@@ -3113,6 +3293,7 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
         + "<td style=\"font-size:9px;line-height:1.4;min-width:130px;\">" + esc((item.descricao||"").toUpperCase()) + "</td>"
         + "<td class=\"num\" style=\"width:34px;\">" + (item.qt||"") + "</td>"
         + "<td style=\"text-align:center;width:28px;\">" + (item.unid||"") + "</td>"
+        + colsAtendInsumo
         + "<td class=\"menor-cell\" style=\"width:80px;\">"
           + "<div class=\"menor-val\">" + (resumo.vlUnit !== null ? fmtMoney(resumo.vlUnit) : "\u2014") + "</div>"
           + (menorForn ? "<div class=\"menor-forn\">" + esc(menorForn) + "</div>" : "")
@@ -3133,6 +3314,7 @@ var gerarRelatorioInsumo = function gerarRelatorioInsumo(mapasComCurrent, insumo
       + "<th style=\"text-align:left;min-width:130px;\">DESCRI\xC7\xC3O</th>"
       + "<th style=\"width:34px;\">QT</th>"
       + "<th style=\"width:28px;\">UN</th>"
+      + (temAtendSecao ? "<th style=\"width:56px;\">ATENDIDO</th><th style=\"width:44px;\">FALTA</th>" : "")
       + "<th class=\"menor-h\" style=\"width:80px;\">MENOR<br><span style=\"font-size:8px;font-weight:400;opacity:.85;\">FORNECEDOR</span></th>"
       + fornHdrs
       + "</tr></thead><tbody>" + rows + "</tbody></table>";

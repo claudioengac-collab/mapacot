@@ -5,12 +5,27 @@ function MapCard(_ref16) {
     onDelete = _ref16.onDelete,
     onDuplicate = _ref16.onDuplicate,
     orcamentos = _ref16.orcamentos || {},
-    associacoes = _ref16.associacoes || [];
+    associacoes = _ref16.associacoes || [],
+    pedidosLista = _ref16.pedidosLista;
   var _useState41 = useState(false),
     _useState42 = _slicedToArray(_useState41, 2),
     confirm = _useState42[0],
     setConfirm = _useState42[1];
   var T = getTheme(mapa.corTema);
+  // NOVO (09/10/2026 — atendimento em todo o sistema): indicador "N de M itens atendidos" no cartão e
+  // opções de atendimento do PDF do ícone (mesmas regras dos relatórios). false = não gerar agora.
+  var atendCartao = React.useMemo(function () { return atendResumoCartao(mapa, pedidosLista); }, [mapa, pedidosLista]);
+  var optsPdfCartao = function optsPdfCartao() {
+    if (pedidosLista === null || pedidosLista === undefined) {
+      alert("AINDA CARREGANDO OS PEDIDOS. AGUARDE ALGUNS SEGUNDOS E CLIQUE DE NOVO.");
+      return false;
+    }
+    if (!pedidosLista.ok) {
+      if (!window.confirm("N\u00c3O FOI POSS\u00cdVEL LER OS PEDIDOS.\n\nO PDF ser\u00e1 gerado SEM o atendimento por pedidos (valores pela quantidade solicitada). Deseja continuar?")) return false;
+      return null;
+    }
+    return { pedidos: pedidosLista.lista, modo: "comprar" };
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: _objectSpread(_objectSpread({}, SC.card), {}, {
       borderTop: "4px solid ".concat(T.hdr)
@@ -78,7 +93,11 @@ function MapCard(_ref16) {
       fontSize: 11,
       color: "#aab"
     }
-  }, "CRIADO EM ", fmtDate(new Date(mapa.criadoEm)), mapa.responsavel && " \xB7 ".concat(mapa.responsavel)), /*#__PURE__*/React.createElement("div", {
+  }, "CRIADO EM ", fmtDate(new Date(mapa.criadoEm)), mapa.responsavel && " \xB7 ".concat(mapa.responsavel)), atendCartao && /*#__PURE__*/React.createElement("div", {
+    "data-card-atend": "1",
+    title: "Itens do mapa (sem os riscados) que j\u00e1 foram atendidos por pedido e/ou almoxarifado",
+    style: { fontSize: 11, fontWeight: 700, color: atendCartao.n === atendCartao.m ? "#186818" : "#2a5298" }
+  }, atendCartao.n + " de " + atendCartao.m + (atendCartao.m === 1 ? " item atendido" : " itens atendidos") + (atendCartao.p > 0 ? " \u00b7 " + atendCartao.p + (atendCartao.p === 1 ? " parcial" : " parciais") : "")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 8,
@@ -135,8 +154,10 @@ function MapCard(_ref16) {
     }
   }, "↗"), /*#__PURE__*/React.createElement("button", {
     onClick: function onClick() {
+      var _optsPdfCartao = optsPdfCartao();
+      if (_optsPdfCartao === false) return;
       logEventoDiag("PDF (\u00edcone lista) aberto: mapa " + (mapa.numero != null ? mapa.numero : "?"));
-      return abrirPDF(buildMapaHTML(mapa, new Date(), orcamentos, associacoes));
+      return abrirPDF(buildMapaHTML(prepararMapasRelatorio([mapa], _optsPdfCartao)[0], new Date(), orcamentos, associacoes));
     },
     style: _objectSpread(_objectSpread({}, SC.btnIco), {}, {
       background: "#fdecea",
@@ -568,6 +589,19 @@ function App() {
     _useState64 = _slicedToArray(_useState63, 2),
     current = _useState64[0],
     setCurrent = _useState64[1];
+  // NOVO (09/10/2026): pedidos lidos para a LISTA (indicador dos cartões e PDF do ícone). Relê toda vez que
+  // a lista volta para a tela (os pedidos podem ter mudado dentro do mapa). null = lendo; {ok,lista}.
+  var _useStatePedLista = useState(null),
+    pedidosLista = _slicedToArray(_useStatePedLista, 2)[0],
+    setPedidosLista = _slicedToArray(_useStatePedLista, 2)[1];
+  var _naLista = !current;
+  useEffect(function () {
+    if (!_naLista) return undefined;
+    var vivo = true;
+    setPedidosLista(null);
+    sbGetPedidosComStatus().then(function (r) { if (vivo) setPedidosLista(r); });
+    return function () { vivo = false; };
+  }, [_naLista]);
   var _useState65 = useState(""),
     _useState66 = _slicedToArray(_useState65, 2),
     search = _useState66[0],
@@ -1674,6 +1708,7 @@ function App() {
     return /*#__PURE__*/React.createElement(MapCard, {
       key: m.id,
       mapa: m,
+      pedidosLista: pedidosLista,
       onOpen: function(mapaEmMemoria) {
         // FIX: relatado e reproduzido pelo Claudio — abrir um mapa usava só a cópia já
         // carregada em memória nesta aba, que podia estar desatualizada se o mesmo mapa tivesse

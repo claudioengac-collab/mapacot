@@ -40,6 +40,21 @@ function ReportsModal(_ref12) {
   var _useStateAlmoxF = useState(_almoxFPadrao),
     almoxF = _slicedToArray(_useStateAlmoxF, 2)[0],
     setAlmoxF = _slicedToArray(_useStateAlmoxF, 2)[1];
+  // NOVO (09/10/2026 — atendimento nos relatórios): interruptor do relatório e leitura dos pedidos ao abrir o
+  // painel (os pedidos ficam numa tabela à parte; o relatório precisa deles para saber o que já foi atendido).
+  var _useStateModoRel = useState("comprar"),
+    modoRel = _slicedToArray(_useStateModoRel, 2)[0],
+    setModoRel = _slicedToArray(_useStateModoRel, 2)[1];
+  var _useStatePedRel = useState(null),
+    pedidosRel = _slicedToArray(_useStatePedRel, 2)[0],
+    setPedidosRel = _slicedToArray(_useStatePedRel, 2)[1];
+  useEffect(function () {
+    if (!open) return undefined;
+    var vivo = true;
+    setPedidosRel(null);
+    sbGetPedidosComStatus().then(function (r) { if (vivo) setPedidosRel(r); });
+    return function () { vivo = false; };
+  }, [open]);
   var insumosFiltrados = React.useMemo(function () {
     var b = normalizeBusca(buscaInsumo);
     if (!b) return [];
@@ -59,6 +74,7 @@ function ReportsModal(_ref12) {
     setBuscaInsumo("");
     setInsumosMarcados(new Set());
     setAlmoxF(_almoxFPadrao);
+    setModoRel("comprar");
   };
   var fecharLimpando = function fecharLimpando() { limparCampos(); onClose(); };
   var toggleInsumoMarcado = function toggleInsumoMarcado(nome) {
@@ -79,6 +95,39 @@ function ReportsModal(_ref12) {
       }
       return novo;
     });
+  };
+  // Opções de atendimento para os relatórios Período/Obra/Insumo. false = não gerar agora.
+  var montarOptsRel = function montarOptsRel() {
+    if (pedidosRel === null) {
+      alert("AINDA CARREGANDO OS PEDIDOS. AGUARDE ALGUNS SEGUNDOS E CLIQUE DE NOVO.");
+      return false;
+    }
+    if (!pedidosRel.ok) {
+      if (!window.confirm("N\u00c3O FOI POSS\u00cdVEL LER OS PEDIDOS.\n\nO relat\u00f3rio ser\u00e1 gerado SEM o atendimento por pedidos (valores pela quantidade solicitada). Deseja continuar?")) return false;
+      return null;
+    }
+    return { pedidos: pedidosRel.lista, modo: modoRel };
+  };
+  var seletorModoRel = function seletorModoRel() {
+    var nota = pedidosRel === null ? "Carregando pedidos\u2026" : (!pedidosRel.ok ? "\u26a0 N\u00e3o foi poss\u00edvel ler os pedidos: o relat\u00f3rio sair\u00e1 sem o atendimento por pedidos." : "S\u00f3 muda os mapas que j\u00e1 t\u00eam pedido e/ou almoxarifado; o resto sai como sempre.");
+    return /*#__PURE__*/React.createElement("div", {
+      "data-rel-atend": "1",
+      style: { marginTop: 12, padding: "8px 10px", background: "#f4f7ff", border: "1px solid #dbe4f8", borderRadius: 8 }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 11, fontWeight: 700, color: "#2a5298", marginBottom: 6 }
+    }, "VALORES DO RESUMO"), /*#__PURE__*/React.createElement("span", {
+      "data-atend-seg": "1",
+      style: { display: "inline-flex", maxWidth: "100%", borderRadius: 6, overflow: "hidden", border: "1px solid #2a5298" }
+    }, [["comprar", "\uD83D\uDED2 A comprar (falta)"], ["solicitado", "\uD83D\uDCCB Solicitado (cheio)"]].map(function (o) {
+      var on = modoRel === o[0];
+      return /*#__PURE__*/React.createElement("button", {
+        key: o[0], type: "button", "data-rel-modo": o[0], "aria-pressed": on ? "true" : "false",
+        onClick: function () { setModoRel(o[0]); },
+        style: { border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, padding: "6px 7px", whiteSpace: "nowrap", fontFamily: "inherit", background: on ? "#2a5298" : "#fff", color: on ? "#fff" : "#2a5298" }
+      }, o[1]);
+    })), /*#__PURE__*/React.createElement("div", {
+      style: { fontSize: 10, color: "#888", marginTop: 6 }
+    }, nota));
   };
   return /*#__PURE__*/React.createElement(Modal, {
     open: open,
@@ -163,7 +212,7 @@ function ReportsModal(_ref12) {
   }, mapas.filter(function (m) {
     var d = new Date(m.criadoEm);
     return d >= new Date(periodo.inicio + "T00:00:00") && d <= new Date(periodo.fim + "T23:59:59");
-  }).length, " MAPA(S) NO PER\xCDODO")), tab === "obra" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }).length, " MAPA(S) NO PER\xCDODO"), seletorModoRel()), tab === "obra" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: SC.rDesc
   }, "Exibe todos os mapas de uma obra espec\xEDfica, um por p\xE1gina."), /*#__PURE__*/React.createElement("label", {
     style: SC.lbl
@@ -191,7 +240,7 @@ function ReportsModal(_ref12) {
     }
   }, mapas.filter(function (m) {
     return (m.obra || "").toUpperCase().includes(obra.toUpperCase());
-  }).length, " MAPA(S)")), tab === "orcamento" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {style: SC.rDesc}, "Gera o relatório de orçamento de uma obra."), /*#__PURE__*/React.createElement("label", {style: SC.lbl}, "OBRA"), /*#__PURE__*/React.createElement(AutocompleteInput, {value: obra, onChange: setObra, suggestions: Object.keys(orcamentos), placeholder: "BUSCAR OU DIGITAR OBRA...", showOnFocus: true, xStyle: {marginBottom: 4}, inputStyle: {border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none"}}), obra && /*#__PURE__*/React.createElement("div", {style: {fontSize: 11, color: "#888", marginTop: 4}}, orcamentos[obra] ? (orcamentos[obra].itens||orcamentos[obra]||[]).length + " ITEM(S)" : "SEM ORÇAMENTO")), tab === "insumo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }).length, " MAPA(S)"), seletorModoRel()), tab === "orcamento" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {style: SC.rDesc}, "Gera o relatório de orçamento de uma obra."), /*#__PURE__*/React.createElement("label", {style: SC.lbl}, "OBRA"), /*#__PURE__*/React.createElement(AutocompleteInput, {value: obra, onChange: setObra, suggestions: Object.keys(orcamentos), placeholder: "BUSCAR OU DIGITAR OBRA...", showOnFocus: true, xStyle: {marginBottom: 4}, inputStyle: {border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none"}}), obra && /*#__PURE__*/React.createElement("div", {style: {fontSize: 11, color: "#888", marginTop: 4}}, orcamentos[obra] ? (orcamentos[obra].itens||orcamentos[obra]||[]).length + " ITEM(S)" : "SEM ORÇAMENTO")), tab === "insumo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: SC.rDesc
   }, "Compara pre\xE7os de um ou mais insumos em todos os mapas."), /*#__PURE__*/React.createElement("label", {
     style: SC.lbl
@@ -295,8 +344,10 @@ function ReportsModal(_ref12) {
           alert("SELECIONE O PERÍODO.");
           return;
         }
+        var _optsPer = montarOptsRel();
+        if (_optsPer === false) return;
         logEventoDiag("RELAT\u00d3RIO gerado: por PER\u00cdODO (" + periodo.inicio + " a " + periodo.fim + ")");
-        gerarRelatorioPeriodo(mapasComCurrent, periodo.inicio, periodo.fim, orcamentos, associacoes);
+        gerarRelatorioPeriodo(mapasComCurrent, periodo.inicio, periodo.fim, orcamentos, associacoes, _optsPer);
         limparCampos();
       }
       if (tab === "obra") {
@@ -312,8 +363,10 @@ function ReportsModal(_ref12) {
           );
           if (!confirmouTodasObras) return;
         }
+        var _optsObra = montarOptsRel();
+        if (_optsObra === false) return;
         logEventoDiag("RELAT\u00d3RIO gerado: por OBRA (" + (obra.trim() || "TODAS AS OBRAS") + ")");
-        gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes);
+        gerarRelatorioObra(mapasComCurrent, obra, orcamentos, associacoes, _optsObra);
         limparCampos();
       }
       if (tab === "orcamento") {
@@ -358,8 +411,10 @@ function ReportsModal(_ref12) {
           return;
         }
         var _listaInsumosMarcados = Array.from(insumosMarcados);
+        var _optsIns = montarOptsRel();
+        if (_optsIns === false) return;
         logEventoDiag("RELAT\u00d3RIO gerado: por INSUMO (" + _listaInsumosMarcados.length + " marcado(s): " + _listaInsumosMarcados.join(", ") + ")");
-        gerarRelatorioInsumo(mapasComCurrent, _listaInsumosMarcados);
+        gerarRelatorioInsumo(mapasComCurrent, _listaInsumosMarcados, _optsIns);
         limparCampos();
       }
     }
