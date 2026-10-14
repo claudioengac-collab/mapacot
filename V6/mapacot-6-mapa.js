@@ -586,6 +586,17 @@ var _useState27 = useState(init),
       return ok;
     });
   };
+  // v=13 (robô): desfazer o aprendizado de UNIDADE (mesmo caminho do desfazer de insumo, com o prefixo "UNID::")
+  var desfazerAprendizadoUnidade = function(textoOriginal){
+    var chave = String(textoOriginal||'').trim().toUpperCase();
+    logEventoDiag("ENSINAR SISTEMA (desfazer unidade): \"" + chave.slice(0,40) + "\"");
+    return sbExcluirAprendizado(PREFIXO_APRENDIZADO_UNIDADE + chave).then(function(ok){
+      if(ok){
+        setAprendizadosUnidade(function(prev){ var n = Object.assign({}, prev); delete n[chave]; return n; });
+      }
+      return ok;
+    });
+  };
   var _useStateEns=useState(false),showEnsinarSistema=_slicedToArray(_useStateEns,2)[0],setShowEnsinarSistema=_slicedToArray(_useStateEns,2)[1];
   var _useStateAV=useState(false),showAdicionarVarios=_slicedToArray(_useStateAV,2)[0],setShowAdicionarVarios=_slicedToArray(_useStateAV,2)[1];
   // FIX (pedido do Claudio — nome do fornecedor cortado no cabeçalho, ex: "ACREFERRO COMERC...";
@@ -2624,7 +2635,7 @@ var _useState27 = useState(init),
       }), " ADICIONAR ITEM"), /*#__PURE__*/React.createElement("button", {
         onClick: function(){ setShowAdicionarVarios(true); },
         style: _objectSpread(_objectSpread({}, SC.btnAddItem), {}, { background:"#f0a500", color:"#1a2b4a" })
-      }, "📋 ADICIONAR VÁRIOS DE UMA VEZ"), /*#__PURE__*/React.createElement("span", {
+      }, "🤖 PREENCHER COM O ROBÔ"), /*#__PURE__*/React.createElement("span", {
         style: {
           fontSize: 13,
           fontWeight: 700,
@@ -3527,13 +3538,17 @@ var _useState27 = useState(init),
     onAprendizadoRemovido: desfazerAprendizado,
     onClose: function(){ setShowEnsinarSistema(false); }
   }),
-  showAdicionarVarios && /*#__PURE__*/React.createElement(ModalAdicionarVariosItens, {
+  showAdicionarVarios && /*#__PURE__*/React.createElement(ModalRoboPreenchimento, {
+    mapa: mapa,
+    mapas: mapas,
     cadastrosInsumos: cadastros.insumos||[],
     cadastrosUnidades: cadastros.unidades||[],
     aprendizados: aprendizados,
     aprendizadosUnidade: aprendizadosUnidade,
     onRegistrarAprendizado: registrarAprendizado,
     onRegistrarAprendizadoUnidade: registrarAprendizadoUnidade,
+    onAprendizadoRemovido: desfazerAprendizado,
+    onAprendizadoUnidadeRemovido: desfazerAprendizadoUnidade,
     onConfirmar: function(itensParaAdicionar){
       addVariosItens(itensParaAdicionar);
       setShowAdicionarVarios(false);
