@@ -9,6 +9,14 @@ function normalizeVendedorLista(valor) {
 }
 // NOVO (pedido do Claudio — anexar PDF/Excel, 30/09/2026): formata tamanho (bytes -> "842 KB" /
 // "1,2 MB") e data (ISO -> "30/09/2026") de cada anexo, só para exibição na listinha do painel.
+// v=14: quando o Banco de Cadastros é aberto de DENTRO do robô de preenchimento, ele precisa ficar numa camada ACIMA do robô
+// (as duas janelas usam a mesma altura de camada e o robô, mais abaixo no código, ficaria por cima). Fora disso (robô fechado)
+// devolve os filhos exatamente como antes: nada muda no jeito como o Banco abre pelo menu Cadastros.
+function BancoSobreRobo(props) {
+  if (!props.sobre) return props.children;
+  return React.createElement("div", { "data-banco-sobre-robo": "1", style: { position: "fixed", left: 0, top: 0, width: 0, height: 0, zIndex: 9000 } }, props.children);
+}
+
 function fmtBytes(bytes) {
   var n = Number(bytes) || 0;
   if (n < 1024 * 1024) return Math.round(n / 1024) + " KB";
@@ -3229,7 +3237,7 @@ var _useState27 = useState(init),
       )
     )
   )),
-  showCadEditor && /*#__PURE__*/React.createElement(CadastrosModal, {
+  showCadEditor && /*#__PURE__*/React.createElement(BancoSobreRobo, { sobre: !!showAdicionarVarios }, /*#__PURE__*/React.createElement(CadastrosModal, {
     open: showCadEditor,
     onClose: function onClose() { setShowCadEditor(false); },
     cadastros: cadastros,
@@ -3256,7 +3264,7 @@ var _useState27 = useState(init),
     onImportarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraImpEd(obra); setShowImpEd(true); }, 200); },
     onLimparOrcamento: onLimparOrcamento,
     onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraGerEd(obra); setShowGerEd(true); }, 200); }
-  }),
+  })),
   showCasar && /*#__PURE__*/React.createElement(ModalCasarInsumos, {
     mapa: mapa, itens: itens,
     onClose: function(){ setShowCasar(false); },
@@ -3549,6 +3557,9 @@ var _useState27 = useState(init),
     onRegistrarAprendizadoUnidade: registrarAprendizadoUnidade,
     onAprendizadoRemovido: desfazerAprendizado,
     onAprendizadoUnidadeRemovido: desfazerAprendizadoUnidade,
+    // v=14: o robô abre o MESMO Banco de Cadastros do menu "Cadastros" (mesmo componente, mesmas funções de salvar)
+    onAbrirCadastros: function(){ setShowCadEditor(true); },
+    bancoAberto: !!showCadEditor,
     onConfirmar: function(itensParaAdicionar){
       addVariosItens(itensParaAdicionar);
       setShowAdicionarVarios(false);

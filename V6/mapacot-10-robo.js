@@ -895,6 +895,12 @@ var MapacotRobo = (function () {
     }
   };
 
+  // v14: uma linha "deixada de fora" não calcula pendências (devolve cedo). Para saber se o insumo/medida da marca "pedir cadastro" já existe,
+  // olhamos a linha como se não estivesse de fora (a decisão de deixar de fora continua valendo; só não esconde a situação do cadastro).
+  function visaoSemFora(L, ctx) {
+    return L.escolha.fora ? visaoLinha(extend(L, { escolha: extend(L.escolha, { fora: false }) }), ctx) : visaoLinha(L, ctx);
+  }
+
   // Refaz a conferência das linhas com o cadastro/aprendizado de AGORA (ex.: depois de desfazer um aprendizado),
   // sem perder nenhuma escolha dele.
   function reavaliar(linhas, ctx) {
@@ -902,6 +908,12 @@ var MapacotRobo = (function () {
       if (!L.info) return L;
       var N = criarLinha(L.info, ctx, L.n);
       N.id = L.id; N.escolha = L.escolha;
+      // v14: se ele tinha marcado "pedir cadastro" (insumo que não existe OU medida que não existe) e isso PASSOU a existir (cadastrou no Banco), a marca perde o sentido:
+      // a linha volta a ser conferida normalmente (provável/certo), sem ficar de fora por causa da marca antiga.
+      if (N.escolha && N.escolha.pedirCadastro) {
+        var V0 = visaoSemFora(N, ctx);
+        if (V0.estado !== 'ignorada' && V0.pendencias.indexOf('insumo-nao') < 0 && V0.pendencias.indexOf('insumo-numero') < 0) N = Acoes.desfazerPedirCadastro(N);
+      }
       return N;
     });
   }
@@ -940,7 +952,8 @@ var MapacotRobo = (function () {
     var jaAprendiI = {}, jaAprendiU = {};
     vs.forEach(function (V, i) {
       var L = linhas[i];
-      if (L.escolha.pedirCadastro) { pedirCadastro.push({ desc: (V.hipotese && V.hipotese.desc) || L.texto, qtd: V.qtd && V.qtd.valor, unid: V.hipotese && V.hipotese.unid }); }
+      var Vm = L.escolha.pedirCadastro && V.estado === 'fora' ? visaoSemFora(L, ctx) : V;
+      if (L.escolha.pedirCadastro && (V.estado === 'ignorada' || Vm.pendencias.indexOf('insumo-nao') >= 0 || Vm.pendencias.indexOf('insumo-numero') >= 0)) { pedirCadastro.push({ desc: (V.hipotese && V.hipotese.desc) || L.texto, qtd: V.qtd && V.qtd.valor, unid: V.hipotese && V.hipotese.unid }); }
       if (!V.incluir || !V.completo) return;
       itens.push({ qtd: V.qtd.valor, unid: V.unidade.oficial, descricao: V.insumo.oficial });
       var e = L.hip[L.escolha.hip != null ? L.escolha.hip : L.iHip];
@@ -1129,8 +1142,12 @@ var RB_ICONES = {
   robo: [['rect', { x: 4, y: 8, width: 16, height: 11, rx: 3 }], ['path', { d: 'M12 8V5M9 13.5v.01M15 13.5v.01M10 16.5h4' }]],
   cadeado: [['rect', { x: 5, y: 11, width: 14, height: 9, rx: 2 }], ['path', { d: 'M8 11V8a4 4 0 018 0v3' }]],
   seta: [['path', { d: 'M5 12h14M13 6l6 6-6 6' }]],
-  lampada: [['path', { d: 'M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0012 3z' }]]
+  lampada: [['path', { d: 'M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0012 3z' }]],
+  pasta: [['path', { d: 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z' }]],
+  copiar: [['rect', { x: 9, y: 9, width: 11, height: 11, rx: 2 }], ['path', { d: 'M5 15V6a2 2 0 012-2h8' }]],
+  mais: [['path', { d: 'M12 5v14M5 12h14' }]]
 };
+var RB_VAZIO = []; // referência estável (evita recalcular tudo a cada tela quando o mapa não passa cadastro)
 function rbIco(nome, tam, cor) {
   var partes = RB_ICONES[nome] || [];
   return React.createElement('svg', { width: tam || 18, height: tam || 18, viewBox: '0 0 24 24', fill: 'none', stroke: cor || 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true', style: { flex: 'none' } },
@@ -1441,7 +1458,14 @@ function RoboBusca(props) {
   var _t = useState(inicial), termo = _t[0], setTermo = _t[1];
   var _s = useState(null), sel = _s[0], setSel = _s[1];
   var _en = useState(true), ensinar = _en[0], setEnsinar = _en[1];
+  var _co = useState(''), copiado = _co[0], setCopiado = _co[1];
   var res = React.useMemo(function () { return R.buscarCadastro(ctx, termo, 500); }, [ctx, termo]);
+  // v14: copia o nome que veio na lista dele (sem quantidade e sem unidade), para colar no insumo novo do Banco
+  var copiarNome = function () {
+    var nome = String(descPedido || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    rbCopiar(nome).then(function () { setCopiado('ok'); setTimeout(function () { setCopiado(''); }, 2500); })
+      .catch(function () { setCopiado('erro'); setTimeout(function () { setCopiado(''); }, 3500); });
+  };
   var lista = res.todas.concat(res.parte);
   var conf = sel ? R.conferirEscolha(descPedido, sel) : null;
 
@@ -1494,6 +1518,10 @@ function RoboBusca(props) {
           h('b', null, 'Medida diferente: '), 'pedido ' + conf.faltantes.map(R.numLegivel).join(', ') + (conf.extras.length ? ', escolhido ' + conf.extras.map(R.numLegivel).join(', ') : ', e o insumo escolhido não tem essa medida') + '. Só use se for isso mesmo que você quer. O sistema não aprende essa troca.'),
         sel && conf.semMedidaNoCadastro && h('div', { style: { marginTop: 10, padding: '10px 14px', borderRadius: 10, background: RB.azulBg, border: '1px solid ' + RB.azulBd, fontSize: 13.5, lineHeight: 1.5 } }, 'O pedido tem ' + conf.faltantes.map(R.numLegivel).join(', ') + ', mas o insumo escolhido não traz medida no nome. Confira se é o que você quer.'),
         sel && rbCaixinha(conf.conflito ? false : ensinar, function (v) { setEnsinar(v); }, 'Ensinar o sistema: "' + descPedido + '" vale este insumo', conf.conflito ? 'Desativado: com número/medida diferente o sistema não aprende.' : 'Vale só para essa frase exata. Dá para desfazer depois em "O que o sistema já aprendeu".', conf.conflito)),
+      props.onAbrirCadastros && h('div', { 'data-rb': 'faixa-cadastrar', style: { flex: 'none', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 24px', background: RB.azulBg, borderTop: '1px solid ' + RB.azulBd } },
+        h('div', { style: { flex: '1 1 220px', fontSize: 14, lineHeight: 1.4 } }, h('b', null, 'Não achou o insumo certo na lista?'), ' Cadastre agora, sem sair do robô.'),
+        h('button', { type: 'button', className: 'rb-btn rb-btn-s', 'data-rb': 'copiar-nome', onClick: copiarNome }, rbIco('copiar', 16), copiado === 'ok' ? 'Copiado!' : copiado === 'erro' ? 'Não consegui copiar' : 'Copiar nome'),
+        h('button', { type: 'button', className: 'rb-btn rb-btn-s rb-btn-p', 'data-rb': 'cadastrar-agora', onClick: props.onAbrirCadastros }, rbIco('mais', 16), 'Cadastrar este insumo agora')),
       h('div', { className: 'rb-ftr' },
         h('button', { type: 'button', className: 'rb-btn', onClick: props.onFechar }, 'Cancelar'),
         h('div', { style: { flex: 1 } }),
@@ -1562,8 +1590,8 @@ function rbLetraColuna(i) { return i >= 0 && i < 26 ? String.fromCharCode(65 + i
 // ───────────────────────── o robô (3 passos) ─────────────────────────
 function ModalRoboPreenchimento(props) {
   var h = React.createElement, R = MapacotRobo, A = R.Acoes;
-  var insumosCad = props.cadastrosInsumos || [];
-  var unidadesCad = props.cadastrosUnidades || [];
+  var insumosCad = props.cadastrosInsumos || RB_VAZIO;
+  var unidadesCad = props.cadastrosUnidades || RB_VAZIO;
   var mapaItens = (props.mapa && props.mapa.itens) || [];
 
   var _p = useState(1), passo = _p[0], setPasso = _p[1];
@@ -1597,6 +1625,20 @@ function ModalRoboPreenchimento(props) {
   var vs = React.useMemo(function () { return linhas ? R.calcularTudo(linhas, ctx) : []; }, [linhas, ctx]);
   var nProvaveis = React.useMemo(function () { return linhas ? R.contarProvaveis(linhas, ctx) : 0; }, [linhas, ctx]);
   var aplicacao = React.useMemo(function () { return linhas ? R.montarAplicacao(linhas, ctx) : { itens: [], aprender: [], aprenderUnidade: [], pedirCadastro: [] }; }, [linhas, ctx]);
+
+  // v14: o Banco de Cadastros pode abrir POR CIMA do robô (botão no topo e faixa da busca). Quando o cadastro muda
+  // (insumo ou unidade novos, editados ou apagados), as linhas são lidas de novo com o cadastro de AGORA,
+  // sem perder nenhuma escolha dele.
+  var catAnterior = React.useRef({ i: insumosCad, u: unidadesCad });
+  useEffect(function () {
+    var antes = catAnterior.current;
+    catAnterior.current = { i: insumosCad, u: unidadesCad };
+    if (antes.i === insumosCad && antes.u === unidadesCad) return;
+    setLinhas(function (prev) { return prev ? R.reavaliar(prev, ctx) : prev; });
+  }, [insumosCad, unidadesCad]);
+  // a janela do Banco devolve a rolagem da página ao fechar; com o robô ainda aberto, trava de novo.
+  useEffect(function () { document.body.style.overflow = 'hidden'; }, [props.bancoAberto]);
+  var abrirBanco = function () { if (props.onAbrirCadastros) props.onAbrirCadastros(); };
 
   // ── leitura (texto / Excel / PDF / foto) ──
   var entrar = function (res, info) {
@@ -1796,6 +1838,7 @@ function ModalRoboPreenchimento(props) {
     return h('div', { className: 'rb-hdr' },
       h('div', { style: { width: 42, height: 42, borderRadius: 10, background: RB.navy, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' } }, rbIco('robo', 24)),
       h('div', { style: { flex: 1, minWidth: 0 } }, h('div', { style: { fontSize: 20, fontWeight: 700 } }, titulo), h('div', { style: { fontSize: 13, color: RB.mute, marginTop: 2, lineHeight: 1.4 } }, sub)),
+      props.onAbrirCadastros && h('button', { type: 'button', className: 'rb-btn', 'data-rb': 'abrir-banco', 'aria-label': 'Banco de cadastros', title: 'Abrir o Banco de Cadastros (insumos, fornecedores, unidades e obras) sem sair do robô', onClick: abrirBanco, style: { flex: 'none' } }, rbIco('pasta', 18), h('span', { className: 'rb-hide-m' }, 'Banco de cadastros')),
       h('button', { type: 'button', 'aria-label': 'Fechar', onClick: tentarFechar, style: { width: 44, height: 44, border: 0, background: RB.soft, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' } }, rbIco('fechar', 18)));
   };
   var passos = function () {
@@ -1991,6 +2034,7 @@ function ModalRoboPreenchimento(props) {
         passo === 1 ? rodapePasso1() : passo === 2 ? rodapePasso2() : rodapePasso3())),
     buscaLinha && h(RoboBusca, {
       L: buscaLinha.L, V: buscaLinha.V, ctx: ctx,
+      onAbrirCadastros: props.onAbrirCadastros ? abrirBanco : null,
       onFechar: function () { setBuscaId(null); },
       onPedirCadastro: function () { mudarLinha(A.pedirCadastro(buscaLinha.L)); setBuscaId(null); },
       onUsar: function (nome, modo) {
