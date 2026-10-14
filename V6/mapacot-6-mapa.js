@@ -951,7 +951,8 @@ var _useState27 = useState(init),
           id: uid(),
           num: baseNum + idx + 1,
           descricao: it.descricao || '',
-          detalhe: '',
+          // v=15: o robô pode mandar o detalhe de cada insumo (campo opcional); sem detalhe continua vazio, como sempre
+          detalhe: it.detalhe ? String(it.detalhe) : '',
           qt: it.qtd || '',
           unid: it.unid || ''
         };
@@ -3560,6 +3561,8 @@ var _useState27 = useState(init),
     // v=14: o robô abre o MESMO Banco de Cadastros do menu "Cadastros" (mesmo componente, mesmas funções de salvar)
     onAbrirCadastros: function(){ setShowCadEditor(true); },
     bancoAberto: !!showCadEditor,
+    // v=15: avisa ao robô que este mapa sabe gravar o detalhe de cada insumo (sem isto o robô nem mostra o campo)
+    suportaDetalhe: true,
     onConfirmar: function(itensParaAdicionar){
       addVariosItens(itensParaAdicionar);
       setShowAdicionarVarios(false);

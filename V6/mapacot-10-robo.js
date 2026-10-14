@@ -884,6 +884,8 @@ var MapacotRobo = (function () {
     confirmarQtd: function (L) { var e = L.hip[L.escolha.hip != null ? L.escolha.hip : L.iHip]; return e && e.h.qtd ? comEscolha(L, { qtd: e.h.qtd }) : L; },
     incluirRiscada: function (L) { return comEscolha(L, { incluirRiscada: true }); },
     duplicadoOk: function (L) { return comEscolha(L, { duplicadoOk: true }); },
+    // v15: detalhe opcional do insumo (vai para o "+ DETALHE" do item do mapa ao aplicar). Não mexe em mais nada da linha.
+    definirDetalhe: function (L, valor) { return comEscolha(L, { detalhe: valor }); },
     pedirCadastro: function (L) { return comEscolha(L, { pedirCadastro: true, incluir: false }); },
     desfazerPedirCadastro: function (L) { return comEscolha(L, { pedirCadastro: false, incluir: null }); },
     // "150" no fim de "lixa 150" não era quantidade: o número volta para a descrição e a quantidade fica em branco
@@ -945,6 +947,11 @@ var MapacotRobo = (function () {
     return n;
   }
 
+  // v15: texto do detalhe como o mapa guarda (maiúsculas, sem espaço/linha sobrando nas pontas). Vazio = sem detalhe.
+  function detalheDe(L) {
+    return String((L && L.escolha && L.escolha.detalhe) || '').replace(/\r/g, '').split('\n').map(function (x) { return x.replace(/[ \t]+/g, ' ').trim(); }).join('\n').trim().toUpperCase();
+  }
+
   // O que vai para o mapa e o que o sistema aprende — só ao clicar em Aplicar.
   function montarAplicacao(linhas, ctx) {
     var vs = calcularTudo(linhas, ctx);
@@ -955,7 +962,10 @@ var MapacotRobo = (function () {
       var Vm = L.escolha.pedirCadastro && V.estado === 'fora' ? visaoSemFora(L, ctx) : V;
       if (L.escolha.pedirCadastro && (V.estado === 'ignorada' || Vm.pendencias.indexOf('insumo-nao') >= 0 || Vm.pendencias.indexOf('insumo-numero') >= 0)) { pedirCadastro.push({ desc: (V.hipotese && V.hipotese.desc) || L.texto, qtd: V.qtd && V.qtd.valor, unid: V.hipotese && V.hipotese.unid }); }
       if (!V.incluir || !V.completo) return;
-      itens.push({ qtd: V.qtd.valor, unid: V.unidade.oficial, descricao: V.insumo.oficial });
+      var itemNovo = { qtd: V.qtd.valor, unid: V.unidade.oficial, descricao: V.insumo.oficial };
+      var detLinha = detalheDe(L);
+      if (detLinha) itemNovo.detalhe = detLinha;
+      itens.push(itemNovo);
       var e = L.hip[L.escolha.hip != null ? L.escolha.hip : L.iHip];
       if (V.insumo.via === 'escolhido' && V.insumo.ensinar && !(L.escolha.insumo && L.escolha.insumo.numeroAceito)) {
         var txt = e.h.descCompleta || e.h.desc; var kk = txt.toUpperCase();
@@ -1065,7 +1075,7 @@ var MapacotRobo = (function () {
 
   return {
     // leitura
-    lerPdf: lerPdf, reavaliar: reavaliar, chavesEnsinadas: chavesEnsinadas, lerRespostaIA: lerRespostaIA, linhasDoPdf: linhasDoPdf, buscarCadastro: buscarCadastro, conferirEscolha: conferirEscolha, numLegivel: numLegivel,
+    lerPdf: lerPdf, detalheDe: detalheDe, reavaliar: reavaliar, chavesEnsinadas: chavesEnsinadas, lerRespostaIA: lerRespostaIA, linhasDoPdf: linhasDoPdf, buscarCadastro: buscarCadastro, conferirEscolha: conferirEscolha, numLegivel: numLegivel,
     lerTexto: lerTexto, lerLinhaLivre: lerLinhaLivre, lerLinhasEstruturadas: lerLinhasEstruturadas, lerPlanilha: lerPlanilha, linhasDeIA: linhasDeIA,
     // contexto e conferência
     criarContexto: criarContexto, construirUsoAnterior: construirUsoAnterior, casarInsumo: casarInsumo, casarUnidade: casarUnidade,
@@ -1115,6 +1125,8 @@ var RB_CSS = [
   '.rb-seg button.rb-on{background:#fff;font-weight:700;color:#0f2147;box-shadow:0 1px 3px rgba(8,16,40,.15)}',
   '.rb-in{height:42px;border:1px solid #b6bfd1;border-radius:8px;padding:0 12px;font-size:15px;color:#1b2437;background:#fff;font-family:inherit}',
   '.rb-in:focus{outline:2px solid #0f2147;outline-offset:0}',
+  '.rb-det{width:100%;min-height:44px;border:1px dashed #8d9ab4;border-radius:8px;padding:9px 12px;font-size:14px;line-height:1.4;color:#1b2437;background:#f6f9ff;font-family:inherit;resize:vertical;text-transform:uppercase;box-sizing:border-box;display:block}',
+  '.rb-det:focus{outline:2px solid #0f2147;outline-offset:0;border-style:solid;background:#fff}',
   '.rb-opt{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid #d9dfeb;border-radius:8px;background:#fff;margin-bottom:8px;cursor:pointer;font-size:14px;line-height:1.35;width:100%;text-align:left}',
   '.rb-opt.rb-on{border:2px solid #0f2147;background:#eaf0fc;padding:9px 11px}',
   '.rb-mono{font-family:Consolas,"Courier New",monospace}',
@@ -1437,6 +1449,11 @@ function RoboLinha(props) {
     e && e.unid && !V.unidade && h('div', { style: { fontSize: 11, color: RB.amarTx, marginTop: 4, fontWeight: 700 } }, 'escrito: ' + e.unid)
   ) : h('div', { style: { fontWeight: 800, fontSize: 18, color: RB.mute } }, e && e.qtd ? e.qtd : '—');
 
+  // v15: campo "Detalhe" (opcional) em cada insumo que ainda pode ir para o mapa. Só aparece se o mapa em uso sabe gravar o detalhe.
+  var campoDetalhe = (props.comDetalhe && editavel) ? h('div', { 'data-rb': 'detalhe', style: { marginTop: secs.length ? 2 : 0 } },
+    h('label', { htmlFor: 'rb-det-' + L.id, style: { display: 'block', fontSize: 11, fontWeight: 800, letterSpacing: '.04em', color: RB.mute, marginBottom: 4 } }, 'DETALHE (OPCIONAL) \u2014 VAI PARA O "+ DETALHE" DO MAPA'),
+    h('textarea', { id: 'rb-det-' + L.id, className: 'rb-det', rows: 1, value: L.escolha.detalhe || '', placeholder: 'Fabricante, marca, medida...', 'aria-label': 'Detalhe da linha ' + L.n, onChange: function (ev) { set(A.definirDetalhe(L, ev.target.value)); } })) : null;
+
   var sitSub = estado === 'ignorada' ? 'Riscada na relação' : estado === 'fora' ? 'Deixada de fora' : (estado === 'certo' && V.insumo && V.insumo.via === 'ensinado') ? 'Já ensinado' : (estado === 'conferir' || estado === 'nao') ? rbRotuloSituacao(V, L) : (estado === 'resolvida' ? 'Você resolveu' : '');
   var rotuloChip = estado === 'ignorada' ? 'IGNORADA' : estado === 'fora' ? 'DE FORA' : V.rotulo;
 
@@ -1445,7 +1462,7 @@ function RoboLinha(props) {
     h('div', { className: 'rb-cel rb-c-env' }, h('div', { style: { fontSize: 11, fontWeight: 700, letterSpacing: '.04em', color: RB.mute } }, 'LINHA ' + L.n),
       h('div', { className: 'rb-mono', style: { marginTop: 4, padding: '8px 10px', background: '#eef2fb', borderRadius: 6, fontSize: 13, lineHeight: 1.4, wordBreak: 'break-word', textDecoration: estado === 'ignorada' ? 'line-through' : 'none', color: estado === 'ignorada' ? RB.mute : RB.ink } }, (L.original || '').trim())),
     h('div', { className: 'rb-cel rb-c-qtd' }, celQtd),
-    h('div', { className: 'rb-cel rb-c-cad' }, secs),
+    h('div', { className: 'rb-cel rb-c-cad' }, secs, campoDetalhe),
     h('div', { className: 'rb-cel rb-c-sit' }, rbChip(estado, rotuloChip), sitSub && h('div', { style: { fontSize: 13, color: estado === 'conferir' ? RB.amarTx : estado === 'nao' ? RB.verm : RB.mute, marginTop: 6, lineHeight: 1.35 } }, sitSub)));
 }
 
@@ -1947,7 +1964,7 @@ function ModalRoboPreenchimento(props) {
       erro && h('div', { role: 'alert', style: { marginTop: 12, padding: '10px 14px', borderRadius: 8, background: RB.vermBg, border: '1px solid ' + RB.vermBd, color: RB.verm, fontSize: 13.5 } }, erro),
       h('div', { className: 'rb-colhead' }, h('div'), h('div', { style: { padding: '0 12px' } }, 'VOCÊ ENVIOU'), h('div', { style: { padding: '0 12px' } }, 'QTD · UN'), h('div', { style: { padding: '0 12px' } }, 'NO CADASTRO DO SISTEMA'), h('div', { style: { padding: '0 12px' } }, 'SITUAÇÃO')),
       visiveis.length === 0 && h('div', { style: { padding: 24, textAlign: 'center', color: RB.mute, fontSize: 14 } }, 'Nenhuma linha neste filtro.'),
-      visiveis.map(function (o) { return h(RoboLinha, { key: o.L.id, L: o.L, V: o.V, ctx: ctx, onMudar: mudarLinha, onBuscar: function (LL) { setBuscaId(LL.id); }, onDesfazerEnsinado: desfazerEnsinado }); }),
+      visiveis.map(function (o) { return h(RoboLinha, { key: o.L.id, L: o.L, V: o.V, ctx: ctx, comDetalhe: !!props.suportaDetalhe, onMudar: mudarLinha, onBuscar: function (LL) { setBuscaId(LL.id); }, onDesfazerEnsinado: desfazerEnsinado }); }),
       filtro === 'todas' && ignoradas.length > 0 && h('div', { style: { margin: '6px 0 14px', padding: '12px 14px', border: '1px dashed ' + RB.line3, borderRadius: 10, background: '#fff' } },
         h('div', { style: { fontWeight: 800, fontSize: 13.5, marginBottom: 6 } }, ignoradas.length + (ignoradas.length === 1 ? ' linha ignorada' : ' linhas ignoradas') + ' (sem quantidade, unidade e insumo):'),
         ignoradas.map(function (o) { return h('div', { key: o.L.id, style: { display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', flexWrap: 'wrap', borderTop: '1px solid ' + RB.line } }, h('div', { style: { flex: 1, minWidth: 200, fontSize: 13.5 } }, h('span', { style: { color: RB.mute } }, 'Linha ' + o.L.n + ': '), '"' + ((o.L.original || '').trim()) + '"'), rbBtn('Tratar como insumo', function () { mudarLinha(A.tratarComoInsumo(o.L)); })); })));
@@ -1981,13 +1998,13 @@ function ModalRoboPreenchimento(props) {
         cartao(nAprender, nAprender === 1 ? 'coisa que o sistema vai aprender' : 'coisas que o sistema vai aprender', RB.azulBg, RB.azulBd, RB.navy)),
       h('div', { style: { display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' } },
         h('div', { style: { flex: '2 1 460px', minWidth: 0 } },
-          titulo('Vai para o mapa (quantidade, unidade e descrição)'),
+          titulo(props.suportaDetalhe ? 'Vai para o mapa (quantidade, unidade, descrição e detalhe)' : 'Vai para o mapa (quantidade, unidade e descrição)'),
           aplicacao.itens.length === 0 ? h('div', { style: { padding: 16, border: '1px solid ' + RB.line2, borderRadius: 10, color: RB.mute, fontSize: 14 } }, 'Nenhum insumo marcado. Volte e resolva as linhas, ou marque as que estão prontas.') :
             h('div', { style: { border: '1px solid ' + RB.line2, borderRadius: 10, overflow: 'hidden' } }, entram.map(function (o, i) {
               var e = o.V.hipotese, nota = '';
               if (o.V.unidade.via === 'escolhida' && e.unid && R.chaveUnid(e.unid) !== R.chaveUnid(o.V.unidade.oficial)) nota = 'você escreveu "' + e.unid + '" e escolheu ' + o.V.unidade.oficial;
               else if (o.V.insumo.via === 'escolhido') nota = 'você escreveu "' + (e.descCompleta || e.desc) + '"';
-              return h('div', { key: o.L.id, style: { display: 'grid', gridTemplateColumns: '64px 64px minmax(0,1fr)', gap: 8, padding: '10px 14px', borderTop: i ? '1px solid ' + RB.line : 'none', alignItems: 'center', fontSize: 15 } }, h('b', null, o.V.qtd.valor), h('b', null, o.V.unidade.oficial), h('div', null, h('b', null, o.V.insumo.oficial), nota && h('div', { style: { fontSize: 12.5, color: RB.mute, marginTop: 2 } }, nota)));
+              return h('div', { key: o.L.id, style: { display: 'grid', gridTemplateColumns: '64px 64px minmax(0,1fr)', gap: 8, padding: '10px 14px', borderTop: i ? '1px solid ' + RB.line : 'none', alignItems: 'center', fontSize: 15 } }, h('b', null, o.V.qtd.valor), h('b', null, o.V.unidade.oficial), h('div', null, h('b', null, o.V.insumo.oficial), props.suportaDetalhe && R.detalheDe(o.L) && h('div', { 'data-rb': 'resumo-detalhe', style: { fontSize: 13, color: RB.ink, marginTop: 3, padding: '3px 8px', background: '#f0f6ff', border: '1px dashed #8d9ab4', borderRadius: 6, fontWeight: 700, whiteSpace: 'pre-wrap', wordBreak: 'break-word' } }, 'Detalhe: ' + R.detalheDe(o.L)), nota && h('div', { style: { fontSize: 12.5, color: RB.mute, marginTop: 2 } }, nota)));
             })),
           (aplicacao.aprender.length + aplicacao.aprenderUnidade.length) > 0 && h('div', null,
             titulo('O sistema vai aprender (' + (aplicacao.aprender.length + aplicacao.aprenderUnidade.length) + ')'),
