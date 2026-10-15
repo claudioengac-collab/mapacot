@@ -1193,6 +1193,43 @@ var _useState27 = useState(init),
       });
     });
   };
+  // v16 (pedido do Claudio — Ler com IA / Casar insumos): ao clicar em PREENCHER MAPA / CARREGAR,
+  // além do VALOR, a descrição que veio no orçamento acompanha cada valor e vai para o DETALHE
+  // daquele fornecedor naquele insumo (o mesmo campo "+ DETALHE" que fica embaixo do valor).
+  // Regras (decididas com o Claudio, conforme o layout aprovado):
+  //  - só os itens que ele associou (ligs); item sem correspondência não leva nada;
+  //  - vai para o fornecedor escolhido na tela; o Detalhe de outro fornecedor não é tocado;
+  //  - NUNCA apaga o que o próprio Claudio digitou: só grava se o Detalhe está vazio, OU se o texto
+  //    que está lá ainda é exatamente o que o sistema gravou numa carga anterior (assim, ao
+  //    recarregar um orçamento revisado do mesmo fornecedor, o texto acompanha o novo valor);
+  //  - o texto gravado pelo sistema fica anotado em "detalhesOrc" (campo novo, só para essa
+  //    comparação; nenhuma outra parte do sistema lê esse campo).
+  var textoDetalheDoOrcamento = function textoDetalheDoOrcamento(desc) {
+    return String(desc == null ? "" : desc).replace(/\s+/g, " ").trim().toUpperCase();
+  };
+  var setDetalhesDoOrcamento = function setDetalhesDoOrcamento(ligs) {
+    return update(function (m) {
+      var det = m.detalhes || {};
+      var auto = m.detalhesOrc || {};
+      var novoDet = null, novoAuto = null;
+      Object.keys(ligs || {}).forEach(function (itemMapaId) {
+        var lig = ligs[itemMapaId];
+        if (!lig || !lig.fornId) return;
+        var txt = textoDetalheDoOrcamento(lig.descPDF);
+        if (!txt) return;
+        var key = itemMapaId + "_" + lig.fornId;
+        var atual = String(det[key] == null ? "" : det[key]).trim();
+        var gravadoAntes = auto[key] == null ? null : String(auto[key]).trim();
+        if (atual === txt) return;
+        if (atual !== "" && gravadoAntes !== atual) return; // texto do próprio usuário: não mexe
+        if (!novoDet) { novoDet = Object.assign({}, det); novoAuto = Object.assign({}, auto); }
+        novoDet[key] = txt;
+        novoAuto[key] = txt;
+      });
+      if (!novoDet) return m;
+      return Object.assign({}, m, { detalhes: novoDet, detalhesOrc: novoAuto });
+    });
+  };
   var setRodape = function setRodape(fid, f, v) {
     return update(function (m) {
       return _objectSpread(_objectSpread({}, m), {}, {
@@ -3275,6 +3312,7 @@ var _useState27 = useState(init),
         var lig=ligs[itemMapaId];
         setPrecoDireto(itemMapaId, lig.fornId, fmtBRL(lig.preco));
       });
+      setDetalhesDoOrcamento(ligs); // v16: a descrição do orçamento acompanha cada valor (Detalhe)
       setShowCasar(false);
     }
   }),
@@ -3291,6 +3329,7 @@ var _useState27 = useState(init),
         var lig=ligs[itemMapaId];
         setPrecoDireto(itemMapaId, lig.fornId, fmtBRL(lig.preco));
       });
+      setDetalhesDoOrcamento(ligs); // v16: a descrição do orçamento acompanha cada valor (Detalhe)
       setShowLerIA(false);
     },
     onIaUso: function(d){ setIaUsoDia(function(prev){ return { leituras: prev.leituras+1, custo: prev.custo+(d.custo||0) }; }); }
