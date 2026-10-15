@@ -1,6 +1,455 @@
+// ==== v17 CONFUN INICIO ====
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// v17 — CONFERÊNCIA DE UNIDADE, QUANTIDADE E PREÇO (com "conta") ao carregar orçamento no mapa
+// Usada por: Ler com IA (grátis e IA) e Casar insumos. Layout aprovado pelo Claudio (5 quadros).
+// REGRA DE OURO: o sistema só AVISA e SUGERE. Nunca converte sozinho: só vale o número que a pessoa
+// confirma. Sem conta, o preço entra exatamente como veio no orçamento (como era antes).
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+var ConfUn = (function () {
+  var FATOR_PRECO = 5;      // preço 5x acima/abaixo dos outros fornecedores acende o aviso (ajustável)
+  var FAIXA_MIN = 0.5, FAIXA_MAX = 2; // "dentro do que os outros cobram": de metade do menor a o dobro do maior
+  var PREFIXO_MEM = "CONTA::";
+  // escritas tratadas como a MESMA unidade (proposta aprovada; fora da lista = diferente)
+  var GRUPOS = [
+    ["UN", "UND", "UNID", "UNIDS", "UNIDADE", "UNIDADES"],
+    ["M", "MT", "MTS", "METRO", "METROS"],
+    ["RL", "ROLO", "ROLOS"],
+    ["PT", "PCT", "PACOTE", "PACOTES"],
+    ["CX", "CAIXA", "CAIXAS"],
+    ["KG", "KGS", "QUILO", "QUILOS"],
+    ["L", "LT", "LTS", "LITRO", "LITROS"],
+    ["PAR", "PR", "PARES"],
+    ["PC", "PCS", "PECA", "PECAS"]
+  ];
+  var _grupoDe = null;
+  function chaveU(u) {
+    return String(u == null ? "" : u).toUpperCase().replace(/²/g, "2").replace(/³/g, "3")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z0-9]/g, "");
+  }
+  function canonU(u, aprend) {
+    var k = chaveU(u);
+    if (!k) return "";
+    if (!_grupoDe) {
+      _grupoDe = {};
+      GRUPOS.forEach(function (g) { g.forEach(function (x) { _grupoDe[x] = g[0]; }); });
+    }
+    if (_grupoDe[k]) return _grupoDe[k];
+    // unidade que a pessoa já "ensinou" ao sistema (ex: PÇ = PC), se houver
+    if (aprend) {
+      var bruto = String(u).trim().toUpperCase();
+      var of = aprend[bruto] || aprend[k];
+      if (of) { var ko = chaveU(of); return _grupoDe[ko] || ko; }
+    }
+    return k;
+  }
+  function mesmaU(a, b, aprend) {
+    var ca = canonU(a, aprend), cb = canonU(b, aprend);
+    if (!ca || !cb) return null;
+    return ca === cb;
+  }
+  function numero(v) {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    var n = parseNumBR(v);
+    return isNaN(n) || !isFinite(n) ? null : n;
+  }
+  function fmtN(n) {
+    var r = Math.round(n * 1000) / 1000;
+    return String(r).replace(".", ",");
+  }
+  function fmtM(v) { return "R$ " + fmtBRL(v); }
+  function arred2(x) { return Math.round(x * 100) / 100; }
+  function fmtPrecoNota(v) {
+    // até 4 casas, sem zeros sobrando (mínimo 2): "4,60", "0,875"
+    var s = (Math.round(v * 10000) / 10000).toFixed(4).replace(/0+$/, "");
+    var p = s.split(".");
+    if (!p[1] || p[1].length < 2) p[1] = (p[1] || "") + "00".slice((p[1] || "").length);
+    p[0] = p[0].replace(/(\d)(?=(\d{3})+$)/g, "$1.");
+    return p[0] + "," + p[1];
+  }
+  // número digitado pela pessoa na conta: positivo, "100", "1,5", "1.000"
+  function parseN(txt) {
+    var s = String(txt == null ? "" : txt).trim();
+    if (!s) return null;
+    var n = null;
+    if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) n = parseNumBR(s);
+    else if (/^\d+([.,]\d+)?$/.test(s)) n = parseFloat(s.replace(",", "."));
+    if (n === null || isNaN(n) || !isFinite(n) || n <= 0 || n > 1e9) return null;
+    return n;
+  }
+  function aplicar(preco, op, n) {
+    if (!(preco > 0) || !(n > 0)) return null;
+    var r = op === "div" ? preco / n : preco * n;
+    r = arred2(r);
+    return r > 0 ? r : null;
+  }
+  function normTxt(s) { return String(s == null ? "" : s).replace(/\s+/g, " ").trim().toUpperCase(); }
+
+  // outros fornecedores já preenchidos NESTE item do mapa (o fornecedor que está sendo carregado não conta)
+  function outros(mapa, itemId, fornId) {
+    var r = [];
+    ((mapa && mapa.fornecedores) || []).forEach(function (f) {
+      if (!f || f.id === fornId) return;
+      var v = parseMoney((mapa.precos || {})[itemId + "_" + f.id]);
+      if (v !== null && v > 0) r.push({ nome: f.nome || "", valor: v });
+    });
+    return r;
+  }
+
+  // Resumo do arquivo: o leitor conseguiu ler quantidade? alguma unidade? (para dizer "este PDF não traz coluna de unidade")
+  function infoDoc(itens) {
+    var comQtd = 0, comUn = 0, tentouUn = 0;
+    (itens || []).forEach(function (i) {
+      if (!i) return;
+      if (numero(i.qtd) !== null) {
+        comQtd++;
+        if (i.unidade) comUn++;
+        if (i.unidade === null) tentouUn++;
+      }
+    });
+    return { temLeitura: comQtd > 0, semUnidade: comQtd > 0 && comUn === 0 && tentouUn === comQtd };
+  }
+
+  // ── tudo que o sistema sabe sobre UMA linha (para mostrar e para decidir os avisos) ──────────
+  function avaliar(o) {
+    var oi = o.oi || {}, mi = o.mi || {}, aprend = o.aprendUnid || null;
+    var preco = numero(oi.preco) || 0;
+    var qP = numero(oi.qtd), uP = oi.unidade ? String(oi.unidade).trim().toUpperCase() : "";
+    var qM = numero(mi.qt), uM = String(mi.unid || "").trim().toUpperCase();
+    var doc = o.doc || { temLeitura: false, semUnidade: false };
+    var unStatus;
+    if (uP) unStatus = "lida";
+    else if (qP === null) unStatus = "nenhuma";
+    else if (oi.unidade === null) unStatus = doc.semUnidade ? "sem" : "nao";
+    else unStatus = "nao";
+    var vm = {
+      preco: preco, qP: qP, uP: uP, unStatus: unStatus, qM: qM, uM: uM,
+      total: (qP !== null && qP > 0 && preco > 0) ? arred2(qP * preco) : null,
+      outros: o.outros || [], min: null, max: null,
+      sU: null, sQ: null, sP: null, sug: null, flagged: false
+    };
+    // (a) unidade
+    if (uP && uM) vm.sU = mesmaU(uP, uM, aprend) ? "igual" : "diferente";
+    // (b) quantidade
+    if (qP !== null && qP > 0 && qM !== null && qM > 0) {
+      if (Math.abs(qP - qM) < 1e-9) vm.sQ = { t: "igual" };
+      else {
+        var maior = Math.max(qP, qM), menor = Math.min(qP, qM), r = maior / menor;
+        if (r >= 2 && Math.abs(r - Math.round(r)) < 1e-6) vm.sQ = { t: "multiplo", fator: Math.round(r), pdfMaior: qP > qM, maior: maior, menor: menor };
+        else vm.sQ = { t: "diferente" };
+      }
+    }
+    // (c) preço contra os outros fornecedores deste item
+    if (vm.outros.length && preco > 0) {
+      var vs = vm.outros.map(function (x) { return x.valor; });
+      vm.min = Math.min.apply(null, vs); vm.max = Math.max.apply(null, vs);
+      if (preco >= vm.max * FATOR_PRECO || preco <= vm.min / FATOR_PRECO) vm.sP = "longe";
+      else if (preco >= vm.min * FAIXA_MIN && preco <= vm.max * FAIXA_MAX) vm.sP = "faixa";
+      else vm.sP = "meio";
+    }
+    vm.flagged = vm.sU === "diferente" || (vm.sQ && vm.sQ.t === "multiplo") || vm.sP === "longe";
+    // sugestão (nunca decide): só pela quantidade, ou "está certo como está" quando só a unidade difere
+    if (vm.sQ && vm.sQ.t === "multiplo") {
+      vm.sug = { op: vm.sQ.pdfMaior ? "mul" : "div", n: vm.sQ.fator, tipo: "qtd",
+        txt: "Sugestão pela quantidade: " + fmtN(vm.sQ.maior) + " ÷ " + fmtN(vm.sQ.menor) + " = " + vm.sQ.fator + "." };
+    } else if (vm.sU === "diferente" && vm.sQ && vm.sQ.t === "igual" && vm.sP !== "longe") {
+      vm.sug = { tipo: "certo",
+        txt: "Quantidade igual (" + fmtN(qP) + " e " + fmtN(qM) + ")" + (vm.sP === "faixa" ? " e preço na faixa dos outros: provavelmente já é preço de " + uM + "." : ": a unidade escrita é diferente, mas não há conversão na quantidade.") };
+    }
+    return vm;
+  }
+
+  // resultado da conta digitada para esta linha
+  function calcConta(vm, conta) {
+    if (!conta || conta.n === undefined || String(conta.n).trim() === "") return { estado: "vazio" };
+    var n = parseN(conta.n);
+    if (n === null) return { estado: "invalido" };
+    var r = aplicar(vm.preco, conta.op === "div" ? "div" : "mul", n);
+    if (r === null) return { estado: "invalido" };
+    var faixa = null;
+    if (vm.outros.length) faixa = (r >= vm.min * FAIXA_MIN && r <= vm.max * FAIXA_MAX) ? "dentro" : "longe";
+    return { estado: "ok", n: n, op: conta.op === "div" ? "div" : "mul", resultado: r, faixa: faixa };
+  }
+  // "estado" da linha para a tela: 'conta' (conta válida), 'certo', 'conferir' (aviso sem resposta), 'ok', 'neutro'
+  function estadoLinha(vm, conta, calc) {
+    if (calc && calc.estado === "ok") return conta && conta.mem ? "conta_lembrada" : "conta";
+    if (conta && conta.certo) return "certo";
+    if (calc && calc.estado === "invalido") return "invalido";
+    if (vm.flagged) return "conferir";
+    if (vm.sQ && vm.sQ.t === "igual") return "qtd_igual";
+    if (vm.sU === "igual") return "un_igual";
+    return "neutro";
+  }
+  function precisaConferir(est) { return est === "conferir" || est === "invalido"; }
+
+  // texto da origem da conta, que vai para o Detalhe do fornecedor: "R$ 4,20 POR MT × 100"
+  function notaConta(vm, calc) {
+    return "R$ " + fmtPrecoNota(vm.preco) + (vm.uP ? " POR " + vm.uP : "") + " " + (calc.op === "div" ? "÷" : "×") + " " + fmtN(calc.n);
+  }
+  // memória da conta (tabela de aprendizado já existente, chave com prefixo): fornecedor + texto do orçamento
+  function chaveMem(fornNome, texto) { return PREFIXO_MEM + normTxt(fornNome) + "::" + normTxt(texto); }
+  function valMem(op, n, unidMapa, aprend) { return (op === "div" ? "div" : "mul") + "|" + String(n) + "|" + canonU(unidMapa, aprend); }
+  function lerMem(v) {
+    var p = String(v == null ? "" : v).split("|");
+    if (p.length < 2) return null;
+    var n = parseFloat(p[1]);
+    if ((p[0] !== "mul" && p[0] !== "div") || isNaN(n) || !(n > 0)) return null;
+    return { op: p[0], n: n, unid: p[2] || "" };
+  }
+  // conta lembrada para esta linha? (só vale se a unidade do insumo do mapa é a mesma de quando foi ensinada)
+  function contaDaMemoria(memoria, fornNome, texto, mi, aprend) {
+    if (!memoria || !fornNome) return null;
+    var m = lerMem(memoria[chaveMem(fornNome, texto)]);
+    if (!m) return null;
+    if (canonU(mi && mi.unid, aprend) !== (m.unid || "")) return null;
+    return { op: m.op, n: String(m.n).replace(".", ","), lembrar: true, mem: true, certo: false };
+  }
+
+  // fração de palavras iguais (inclui palavras curtas, ao contrário do wordScore que descarta 1-2 letras)
+  function tokensComuns(a, b) {
+    var ta = normalizar(a).split(" ").filter(Boolean), tb = normalizar(b).split(" ").filter(Boolean);
+    if (!ta.length || !tb.length) return 0;
+    var c = 0; ta.forEach(function (w) { if (tb.indexOf(w) >= 0) c++; });
+    return c / Math.max(ta.length, tb.length);
+  }
+  // Une a leitura local do PDF (quantidade/unidade) com os itens que a IA devolveu (só descrição e preço).
+  // Conservador: só junta quando o PREÇO é igual e a descrição é parecida; cada linha local é usada uma vez.
+  function mesclar(itensIA, locais) {
+    var usados = {};
+    return (itensIA || []).map(function (oi) {
+      if (!oi) return oi;
+      if (numero(oi.qtd) !== null) return oi; // a IA já trouxe a quantidade: respeita
+      var melhor = -1, melhorSc = 0, cands = [];
+      (locais || []).forEach(function (l, li) {
+        if (usados[li]) return;
+        if (Math.abs((numero(l.preco) || 0) - (numero(oi.preco) || 0)) > 0.006) return;
+        cands.push(li);
+      });
+      var melhorFino = -1;
+      cands.forEach(function (li) {
+        var sc = wordScore(oi.descricao, locais[li].descricao);
+        var fino = tokensComuns(oi.descricao, locais[li].descricao); // desempate: conta também siglas de 1-2 letras (tamanho M/G)
+        if (sc > melhorSc + 1e-9 || (Math.abs(sc - melhorSc) <= 1e-9 && fino > melhorFino + 1e-9)) { melhorSc = sc; melhor = li; melhorFino = fino; }
+      });
+      var aceita = melhor >= 0 && (melhorSc >= 0.3 || (cands.length === 1 && melhorSc >= 0.15));
+      if (!aceita) return oi;
+      usados[melhor] = true;
+      var l = locais[melhor];
+      var novo = {}; Object.keys(oi).forEach(function (k) { novo[k] = oi[k]; });
+      novo.qtd = l.qtd; novo.unidade = l.unidade === undefined ? undefined : l.unidade;
+      return novo;
+    });
+  }
+
+  // ─────────────────────────── visual ───────────────────────────
+  function CE() { return React.createElement.apply(React, arguments); }
+  function ico(nome, cor, tam) {
+    var s = tam || 14, c = cor || "#555";
+    var base = { width: s, height: s, viewBox: "0 0 24 24", fill: "none", stroke: c, strokeWidth: 2.4, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", style: { flexShrink: 0, display: "block" } };
+    var p;
+    if (nome === "warn") p = [CE("path", { key: 1, d: "M12 3 2 21h20L12 3z" }), CE("path", { key: 2, d: "M12 10v5" }), CE("path", { key: 3, d: "M12 18.2v.1" })];
+    else if (nome === "ok") { base.strokeWidth = 3; p = [CE("path", { key: 1, d: "M5 12.5l5 5 9-11" })]; }
+    else if (nome === "q") p = [CE("circle", { key: 1, cx: 12, cy: 12, r: 9 }), CE("path", { key: 2, d: "M9.5 9.5a2.6 2.6 0 1 1 3.6 2.4c-.7.4-1.1.9-1.1 1.8" }), CE("path", { key: 3, d: "M12 17v.1" })];
+    else p = [CE("path", { key: 1, d: "M9 18h6" }), CE("path", { key: 2, d: "M10 21h4" }), CE("path", { key: 3, d: "M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" })];
+    return CE("svg", base, p);
+  }
+  var TONS = {
+    n: { background: "#eef1fa", color: "#33405e" }, ok: { background: "#e6f4ea", color: "#14591f" },
+    warn: { background: "#fff1cc", color: "#7a4a00" }, mute: { background: "#eceff5", color: "#6a7690", fontStyle: "italic" },
+    blue: { background: "#e6f0ff", color: "#1f4585" }
+  };
+  function chip(txt, tom, key) {
+    return CE("span", { key: key, style: Object.assign({ fontSize: 11, fontWeight: 700, padding: "2px 7px", borderRadius: 4, whiteSpace: "normal", maxWidth: "100%", boxSizing: "border-box" }, TONS[tom || "n"]) }, txt);
+  }
+  // texto com trechos em negrito: ["Quantidade: ", {b:"200"}, " ..."]
+  function rico(partes) {
+    return (partes || []).map(function (p, i) { return typeof p === "string" ? p : CE("b", { key: i }, p.b); });
+  }
+
+  // chips do que o PDF traz + do que o mapa espera
+  function tirasPDF(vm) {
+    var c = [];
+    if (vm.qP !== null) c.push(chip("qtd " + fmtN(vm.qP), "n", "q"));
+    if (vm.unStatus === "lida") c.push(chip("unid. " + vm.uP, "n", "u"));
+    else if (vm.unStatus === "sem") c.push(chip("sem unidade no PDF", "mute", "u"));
+    else if (vm.unStatus === "nao") c.push(chip("unidade não lida", "mute", "u"));
+    else c.push(chip("qtd e unidade não lidas", "mute", "u"));
+    if (vm.total !== null) c.push(chip(fmtN(vm.qP) + " × " + fmtM(vm.preco) + " = " + fmtM(vm.total), "n", "t"));
+    return c;
+  }
+  function tirasMapa(vm) {
+    return [chip("qtd no mapa " + (vm.qM !== null ? fmtN(vm.qM) : "—"), "n", "mq"), chip("unid. no mapa " + (vm.uM || "—"), "n", "mu")];
+  }
+  function linhaOutros(vm) {
+    if (!vm.outros.length) return null;
+    var it = [];
+    vm.outros.forEach(function (o, i) {
+      if (i) it.push(CE("span", { key: "s" + i, style: { color: "#c0c7d8" } }, " · "));
+      it.push(CE("span", { key: "o" + i, style: { fontSize: 11, color: "#33405e", whiteSpace: "nowrap" } }, CE("b", { style: { color: "#5a6684" } }, o.nome + " "), fmtM(o.valor)));
+    });
+    return CE("div", { style: { display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", minWidth: 0 } },
+      CE("span", { style: { fontSize: 10, fontWeight: 800, letterSpacing: ".05em", color: "#7a8399" } }, "OUTROS FORNECEDORES"), it);
+  }
+  function pilula(est, vm, calc) {
+    var base = { display: "inline-flex", alignItems: "center", gap: 5, borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 800, whiteSpace: "normal", maxWidth: "100%", boxSizing: "border-box" };
+    var verde = Object.assign({}, base, { background: "#e6f4ea", border: "1.5px solid #b0d0b0", color: "#14591f" });
+    if (est === "conferir") return CE("span", { "data-cfu": "pilula-conferir", style: Object.assign({}, base, { background: "#fff1cc", border: "1.5px solid #f0a800", color: "#7a4a00" }) }, ico("warn", "#b36b00", 13), "conferir (veja abaixo)");
+    if (est === "invalido") return CE("span", { "data-cfu": "pilula-invalido", style: Object.assign({}, base, { background: "#fdecea", border: "1.5px solid #e8a09a", color: "#a02020" }) }, ico("warn", "#a02020", 13), "número da conta inválido");
+    if (est === "conta" || est === "conta_lembrada")
+      return CE("span", { "data-cfu": "pilula-conta", style: Object.assign({}, base, { background: "#e6f0ff", border: "1.5px solid #9dbbea", color: "#1f4585" }) }, ico("ok", "#1f4585", 12),
+        (est === "conta_lembrada" ? "conta lembrada: " : "conta: ") + (calc.op === "div" ? "÷ " : "× ") + fmtN(calc.n) + " = " + fmtM(calc.resultado));
+    if (est === "certo") return CE("span", { "data-cfu": "pilula-certo", style: verde }, ico("ok", "#14591f", 12), "confirmado: está certo como está");
+    if (est === "qtd_igual") return CE("span", { "data-cfu": "pilula-qtd", style: verde }, ico("ok", "#14591f", 12), "quantidade igual (" + fmtN(vm.qP) + " e " + fmtN(vm.qM) + ")");
+    if (est === "un_igual") return CE("span", { "data-cfu": "pilula-un", style: verde }, ico("ok", "#14591f", 12), "unidade igual (" + vm.uM + ")");
+    return null;
+  }
+
+  // régua: onde o valor cai em relação aos outros fornecedores
+  function reguaMax(vals) {
+    var m = Math.max.apply(null, vals) * 1.08;
+    var mag = Math.pow(10, Math.floor(Math.log(m) / Math.LN10) - 1);
+    return Math.ceil(m / mag) * mag;
+  }
+  function regua(vm, conv) {
+    var vals = vm.outros.map(function (o) { return o.valor; }).concat([vm.preco]);
+    if (conv) vals.push(conv);
+    var max = reguaMax(vals);
+    var pos = function (v) { return Math.max(0, Math.min(v, max)) / max * 100; };
+    var lo = vm.min, hi = vm.max;
+    var ancora = function (p) { return p > 68 ? { right: (100 - p) + "%", transform: "translateX(6px)", textAlign: "right" } : (p < 32 ? { left: p + "%", transform: "translateX(-4px)" } : { left: p + "%", transform: "translateX(-50%)" }); };
+    var perto = conv && Math.abs(pos(conv) - pos(vm.preco)) < 40;
+    var linhaConv = perto ? 17 : 0;
+    var els = [];
+    els.push(CE("div", { key: "trilho", style: { position: "absolute", left: 0, right: 0, top: 52, height: 6, borderRadius: 3, background: "#e3e8f4" } }));
+    els.push(CE("div", { key: "faixa", style: { position: "absolute", left: pos(lo) + "%", width: Math.max(pos(hi) - pos(lo), 0.6) + "%", top: 52, height: 6, borderRadius: 3, background: "#b7dfc0" } }));
+    vm.outros.forEach(function (o, i) {
+      els.push(CE("div", { key: "d" + i, title: o.nome + " " + fmtM(o.valor), style: { position: "absolute", left: pos(o.valor) + "%", top: 49, width: 11, height: 11, marginLeft: -5, borderRadius: 6, background: "#3b9d52", border: "2px solid #fff", boxShadow: "0 0 0 1px #3b9d52", boxSizing: "content-box" } }));
+    });
+    els.push(CE("div", { key: "lr", style: Object.assign({ position: "absolute", top: 0, fontSize: 11, fontWeight: 800, color: "#b3261e", whiteSpace: "nowrap" }, ancora(pos(vm.preco))) }, fmtM(vm.preco) + " ", CE("span", { style: { fontWeight: 600 } }, "como veio")));
+    els.push(CE("div", { key: "tr", style: { position: "absolute", left: pos(vm.preco) + "%", top: 17, width: 2, height: 36, background: "#b3261e" } }));
+    if (conv) {
+      els.push(CE("div", { key: "lc", style: Object.assign({ position: "absolute", top: linhaConv, fontSize: 11, fontWeight: 800, color: "#1a3a78", whiteSpace: "nowrap" }, ancora(pos(conv))) }, fmtM(conv) + " ", CE("span", { style: { fontWeight: 600 } }, "com a conta")));
+      els.push(CE("div", { key: "tc", style: { position: "absolute", left: pos(conv) + "%", top: linhaConv + 17, width: 3, height: 36 - linhaConv, marginLeft: -1, background: "#1a3a78" } }));
+    }
+    els.push(CE("div", { key: "ou", style: { position: "absolute", left: pos(lo) + "%", width: Math.max(pos(hi) - pos(lo), 14) + "%", top: 64, textAlign: "center", fontSize: 10.5, color: "#2f7a43", fontWeight: 700, whiteSpace: "nowrap" } }, "outros fornecedores"));
+    els.push(CE("div", { key: "z", style: { position: "absolute", left: 0, top: 80, fontSize: 10, color: "#8a93a6" } }, "R$ 0"));
+    els.push(CE("div", { key: "mx", style: { position: "absolute", right: 0, top: 80, fontSize: 10, color: "#8a93a6" } }, fmtM(max)));
+    return CE("div", { "data-cfu": "regua", style: { position: "relative", height: 98, margin: "2px 6px 0" } }, els);
+  }
+
+  // painel do aviso / da conta. h = {op(op), n(txt), lembrar(b), usarSug(), certo(), trocar(), esquecer(), fechar()}
+  function painel(p) {
+    var vm = p.vm, conta = p.conta || {}, calc = p.calc, h = p.h, forn = p.fornNome || "este fornecedor";
+    var uMapa = vm.uM || "a unidade do mapa";
+    var flagged = vm.flagged && !(calc && calc.estado === "ok") && !conta.certo;
+    var jaResolvido = (calc && calc.estado === "ok") || conta.certo;
+    // --- conta lembrada: faixa compacta (quadro D) ---
+    if (conta.mem && calc && calc.estado === "ok") {
+      return CE("div", { "data-cfu": "painel-lembrada", style: { borderLeft: "4px solid #9dbbea", background: "#f3f7ff", borderRadius: "0 8px 8px 0", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, fontSize: 12, color: "#33405e" } },
+        CE("div", null, "Conta ", CE("b", null, "lembrada"), " (" + forn + " + este texto): ",
+          CE("b", null, fmtM(vm.preco) + " " + (calc.op === "div" ? "÷" : "×") + " " + fmtN(calc.n) + " = " + fmtM(calc.resultado)), vm.uM ? CE("b", null, " por " + vm.uM) : null),
+        CE("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+          CE("button", { "data-cfu": "trocar", type: "button", onClick: h.trocar, style: { border: "1.5px solid #1a3a78", color: "#1a3a78", background: "#fff", borderRadius: 5, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "Trocar o número"),
+          CE("button", { "data-cfu": "esquecer", type: "button", onClick: h.esquecer, style: { border: "1.5px solid #c8cfe0", color: "#5a6684", background: "#fff", borderRadius: 5, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "Esquecer esta conta")));
+    }
+    var motivos = [];
+    if (flagged || p.mostrarSinais) {
+      var ic = { ok: ico("ok", "#14591f", 14), warn: ico("warn", "#b36b00", 14), info: ico("q", "#5a6684", 14) };
+      var lin = function (t, partes, key) { return CE("div", { key: key, style: { display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12, lineHeight: 1.45, color: "#3a2a00" } }, CE("div", { style: { paddingTop: 1, flexShrink: 0 } }, ic[t]), CE("div", null, rico(partes))); };
+      // unidade
+      if (vm.sU === "diferente") motivos.push(lin("warn", [{ b: "Unidade:" }, " o PDF traz ", { b: vm.uP }, "; o mapa espera ", { b: vm.uM }, "."], "u"));
+      else if (vm.sU === "igual") motivos.push(lin("ok", [{ b: "Unidade:" }, " " + vm.uP + " no PDF e no mapa."], "u"));
+      else if (vm.unStatus === "sem") motivos.push(lin("info", [{ b: "Unidade:" }, " o PDF de " + forn + " ", { b: "não traz unidade" }, vm.uM ? ". O mapa espera " : ".", vm.uM ? { b: vm.uM } : "", vm.uM ? "." : ""], "u"));
+      else if (vm.unStatus === "nao") motivos.push(lin("info", ["Unidade: não consegui ler a unidade desta linha do PDF.", vm.uM ? " O mapa espera " : "", vm.uM ? { b: vm.uM } : "", vm.uM ? "." : ""], "u"));
+      else motivos.push(lin("info", [{ b: "Unidade e quantidade" }, " não foram lidas deste PDF (só o preço)."], "u"));
+      // quantidade
+      if (vm.sQ) {
+        if (vm.sQ.t === "multiplo") motivos.push(lin("warn", [{ b: "Quantidade:" }, " orçamento ", { b: fmtN(vm.qP) }, ", mapa ", { b: fmtN(vm.qM) }, ". ", { b: fmtN(vm.sQ.maior) + " ÷ " + fmtN(vm.sQ.menor) + " = " + vm.sQ.fator }, ", uma divisão exata."], "q"));
+        else if (vm.sQ.t === "igual") motivos.push(lin("ok", [{ b: "Quantidade:" }, " orçamento " + fmtN(vm.qP) + ", mapa " + fmtN(vm.qM) + " (igual)."], "q"));
+        else motivos.push(lin("info", [{ b: "Quantidade:" }, " orçamento " + fmtN(vm.qP) + ", mapa " + fmtN(vm.qM) + "."], "q"));
+      }
+      // preço
+      if (vm.sP) {
+        var faixaTxt = vm.min === vm.max ? fmtM(vm.min) : fmtM(vm.min) + " a " + fmtM(vm.max);
+        if (vm.sP === "longe") motivos.push(lin("warn", [{ b: "Preço:" }, " ", { b: fmtM(vm.preco) }, " contra ", { b: faixaTxt }, vm.outros.length === 1 ? " do outro fornecedor deste item." : " dos outros fornecedores deste item."], "p"));
+        else if (vm.sP === "faixa") motivos.push(lin("ok", [{ b: "Preço:" }, " " + fmtM(vm.preco) + ", dentro do que os outros cobram (" + faixaTxt + ")."], "p"));
+        else motivos.push(lin("info", [{ b: "Preço:" }, " " + fmtM(vm.preco) + ", fora da faixa dos outros (" + faixaTxt + "), mas perto."], "p"));
+      }
+    }
+    var manual = !flagged && !jaResolvido;
+    var cor = flagged ? "#f0a800" : "#1a3a78";
+    var fundo = flagged ? "#fffbea" : "#f3f7ff";
+    var topo;
+    if (flagged) topo = [CE("div", { key: "t", style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 800, color: "#6a4300" } }, ico("warn", "#b36b00", 15), "Conferir esta linha ", CE("span", { style: { fontWeight: 600, color: "#7a5a1a" } }, "(o sistema vê um ou mais sinais)")), motivos];
+    else if (manual) topo = [CE("div", { key: "t", style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 800, color: "#1a3a78" } }, ico("bulb", "#1a3a78", 15), "Conta feita por você"),
+      CE("div", { key: "d", style: { fontSize: 12, lineHeight: 1.5, color: "#33405e" } }, "O sistema não achou nada estranho nesta linha. Se pela sua rotina o valor ", CE("b", null, "não é do " + (vm.uM || "mapa")), ", digite o número e a conta aparece."), motivos];
+    else topo = [CE("div", { key: "t", style: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 800, color: "#1a3a78" } }, ico("bulb", "#1a3a78", 15), "Conta desta linha"), motivos];
+    var seg = function (op, txt) {
+      var on = (conta.op === "div" ? "div" : "mul") === op;
+      return CE("button", { "data-cfu": "op-" + op, type: "button", onClick: function () { h.op(op); }, style: { padding: "5px 10px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer", background: on ? "#1a3a78" : "#fff", color: on ? "#fff" : "#33405e" } }, txt);
+    };
+    var invalido = calc && calc.estado === "invalido";
+    var campo = CE("input", { "data-cfu": "n", type: "text", inputMode: "decimal", value: conta.n == null ? "" : conta.n, placeholder: "ex.: 100", onChange: function (e) { h.n(e.target.value); },
+      style: { width: 92, boxSizing: "border-box", border: "1.5px solid " + (invalido ? "#c0392b" : (calc && calc.estado === "ok" ? "#1a3a78" : "#f0a800")), borderRadius: 5, background: "#fff", padding: "5px 8px", textAlign: "right", fontWeight: 800, fontSize: 14, color: "#1b2437", textTransform: "none" } });
+    var res;
+    if (calc && calc.estado === "ok")
+      res = CE("div", { "data-cfu": "resultado", style: { border: "1.5px solid #6fbf7f", background: "#e6f4ea", borderRadius: 5, padding: "5px 11px", fontSize: 12.5, color: "#14591f", fontWeight: 700 } },
+        fmtM(vm.preco) + " " + (calc.op === "div" ? "÷" : "×") + " " + fmtN(calc.n) + " = ", CE("span", { style: { fontSize: 15, fontWeight: 900 } }, fmtM(calc.resultado)), vm.uM ? CE("span", { style: { fontWeight: 600 } }, " por " + vm.uM) : null);
+    else if (invalido)
+      res = CE("div", { "data-cfu": "resultado", style: { border: "1.5px dashed #e8a09a", borderRadius: 5, padding: "5px 11px", fontSize: 12, color: "#a02020", background: "#fff8f7" } }, "número inválido — use só números maiores que zero");
+    else
+      res = CE("div", { "data-cfu": "resultado", style: { border: "1.5px dashed #d8b45a", borderRadius: 5, padding: "5px 11px", fontSize: 12, color: "#8a6a20", background: "#fffdf5" } }, "digite o número para ver a conta");
+    var faixaMsg = null;
+    if (calc && calc.estado === "ok" && calc.faixa === "dentro") faixaMsg = CE("span", { "data-cfu": "faixa", style: { display: "inline-flex", alignItems: "center", gap: 4, color: "#14591f", fontSize: 12, fontWeight: 700 } }, ico("ok", "#14591f", 13), "dentro do que os outros cobram");
+    else if (calc && calc.estado === "ok" && calc.faixa === "longe") faixaMsg = CE("span", { "data-cfu": "faixa", style: { display: "inline-flex", alignItems: "center", gap: 4, color: "#b3261e", fontSize: 12, fontWeight: 700 } }, ico("warn", "#b3261e", 13), "ainda longe dos outros");
+    var sug = null;
+    if (flagged && vm.sug) {
+      if (vm.sug.tipo === "qtd")
+        sug = CE("div", { "data-cfu": "sugestao", style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "#16315e", background: "#eef5ff", border: "1px solid #b8d0f5", borderRadius: 6, padding: "6px 10px" } },
+          ico("bulb", "#1f4fa8", 15), CE("span", { style: { flex: 1, minWidth: 180 } }, vm.sug.txt + " ", CE("span", { style: { color: "#5a6684" } }, "(você confirma)")),
+          CE("button", { "data-cfu": "usar", type: "button", onClick: h.usarSug, style: { background: "#1f6feb", color: "#fff", border: "none", borderRadius: 5, padding: "4px 11px", fontSize: 12, fontWeight: 800, cursor: "pointer" } }, "Usar " + (vm.sug.op === "div" ? "÷" : "×") + " " + vm.sug.n),
+          CE("button", { "data-cfu": "certo", type: "button", onClick: h.certo, style: { border: "1.5px solid #1a3a78", color: "#1a3a78", background: "#fff", borderRadius: 5, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "Está certo como está"));
+      else
+        sug = CE("div", { "data-cfu": "sugestao", style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "#16315e", background: "#eef5ff", border: "1px solid #b8d0f5", borderRadius: 6, padding: "6px 10px" } },
+          ico("bulb", "#1f4fa8", 15), CE("span", { style: { flex: 1, minWidth: 180 } }, vm.sug.txt + " ", CE("b", null, "Está certo como está."), CE("span", { style: { color: "#5a6684" } }, " (você confirma)")),
+          CE("button", { "data-cfu": "certo", type: "button", onClick: h.certo, style: { border: "1.5px solid #1a3a78", color: "#1a3a78", background: "#fff", borderRadius: 5, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "Está certo como está"));
+    } else if (flagged) {
+      // sem sugestão pela quantidade: ainda assim a pessoa pode confirmar que está certo
+      sug = CE("div", { "data-cfu": "sugestao", style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 12, color: "#16315e", background: "#eef5ff", border: "1px solid #b8d0f5", borderRadius: 6, padding: "6px 10px" } },
+        ico("bulb", "#1f4fa8", 15), CE("span", { style: { flex: 1, minWidth: 180 } }, "Sem sugestão de número. Se pela sua rotina o valor está na unidade do mapa, confirme; senão digite a conta abaixo."),
+        CE("button", { "data-cfu": "certo", type: "button", onClick: h.certo, style: { border: "1.5px solid #1a3a78", color: "#1a3a78", background: "#fff", borderRadius: 5, padding: "3px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "Está certo como está"));
+    }
+    var convVal = calc && calc.estado === "ok" ? calc.resultado : null;
+    return CE("div", { "data-cfu": "painel", style: { borderLeft: "4px solid " + cor, background: fundo, borderRadius: "0 8px 8px 0", padding: "11px 13px", display: "flex", flexDirection: "column", gap: 9, minWidth: 0 } },
+      topo,
+      vm.outros.length ? regua(vm, convVal) : null,
+      CE("div", { style: { display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" } },
+        CE("div", { style: { fontSize: 12, fontWeight: 700, color: "#33405e" } }, "Converter para " + (vm.uM || "a unidade do mapa") + ":"),
+        CE("div", { style: { display: "flex", border: "1.5px solid #1a3a78", borderRadius: 6, overflow: "hidden" } }, seg("mul", "× multiplicar"), seg("div", "÷ dividir")),
+        CE("div", { style: { fontSize: 12, color: "#33405e" } }, "por"), campo,
+        CE("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } }, CE("div", { style: { fontSize: 15, color: "#33405e", fontWeight: 700 } }, "="), res),
+        faixaMsg),
+      sug,
+      CE("label", { style: { display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12, color: "#33405e", cursor: "pointer" } },
+        CE("input", { "data-cfu": "lembrar", type: "checkbox", checked: conta.lembrar !== false, onChange: function (e) { h.lembrar(e.target.checked); }, style: { marginTop: 2, accentColor: "#1a3a78", flexShrink: 0 } }),
+        CE("span", null, "Lembrar esta conta para ", CE("b", null, forn), " + este texto do orçamento ", CE("span", { style: { color: "#5a6684" } }, "(da próxima vez já vem preenchida; você ainda vê e pode trocar)"))));
+  }
+
+  return {
+    FATOR_PRECO: FATOR_PRECO, PREFIXO_MEM: PREFIXO_MEM, GRUPOS: GRUPOS,
+    canonU: canonU, mesmaU: mesmaU, numero: numero, fmtN: fmtN, fmtM: fmtM, parseN: parseN, aplicar: aplicar, outros: outros, infoDoc: infoDoc,
+    avaliar: avaliar, calcConta: calcConta, estadoLinha: estadoLinha, precisaConferir: precisaConferir, notaConta: notaConta,
+    chaveMem: chaveMem, valMem: valMem, lerMem: lerMem, contaDaMemoria: contaDaMemoria, mesclar: mesclar, normTxt: normTxt,
+    tirasPDF: tirasPDF, tirasMapa: tirasMapa, linhaOutros: linhaOutros, pilula: pilula, painel: painel, regua: regua, chip: chip, ico: ico
+  };
+})();
+// ==== v17 CONFUN FIM ====
 function ModalCasarInsumos(_ref_cas) {
   var mapa=_ref_cas.mapa, itens=_ref_cas.itens, onClose=_ref_cas.onClose, onConfirm=_ref_cas.onConfirm;
   var onAprendizadoSalvo=_ref_cas.onAprendizadoSalvo||function(){};
+  // v17 (conferência de unidade/quantidade/preço com "conta"): memória das contas e das unidades ensinadas
+  var aprendizadosConta=_ref_cas.aprendizadosConta||{}, aprendizadosUnidade=_ref_cas.aprendizadosUnidade||{};
+  var onContaSalva=_ref_cas.onContaSalva||function(){}, onContaEsquecida=_ref_cas.onContaEsquecida||function(){};
   var _sF=useState(""),   fornId=_slicedToArray(_sF,2)[0],    setFornId=_slicedToArray(_sF,2)[1];
   var _sCarr=useState(false),carregando=_slicedToArray(_sCarr,2)[0],setCarregando=_slicedToArray(_sCarr,2)[1];
   var _sI=useState([]),   itemsOrc=_slicedToArray(_sI,2)[0],  setItemsOrc=_slicedToArray(_sI,2)[1];
@@ -9,8 +458,37 @@ function ModalCasarInsumos(_ref_cas) {
   var _sLig=useState({}), ligs=_slicedToArray(_sLig,2)[0],    setLigs=_slicedToArray(_sLig,2)[1];
   var _sB1=useState(""),  busca1=_slicedToArray(_sB1,2)[0],   setBusca1=_slicedToArray(_sB1,2)[1];
   var _sB2=useState(""),  busca2=_slicedToArray(_sB2,2)[0],   setBusca2=_slicedToArray(_sB2,2)[1];
+  // v17: a "conta" de cada ligação (chave = id do insumo do mapa) e quais painéis estão abertos
+  var _sCtC=useState({}), contas=_slicedToArray(_sCtC,2)[0], setContas=_slicedToArray(_sCtC,2)[1];
+  var _sAbC=useState({}), abertos=_slicedToArray(_sAbC,2)[0], setAbertos=_slicedToArray(_sAbC,2)[1];
   var forns = mapa.fornecedores || [];
   var fornNome = (forns.find(function(f){return f.id===fornId;})||{}).nome || "";
+  var nomeDoForn = function(id){ return (forns.find(function(f){return f.id===id;})||{}).nome || ""; };
+  var itemMapaDe = function(id){ return (itens||[]).find(function(m){return m.id===id;})||null; };
+  var docI = ConfUn.infoDoc(itemsOrc.map(function(x){ return x ? {qtd:x.qtd, unidade:x.unidade} : x; }));
+  // tudo que o sistema sabe sobre uma ligação (PDF × mapa × outros fornecedores)
+  var vmDaLig = function(mid, lig){
+    var orc = itemsOrc[lig.orcIdx], mi = itemMapaDe(mid); if(!mi) return null;
+    // a linha do arquivo só vale se ainda é a mesma que foi ligada (se a pessoa trocou o arquivo depois, usa só texto e preço da ligação)
+    var mesma = !!orc && orc.desc === lig.descPDF && orc.preco === lig.preco;
+    return ConfUn.avaliar({oi:{descricao:lig.descPDF,preco:lig.preco,qtd:mesma?orc.qtd:undefined,unidade:mesma?orc.unidade:undefined}, mi:mi, mapa:mapa, outros:ConfUn.outros(mapa,mid,lig.fornId), aprendUnid:aprendizadosUnidade, doc:docI});
+  };
+  var setConta = function(mid, patch){
+    setContas(function(prev){ var n=Object.assign({},prev); n[mid]=Object.assign({op:"mul",n:"",lembrar:true},prev[mid]||{},patch); return n; });
+  };
+  var alternarPainel = function(mid, vm){
+    setAbertos(function(prev){ var n=Object.assign({},prev); n[mid]=!prev[mid]; return n; });
+    setContas(function(prev){ if(prev[mid]) return prev; var n=Object.assign({},prev); n[mid]={op:(vm&&vm.sug&&vm.sug.op)||"mul",n:"",lembrar:true}; return n; });
+  };
+  // junta a quantidade/unidade lidas do PDF (mesmo leitor do Ler com IA grátis) aos itens que o leitor deste modal achou;
+  // só junta quando o preço é igual ao UNITÁRIO lido (se este modal pegou o total da linha, não mistura)
+  var enriquecerComLeitura = function(items, textos){
+    try{
+      var locais = parsearPDFTextoLerIAGlobal(textos);
+      var m = ConfUn.mesclar(items.map(function(i){ return {descricao:i.desc, preco:i.preco}; }), locais);
+      return items.map(function(i,k){ return (m[k] && m[k].qtd !== undefined) ? Object.assign({}, i, {qtd:m[k].qtd, unidade:m[k].unidade}) : i; });
+    }catch(e){ return items; }
+  };
   var parsearTexto = function(txt) {
     var parsed = [];
     txt.split("\n").forEach(function(linha) {
@@ -157,6 +635,7 @@ function ModalCasarInsumos(_ref_cas) {
         if (!textos.length) { alert("N\xC3O FOI POSS\xCDVEL EXTRAIR TEXTO DO PDF.\nVerifique se o PDF tem texto selecion\xE1vel (n\xE3o pode ser imagem escaneada)."); return; }
         var items = parsearPDFTexto(textos);
         if (!items.length) { alert("NENHUM ITEM COM PRE\xC7O ENCONTRADO NO PDF.\nTente converter o PDF em Excel ou CSV."); return; }
+        items = enriquecerComLeitura(items, textos);
         setItemsOrc(items);
       });
     } else if (ext === "xlsx" || ext === "xls") {
@@ -178,9 +657,19 @@ function ModalCasarInsumos(_ref_cas) {
     var orc = itemsOrc[selOIdx]; if (!orc) return;
     var novo = Object.assign({},ligs);
     novo[selMId]={descPDF:orc.desc,preco:orc.preco,fornId:fornId,orcIdx:selOIdx};
+    // v17: traz a conta já lembrada (se houver) e abre o painel das ligações com aviso
+    var miL = itemMapaDe(selMId), midL = selMId;
+    var memL = miL ? ConfUn.contaDaMemoria(aprendizadosConta, fornNome, orc.desc, miL, aprendizadosUnidade) : null;
+    var vmL = miL ? ConfUn.avaliar({oi:{descricao:orc.desc,preco:orc.preco,qtd:orc.qtd,unidade:orc.unidade}, mi:miL, mapa:mapa, outros:ConfUn.outros(mapa,midL,fornId), aprendUnid:aprendizadosUnidade, doc:docI}) : null;
+    setContas(function(prev){ var n=Object.assign({},prev); delete n[midL]; if(memL) n[midL]=memL; return n; });
+    setAbertos(function(prev){ var n=Object.assign({},prev); n[midL]=!!(memL||(vmL&&vmL.flagged)); return n; });
     setLigs(novo); setSelMId(null); setSelOIdx(null);
   };
-  var desligar = function(mid){var n=Object.assign({},ligs);delete n[mid];setLigs(n);};
+  var desligar = function(mid){
+    var n=Object.assign({},ligs);delete n[mid];setLigs(n);
+    setContas(function(prev){ var c=Object.assign({},prev); delete c[mid]; return c; });
+    setAbertos(function(prev){ var c=Object.assign({},prev); delete c[mid]; return c; });
+  };
   var confirmar = function(){
     if(!Object.keys(ligs).length){alert("NENHUMA LIGA\xC7\xC3O CRIADA.");return;}
     // Alimenta a memória: cada "ligação" ensina que aquele texto do orçamento é aquele insumo do mapa
@@ -188,15 +677,58 @@ function ModalCasarInsumos(_ref_cas) {
       var itemMapa = itens.find(function(i){ return i.id === mid; });
       if(itemMapa && itemMapa.descricao) onAprendizadoSalvo(ligs[mid].descPDF, itemMapa.descricao);
     });
-    onConfirm(ligs);
+    // v17: só se a pessoa digitou/confirmou uma conta válida o preço muda; sem conta entra como veio. A memória da
+    // conta só é gravada agora, ao clicar em SALVAR (cancelar não grava nada).
+    var ligsFinal = {};
+    Object.keys(ligs).forEach(function(mid){
+      var lig = ligs[mid], cta = contas[mid], vm = vmDaLig(mid, lig), nova = Object.assign({}, lig);
+      var calc = vm ? ConfUn.calcConta(vm, cta) : null;
+      var fn = nomeDoForn(lig.fornId), orc = {desc:lig.descPDF}, mi = itemMapaDe(mid);
+      if(vm && calc && calc.estado === "ok"){
+        nova.preco = calc.resultado;
+        nova.conta = {op:calc.op, n:calc.n, precoOriginal:lig.preco, unidPdf:vm.uP, unidMapa:vm.uM, nota:ConfUn.notaConta(vm, calc)};
+      }
+      if(orc && mi && fn){
+        var chave = ConfUn.chaveMem(fn, orc.desc), existente = aprendizadosConta[chave];
+        if(nova.conta && (!cta || cta.lembrar !== false)){
+          var valor = ConfUn.valMem(nova.conta.op, nova.conta.n, mi.unid, aprendizadosUnidade);
+          if(existente !== valor) onContaSalva(fn, orc.desc, valor);
+        } else if(existente && cta && (cta.esq || (nova.conta && cta.lembrar === false))){
+          onContaEsquecida(fn, orc.desc);
+        }
+      }
+      ligsFinal[mid] = nova;
+    });
+    onConfirm(ligsFinal);
   };
   var nLig=Object.keys(ligs).length;
   var podeLinkar=!!(fornId&&selMId&&selOIdx!==null);
   var filtM=itens.filter(function(it){return !busca1||(it.descricao||"").toUpperCase().includes(busca1.toUpperCase());});
   var filtO=itemsOrc.map(function(it,i){return{it:it,i:i};}).filter(function(x){return !busca2||x.it.desc.includes(busca2.toUpperCase());});
   var CE=React.createElement;
+  // v17: conferência de cada ligação (o que o PDF traz × o que o mapa espera × o que os outros cobram)
+  var confPorMid={}, nConferir=0, nContasAplic=0, primeiroPreco=null;
+  Object.keys(ligs).forEach(function(mid){
+    var vmL=vmDaLig(mid, ligs[mid]); if(!vmL) return;
+    var calcL=ConfUn.calcConta(vmL, contas[mid]);
+    var estL=ConfUn.estadoLinha(vmL, contas[mid], calcL);
+    confPorMid[mid]={vm:vmL, calc:calcL, est:estL};
+    if(ConfUn.precisaConferir(estL)){ nConferir++; if(primeiroPreco===null) primeiroPreco=vmL.preco; }
+    if(estL==="conta"||estL==="conta_lembrada") nContasAplic++;
+  });
+  var hhDe = function(mid, cf){
+    return {
+      op:function(op){ setConta(mid,{op:op,mem:false,certo:false}); },
+      n:function(txt){ setConta(mid,{n:txt,mem:false,certo:false}); },
+      lembrar:function(b){ setConta(mid,{lembrar:b}); },
+      usarSug:function(){ setConta(mid,{op:cf.vm.sug.op,n:String(cf.vm.sug.n),mem:false,certo:false}); },
+      certo:function(){ setConta(mid,{certo:true,n:"",mem:false,esq:false}); setAbertos(function(p){var n=Object.assign({},p);n[mid]=false;return n;}); },
+      trocar:function(){ setConta(mid,{mem:false}); },
+      esquecer:function(){ setConta(mid,{n:"",mem:false,esq:true,certo:false}); setAbertos(function(p){var n=Object.assign({},p);n[mid]=!!cf.vm.flagged;return n;}); }
+    };
+  };
   var stOvl={position:"fixed",inset:0,background:"rgba(10,20,50,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200};
-  var stMod={background:"#fff",borderRadius:14,width:"96vw",maxWidth:900,maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"};
+  var stMod={background:"#fff",borderRadius:14,width:"96vw",maxWidth:1000,maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"};
   var stHdr={background:"#2a5298",color:"#fff",padding:"14px 20px",display:"flex",alignItems:"center",gap:10};
   var stFBar={background:"#f0f4ff",borderBottom:"1px solid #dde4f5",padding:"10px 20px",display:"flex",alignItems:"center",gap:10,fontSize:12};
   var stSel={border:"1.5px solid #c5d8f0",borderRadius:6,padding:"5px 10px",fontSize:12,color:"#2a5298",fontWeight:700,background:"#fff",outline:"none",cursor:"pointer"};
@@ -211,7 +743,7 @@ function ModalCasarInsumos(_ref_cas) {
   var stLnkZ={display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",width:56,flexShrink:0,background:"#f8f9ff",borderLeft:"1px solid #e4e8f5",borderRight:"1px solid #e4e8f5",gap:12};
   var stBtnL={background:podeLinkar?"#2a5298":"#bbb",color:"#fff",border:"none",borderRadius:8,padding:"10px 6px",cursor:podeLinkar?"pointer":"not-allowed",display:"flex",flexDirection:"column",alignItems:"center",gap:3,width:40};
   var stLoad={margin:"8px 10px",border:"2px dashed #c5d8f0",borderRadius:8,padding:"14px 10px",textAlign:"center",cursor:"pointer",color:"#7a9abf",fontSize:11,background:"#f8faff"};
-  var stFtr={padding:"12px 20px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10};
+  var stFtr={padding:"12px 20px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"};
   var stSalv={background:nLig>0?"#186818":"#bbb",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12,fontWeight:800,cursor:nLig>0?"pointer":"not-allowed",marginLeft:"auto",display:"flex",alignItems:"center",gap:6};
   return CE("div",{style:stOvl},
     CE("div",{style:stMod},
@@ -236,7 +768,12 @@ function ModalCasarInsumos(_ref_cas) {
           CE("div",{style:stInst},"\u2460 Clique em um insumo do mapa"),
           CE("div",{style:stList},filtM.map(function(it){
             var lig=ligs[it.id],isSel=selMId===it.id;
-            return CE("div",{key:it.id,onClick:function(){if(!lig)setSelMId(isSel?null:it.id);},style:{padding:"8px 14px",borderBottom:"1px solid #f0f2f8",cursor:lig?"default":"pointer",background:lig?"#e6f4ea":isSel?"#dbeafe":"transparent",borderLeft:lig?"3px solid #186818":isSel?"3px solid #2a5298":"3px solid transparent",display:"flex",alignItems:"center",gap:8}},
+            var cf=lig?(confPorMid[it.id]||null):null;
+            var precisa=!!cf&&ConfUn.precisaConferir(cf.est);
+            var aberto=!!abertos[it.id]&&!!cf;
+            var hh=cf?hhDe(it.id,cf):null;
+            return CE(React.Fragment,{key:it.id},
+            CE("div",{"data-linha":"mapa",onClick:function(){if(!lig)setSelMId(isSel?null:it.id);},style:{padding:"8px 14px",borderBottom:cf?"none":"1px solid #f0f2f8",cursor:lig?"default":"pointer",background:lig?"#e6f4ea":isSel?"#dbeafe":"transparent",borderLeft:lig?"3px solid #186818":isSel?"3px solid #2a5298":"3px solid transparent",display:"flex",alignItems:"center",gap:8}},
               CE("div",{style:{width:8,height:8,borderRadius:"50%",background:lig?"#186818":isSel?"#2a5298":"#d0d8e8",flexShrink:0}}),
               CE("div",{style:{flex:1}},
                 CE("div",{style:{fontSize:11,fontWeight:600,color:lig?"#186818":isSel?"#1a3a78":"#1a2a4a"}},it.descricao),
@@ -246,6 +783,20 @@ function ModalCasarInsumos(_ref_cas) {
                 CE("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713 CASADO"),
                 CE("button",{onClick:function(e){e.stopPropagation();desligar(it.id);},style:{background:"#fdecea",border:"none",borderRadius:3,padding:"1px 6px",fontSize:10,color:"#c0392b",cursor:"pointer",fontWeight:700}},"\u2702")
               ):null
+            ),
+            cf&&CE("div",{"data-linha":"conf","data-mid":it.id,style:{padding:"0 14px 8px 25px",background:precisa?"#fffdf2":"#f1f9f3",borderLeft:"3px solid "+(precisa?"#f0a800":"#186818"),borderBottom:aberto?"none":"1px solid #f0f2f8",display:"flex",flexDirection:"column",gap:5,minWidth:0}},
+              CE("div",{"data-cfu":"texto-pdf",style:{fontSize:10.5,color:"#33405e",lineHeight:1.35,wordBreak:"break-word"}},CE("b",{style:{color:"#5a6684"}},"PDF: "),lig.descPDF," \u00B7 ",CE("b",null,"R$ "+fmtBRL(lig.preco)),CE("span",{style:{color:"#6a7690"}}," cada, no PDF")),
+              CE("div",{"data-cfu":"tiras-pdf",style:{display:"flex",flexWrap:"wrap",gap:5}},ConfUn.tirasPDF(cf.vm)),
+              CE("div",{"data-cfu":"tiras-mapa",style:{display:"flex",flexWrap:"wrap",gap:5}},ConfUn.tirasMapa(cf.vm)),
+              ConfUn.linhaOutros(cf.vm),
+              CE("div",{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
+                ConfUn.pilula(cf.est,cf.vm,cf.calc),
+                CE("button",{"data-cfu":"botao-conta",type:"button",onClick:function(e){e.stopPropagation();alternarPainel(it.id,cf.vm);},style:{border:"1.5px solid #1a3a78",color:"#1a3a78",background:aberto?"#e6edfb":"#fff",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}},"\xD7 conta")
+              )
+            ),
+            cf&&aberto&&CE("div",{"data-linha":"painel","data-mid":it.id,style:{padding:"0 10px 10px 18px",background:precisa?"#fffdf2":"#f1f9f3",borderBottom:"1px solid #f0f2f8",borderLeft:"3px solid "+(precisa?"#f0a800":"#186818")}},
+              ConfUn.painel({vm:cf.vm,conta:contas[it.id]||{op:"mul",n:"",lembrar:true},calc:cf.calc,h:hh,fornNome:nomeDoForn(lig.fornId)})
+            )
             );
           }))
         ),
@@ -280,7 +831,8 @@ function ModalCasarInsumos(_ref_cas) {
             return CE("div",{key:idx,onClick:function(){if(!isLig)setSelOIdx(isSel?null:idx);},style:{padding:"8px 14px",borderBottom:"1px solid #f0f2f8",cursor:isLig?"default":"pointer",background:isLig?"#e6f4ea":isSel?"#fef3c7":"transparent",borderLeft:isLig?"3px solid #186818":isSel?"3px solid #f0a500":"3px solid transparent",display:"flex",alignItems:"center",gap:8}},
               CE("div",{style:{flex:1}},
                 CE("div",{style:{fontSize:11,fontWeight:600,color:isLig?"#186818":isSel?"#92400e":"#1a2a4a"}},it.desc),
-                CE("div",{style:{fontSize:11,fontWeight:800,color:"#186818",marginTop:2}},"R$ "+it.preco.toLocaleString("pt-BR",{minimumFractionDigits:2}))
+                CE("div",{style:{fontSize:11,fontWeight:800,color:"#186818",marginTop:2}},"R$ "+it.preco.toLocaleString("pt-BR",{minimumFractionDigits:2})),
+                (ConfUn.numero(it.qtd)!==null)?CE("div",{"data-cfu":"lido-pdf",style:{fontSize:10,color:"#6a7690",marginTop:1}},"qtd "+ConfUn.fmtN(ConfUn.numero(it.qtd))+(it.unidade?" \u00B7 unid. "+it.unidade:" \u00B7 sem unidade lida")):null
               ),
               isLig?CE("span",{style:{fontSize:9,background:"#186818",color:"#fff",borderRadius:3,padding:"1px 5px"}},"\u2713"):null
             );
@@ -290,6 +842,12 @@ function ModalCasarInsumos(_ref_cas) {
       CE("div",{style:stFtr},
         CE("span",{style:{fontSize:12,color:"#555"}},"Liga\xE7\xF5es:"),
         CE("span",{style:{background:nLig>0?"#186818":"#ccc",color:"#fff",borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700}},nLig+" "+(nLig===1?"CASADA":"CASADAS")),
+        (nConferir>0||nContasAplic>0)&&CE("div",{"data-cfu":"rodape",style:{flex:1,minWidth:200,background:nConferir>0?"#fff6e0":"#e6f0ff",border:"1px solid "+(nConferir>0?"#f0c060":"#b8d0f5"),borderRadius:6,padding:"6px 10px",fontSize:11,color:nConferir>0?"#6a4300":"#1f4585",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+          nConferir>0&&ConfUn.ico("warn","#b36b00",14),
+          nConferir>0&&CE("b",null,nConferir+(nConferir===1?" liga\xE7\xE3o para conferir.":" liga\xE7\xF5es para conferir.")),
+          nConferir>0&&(nConferir===1&&primeiroPreco!==null?" Se clicar assim, ela vai com "+ConfUn.fmtM(primeiroPreco)+", sem conta.":" Se clicar assim, elas v\xE3o com o pre\xE7o do PDF, sem conta."),
+          nContasAplic>0&&CE("span",{style:{fontWeight:700}},(nConferir>0?"\xB7 ":"")+nContasAplic+(nContasAplic===1?" conta aplicada.":" contas aplicadas."))
+        ),
         CE("button",{style:{background:"none",border:"1.5px solid #dde4f5",borderRadius:8,padding:"9px 16px",fontSize:12,fontWeight:600,color:"#666",cursor:"pointer"},onClick:onClose},"CANCELAR"),
         CE("button",{style:stSalv,disabled:nLig===0,onClick:confirmar},"\u2705 SALVAR E PREENCHER PRE\xC7OS")
       )
@@ -1766,59 +2324,25 @@ function buscarCotacaoDolarIA() {
     });
 }
 
-function ModalLerComIA(_ref_ia) {
-  var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso, onAprendizadoSalvo=_ref_ia.onAprendizadoSalvo||function(){};
-  var aprendizados=_ref_ia.aprendizados||{};
-  var CE=React.createElement;
-  var _sStep=useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
-  var _sArq=useState(null),arquivo=_slicedToArray(_sArq,2)[0],setArquivo=_slicedToArray(_sArq,2)[1];
-  var _sForn=useState(""),fornId=_slicedToArray(_sForn,2)[0],setFornId=_slicedToArray(_sForn,2)[1];
-  var _sRes=useState(null),resultado=_slicedToArray(_sRes,2)[0],setResultado=_slicedToArray(_sRes,2)[1];
-  var _sMatch=useState({}),matchs=_slicedToArray(_sMatch,2)[0],setMatchs=_slicedToArray(_sMatch,2)[1];
-  var _sErro=useState(""),erro=_slicedToArray(_sErro,2)[0],setErro=_slicedToArray(_sErro,2)[1];
-  var _sCusto=useState(null),custo=_slicedToArray(_sCusto,2)[0],setCusto=_slicedToArray(_sCusto,2)[1];
-  var _sMsg=useState("Preparando..."),msg=_slicedToArray(_sMsg,2)[0],setMsg=_slicedToArray(_sMsg,2)[1];
-  var _sB3=useState(""),busca3=_slicedToArray(_sB3,2)[0],setBusca3=_slicedToArray(_sB3,2)[1];
-  var _sFiltro=useState("todos"),filtroTipo=_slicedToArray(_sFiltro,2)[0],setFiltroTipo=_slicedToArray(_sFiltro,2)[1];
-  var _sMD=useState({}),matchDesc=_slicedToArray(_sMD,2)[0],setMatchDesc=_slicedToArray(_sMD,2)[1];
-  var _sSA=useState(null),seletorAberto=_slicedToArray(_sSA,2)[0],setSeletorAberto=_slicedToArray(_sSA,2)[1];
-  var _sSB=useState(""),seletorBusca=_slicedToArray(_sSB,2)[0],setSeletorBusca=_slicedToArray(_sSB,2)[1];
-  // FIX (pedido do Claudio): mostrar também o campo "detalhe" do insumo junto da descrição,
-  // pra ajudar a distinguir insumos com nome parecido mas especificações diferentes (ex: dois
-  // "AVENTAL - DE PLASTICO" com tamanhos distintos). Puramente de EXIBIÇÃO — não mexe em nada
-  // da lógica de casamento (fazerMatchs continua comparando só descricao, como sempre fez).
-  var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); if(!f) return ""; return f.detalhe ? (f.descricao||"")+" — "+f.detalhe : (f.descricao||""); };
-  var forns=mapa.fornecedores||[];
-  // FIX: (1) a versão anterior removia letras acentuadas (Ç,Ã,Õ etc.) transformando-as em ESPAÇO,
-  // o que quebrava palavras portuguesas ao meio (ex: "AÇO" virava "A O", "TUBULAÇÃO" virava "TUBULA
-  // O") — perdendo a palavra inteira no casamento, já que fragmentos de 1 letra são descartados.
-  // Agora converte o acento para sua forma sem acento (Ç->C, Ã->A) via normalize('NFD'), preservando
-  // a palavra inteira. (2) usa String(s||"") em vez de (s||"") para nunca quebrar com erro fatal caso
-  // a descrição venha como número/objeto (ex: dado corrompido ou resposta malformada da IA).
-  // FIX (pedido do Claudio — adicionar vários itens de uma vez no mapa): "normalizar" e
-  // "wordScore" foram MOVIDAS pra função global, em mapacot-1-core.js — de lá continuam sendo
-  // usadas aqui exatamente como antes (confirmado, comparando caractere por caractere, que a
-  // lógica não mudou em nada). Ficam disponíveis pra outras partes do sistema reaproveitarem,
-  // sem duplicar essa lógica já madura e testada.
-  var fazerMatchs=function(orcItens){
-    var result={};
-    orcItens.forEach(function(oi,idx){
-      if(!oi) return; // FIX: protege contra item null/malformado (ex: resposta inesperada da IA)
-      // FIX: consulta a mem\u00f3ria primeiro - se esse texto j\u00e1 foi ensinado, acha o item do mapa com essa descri\u00e7\u00e3o exata
-      var chave = String(oi.descricao||'').trim().toUpperCase();
-      var descConhecida = aprendizados[chave];
-      if (descConhecida) {
-        var itemConhecido = itens.find(function(mi){ return mi.descricao === descConhecida; });
-        if (itemConhecido) { result[idx] = itemConhecido.id; return; }
-      }
-      var best=0,bestId="";
-      itens.forEach(function(mi){var sc=wordScore(oi.descricao,mi.descricao);if(sc>best){best=sc;bestId=mi.id;}});
-      result[idx]=best>=0.35?bestId:"";
-    });
-    return result;
-  };
-  var _sModoLer=useState(''),modoLer=_slicedToArray(_sModoLer,2)[0],setModoLer=_slicedToArray(_sModoLer,2)[1];
-  var parsearPDFTextoLerIA = function(textosOriginaisEntrada) {
+// v17 (conferência de unidade): lê a UNIDADE que o PDF escreve junto da quantidade de uma linha.
+// Só aceita uma sigla de unidade conhecida, colada no número ("200,000 MT"), logo DEPOIS dele (COSTA REP:
+// "2,00 MT 575,72") ou logo ANTES (PARANORTE/AGRO BOI: "MT 200,000 4,2000"). Nada achado = null
+// (o PDF não traz unidade, como o da REMOLO JARUDE). Nunca inventa: só devolve o que está escrito.
+var UNID_PDF_RE = /^(UN|UND|UNID|UNIDADE|PC|P\u00C7|PCS|KG|KGS|MT|MTS|M|M2|M\u00B2|M3|M\u00B3|ML|CX|L|LT|LTS|PCT|PT|CJ|RL|ROLO|SC|PAR|PR|FD|BD|GL|JG|VB|FX|T|DZ)$/i;
+function lerUnidadeAoLadoDaQtd(toksOrig, pos) {
+  if (pos === null || pos === undefined || pos < 0) return null;
+  var tok = String(toksOrig[pos] == null ? "" : toksOrig[pos]).trim();
+  var colada = tok.match(/^[\d.,]+\s*(RL|KG|UN|PC|MT|M2|M3)$/i);
+  if (colada) return colada[1].toUpperCase();
+  var depois = String(toksOrig[pos + 1] == null ? "" : toksOrig[pos + 1]).trim().replace(/\.$/, "");
+  if (UNID_PDF_RE.test(depois)) return depois.toUpperCase();
+  var antes = String(pos > 0 && toksOrig[pos - 1] != null ? toksOrig[pos - 1] : "").trim().replace(/\.$/, "");
+  if (UNID_PDF_RE.test(antes)) return antes.toUpperCase();
+  return null;
+}
+// v17: o leitor grátis de PDF (parsearPDFTextoLerIA) foi MOVIDO, sem mudar nenhuma regra, de dentro do componente
+// ModalLerComIA para cá (função global), só para o "Casar insumos" também poder ler quantidade/unidade com o mesmo leitor.
+function parsearPDFTextoLerIAGlobal(textosOriginaisEntrada) {
     // FIX: alguns fornecedores (ex: Mexichem) colam o prefixo "R$" junto com o número no MESMO token
     // (ex: "R$ 86,75"), ao invés de "R$" e o número virem em tokens separados. Outros (ex: Gerdau)
     // colam um SUFIXO de unidade/moeda no final (ex: "6,000 RL", "1.666,80 BRL/RL", "10.000,81 BRL").
@@ -2002,7 +2526,7 @@ function ModalLerComIA(_ref_ia) {
       // como unidade em outro tipo de documento.
       var UNIDADE_RE = /^(UN|UND|PC|PÇ|KG|MT|M|CX|L|LT|PCT|CJ|PT|SC|RL)$/i;
       var FORMATO_QTD_RE = /,\d{3}$|,\d{5}$/; // ex: "1,000", "15,000" (3 casas) ou "26,00000" (5 casas) — sempre quantidade nesses padrões
-      var unitValidado=null, qtdValidada=null, melhorDiferenca=Infinity, melhorBonus=-1, melhorPrioridade=-1;
+      var unitValidado=null, qtdValidada=null, posQtdValidada=null, melhorDiferenca=Infinity, melhorBonus=-1, melhorPrioridade=-1; // v17: posQtdValidada = onde (no PDF) está a quantidade escolhida, para ler a unidade ao lado dela
       for (var xi=0; xi<numeros.length; xi++) {
         for (var yi=0; yi<numeros.length; yi++) {
           if (xi===yi) continue;
@@ -2033,7 +2557,7 @@ function ModalLerComIA(_ref_ia) {
                 // (fallback) quando só bate com qtd=1 "seco", sem nenhuma pista de apoio.
                 var prioridade = FORMATO_QTD_RE.test(textosOriginais[xi]) ? 3 : (bonus ? 2 : (qtd>1 ? 1 : 0));
                 if (prioridade>melhorPrioridade || (prioridade===melhorPrioridade && (diferenca<melhorDiferenca || (diferenca===melhorDiferenca && bonus>melhorBonus)))) {
-                  melhorDiferenca=diferenca; melhorBonus=bonus; melhorPrioridade=prioridade; unitValidado=unit; qtdValidada=qtd;
+                  melhorDiferenca=diferenca; melhorBonus=bonus; melhorPrioridade=prioridade; unitValidado=unit; qtdValidada=qtd; posQtdValidada=posicoes[xi];
                 }
               }
             }
@@ -2060,7 +2584,7 @@ function ModalLerComIA(_ref_ia) {
                     var bonusQuadra = UNIDADE_RE.test(proxTokenDaQtd2) ? 1 : 0;
                     var scoreQuadra = difQuadra - (bonusQuadra*0.02);
                     if (scoreQuadra<melhorDifQuadra) {
-                      melhorDifQuadra=scoreQuadra; unitValidado=unit2; qtdValidada=qtd2;
+                      melhorDifQuadra=scoreQuadra; unitValidado=unit2; qtdValidada=qtd2; posQtdValidada=posicoes[xi2];
                     }
                   }
                 }
@@ -2070,7 +2594,8 @@ function ModalLerComIA(_ref_ia) {
         }
       }
       if (unitValidado!==null && unitValidado>0) {
-        items.push({descricao:descCompleta.toUpperCase(), preco:unitValidado, qtd:qtdValidada});
+        // v17: além do preço e da quantidade, devolve a UNIDADE que o PDF escreve ao lado da quantidade (ou null se o PDF não traz)
+        items.push({descricao:descCompleta.toUpperCase(), preco:unitValidado, qtd:qtdValidada, unidade:lerUnidadeAoLadoDaQtd(textosOriginaisEntrada, posQtdValidada)});
       }
     }
 
@@ -2165,7 +2690,7 @@ function ModalLerComIA(_ref_ia) {
           var qtdM = converterNumeroMultilit(possQtdMultilit);
           var unitM = converterNumeroMultilit(possUnitMultilit);
           if (qtdM>=1 && unitM>0) {
-            items.push({descricao:palavras.join(" ").toUpperCase(), preco:unitM, qtd:qtdM});
+            items.push({descricao:palavras.join(" ").toUpperCase(), preco:unitM, qtd:qtdM, unidade:(textos[ui]||"").trim().toUpperCase()});
           }
         }
       }
@@ -2313,7 +2838,116 @@ function ModalLerComIA(_ref_ia) {
       if (itemsFerrosul.length>items.length) items = itemsFerrosul;
     }
     return items;
+}
+
+function ModalLerComIA(_ref_ia) {
+  var mapa=_ref_ia.mapa, itens=_ref_ia.itens, onClose=_ref_ia.onClose, onConfirm=_ref_ia.onConfirm, onIaUso=_ref_ia.onIaUso, onAprendizadoSalvo=_ref_ia.onAprendizadoSalvo||function(){};
+  var aprendizados=_ref_ia.aprendizados||{};
+  // v17 (conferência de unidade/quantidade/preço com "conta"): memória das contas e das unidades ensinadas
+  var aprendizadosConta=_ref_ia.aprendizadosConta||{}, aprendizadosUnidade=_ref_ia.aprendizadosUnidade||{};
+  var onContaSalva=_ref_ia.onContaSalva||function(){}, onContaEsquecida=_ref_ia.onContaEsquecida||function(){};
+  var CE=React.createElement;
+  var _sStep=useState(1),step=_slicedToArray(_sStep,2)[0],setStep=_slicedToArray(_sStep,2)[1];
+  var _sArq=useState(null),arquivo=_slicedToArray(_sArq,2)[0],setArquivo=_slicedToArray(_sArq,2)[1];
+  var _sForn=useState(""),fornId=_slicedToArray(_sForn,2)[0],setFornId=_slicedToArray(_sForn,2)[1];
+  var _sRes=useState(null),resultado=_slicedToArray(_sRes,2)[0],setResultado=_slicedToArray(_sRes,2)[1];
+  var _sMatch=useState({}),matchs=_slicedToArray(_sMatch,2)[0],setMatchs=_slicedToArray(_sMatch,2)[1];
+  var _sErro=useState(""),erro=_slicedToArray(_sErro,2)[0],setErro=_slicedToArray(_sErro,2)[1];
+  var _sCusto=useState(null),custo=_slicedToArray(_sCusto,2)[0],setCusto=_slicedToArray(_sCusto,2)[1];
+  var _sMsg=useState("Preparando..."),msg=_slicedToArray(_sMsg,2)[0],setMsg=_slicedToArray(_sMsg,2)[1];
+  var _sB3=useState(""),busca3=_slicedToArray(_sB3,2)[0],setBusca3=_slicedToArray(_sB3,2)[1];
+  var _sFiltro=useState("todos"),filtroTipo=_slicedToArray(_sFiltro,2)[0],setFiltroTipo=_slicedToArray(_sFiltro,2)[1];
+  var _sMD=useState({}),matchDesc=_slicedToArray(_sMD,2)[0],setMatchDesc=_slicedToArray(_sMD,2)[1];
+  var _sSA=useState(null),seletorAberto=_slicedToArray(_sSA,2)[0],setSeletorAberto=_slicedToArray(_sSA,2)[1];
+  var _sSB=useState(""),seletorBusca=_slicedToArray(_sSB,2)[0],setSeletorBusca=_slicedToArray(_sSB,2)[1];
+  // v17: a "conta" de cada linha (idx do item do orçamento -> {op,n,lembrar,certo,mem,esq}) e quais painéis estão abertos
+  var _sCt=useState({}),contas=_slicedToArray(_sCt,2)[0],setContas=_slicedToArray(_sCt,2)[1];
+  var _sAb=useState({}),abertos=_slicedToArray(_sAb,2)[0],setAbertos=_slicedToArray(_sAb,2)[1];
+  // v17: no celular (janela estreita) cada linha do passo 3 empilha (texto + preço em cima, insumo do mapa embaixo) em vez de 3 colunas
+  var _sLg=useState(typeof window!=="undefined"?window.innerWidth:1200),largJanela=_slicedToArray(_sLg,2)[0],setLargJanela=_slicedToArray(_sLg,2)[1];
+  useEffect(function(){
+    var f=function(){ setLargJanela(window.innerWidth); };
+    window.addEventListener("resize",f);
+    return function(){ window.removeEventListener("resize",f); };
+  },[]);
+  var estreito=largJanela<640;
+  // FIX (pedido do Claudio): mostrar também o campo "detalhe" do insumo junto da descrição,
+  // pra ajudar a distinguir insumos com nome parecido mas especificações diferentes (ex: dois
+  // "AVENTAL - DE PLASTICO" com tamanhos distintos). Puramente de EXIBIÇÃO — não mexe em nada
+  // da lógica de casamento (fazerMatchs continua comparando só descricao, como sempre fez).
+  var getItemDesc=function(id){ var f=(itens||[]).find(function(m){return m.id===id;}); if(!f) return ""; return f.detalhe ? (f.descricao||"")+" — "+f.detalhe : (f.descricao||""); };
+  var forns=mapa.fornecedores||[];
+  // ── v17: conferência de unidade/quantidade/preço (a "conta") — ver ConfUn no começo deste arquivo ──
+  var fornNome=((forns.find(function(f){return f.id===fornId;})||{}).nome)||"";
+  var itemMapaDe=function(id){ return (itens||[]).find(function(m){return m.id===id;})||null; };
+  var linhaVM=function(oi,mid,docI){
+    var mi=itemMapaDe(mid); if(!mi||!oi) return null;
+    return ConfUn.avaliar({oi:oi,mi:mi,mapa:mapa,outros:ConfUn.outros(mapa,mid,fornId),aprendUnid:aprendizadosUnidade,doc:docI});
   };
+  // ao abrir o passo 3: traz as contas já lembradas e deixa abertos os painéis das linhas com aviso
+  var iniciarConferencia=function(itensOrc,ms){
+    var docI=ConfUn.infoDoc(itensOrc), c={}, ab={};
+    (itensOrc||[]).forEach(function(oi,idx){
+      var mid=ms[idx]; if(!oi||!mid) return;
+      var mi=itemMapaDe(mid); if(!mi) return;
+      var mem=ConfUn.contaDaMemoria(aprendizadosConta,fornNome,oi.descricao,mi,aprendizadosUnidade);
+      var vm=linhaVM(oi,mid,docI);
+      if(mem){ c[idx]=mem; ab[idx]=true; }
+      else if(vm&&vm.flagged){ ab[idx]=true; }
+    });
+    setContas(c); setAbertos(ab);
+  };
+  // trocou o insumo do mapa de uma linha: a conta e o painel dela recomeçam para o novo insumo
+  var trocarMatch=function(idx,novoId){
+    setMatchs(function(prev){var n=Object.assign({},prev);n[idx]=novoId;return n;});
+    var oi=resultado&&resultado.itens?resultado.itens[idx]:null;
+    var mi=novoId?itemMapaDe(novoId):null;
+    var mem=(oi&&mi)?ConfUn.contaDaMemoria(aprendizadosConta,fornNome,oi.descricao,mi,aprendizadosUnidade):null;
+    var vm=(oi&&mi)?linhaVM(oi,novoId,ConfUn.infoDoc(resultado.itens)):null;
+    setContas(function(prev){var n=Object.assign({},prev);delete n[idx];if(mem)n[idx]=mem;return n;});
+    setAbertos(function(prev){var n=Object.assign({},prev);n[idx]=!!(mem||(vm&&vm.flagged));return n;});
+  };
+  var setConta=function(idx,patch){
+    setContas(function(prev){var n=Object.assign({},prev);n[idx]=Object.assign({op:"mul",n:"",lembrar:true},prev[idx]||{},patch);return n;});
+  };
+  var alternarPainel=function(idx,vm){
+    setAbertos(function(prev){var n=Object.assign({},prev);n[idx]=!prev[idx];return n;});
+    setContas(function(prev){
+      if(prev[idx]) return prev;
+      var n=Object.assign({},prev);n[idx]={op:(vm&&vm.sug&&vm.sug.op)||"mul",n:"",lembrar:true};return n;
+    });
+  };
+  // FIX: (1) a versão anterior removia letras acentuadas (Ç,Ã,Õ etc.) transformando-as em ESPAÇO,
+  // o que quebrava palavras portuguesas ao meio (ex: "AÇO" virava "A O", "TUBULAÇÃO" virava "TUBULA
+  // O") — perdendo a palavra inteira no casamento, já que fragmentos de 1 letra são descartados.
+  // Agora converte o acento para sua forma sem acento (Ç->C, Ã->A) via normalize('NFD'), preservando
+  // a palavra inteira. (2) usa String(s||"") em vez de (s||"") para nunca quebrar com erro fatal caso
+  // a descrição venha como número/objeto (ex: dado corrompido ou resposta malformada da IA).
+  // FIX (pedido do Claudio — adicionar vários itens de uma vez no mapa): "normalizar" e
+  // "wordScore" foram MOVIDAS pra função global, em mapacot-1-core.js — de lá continuam sendo
+  // usadas aqui exatamente como antes (confirmado, comparando caractere por caractere, que a
+  // lógica não mudou em nada). Ficam disponíveis pra outras partes do sistema reaproveitarem,
+  // sem duplicar essa lógica já madura e testada.
+  var fazerMatchs=function(orcItens){
+    var result={};
+    orcItens.forEach(function(oi,idx){
+      if(!oi) return; // FIX: protege contra item null/malformado (ex: resposta inesperada da IA)
+      // FIX: consulta a mem\u00f3ria primeiro - se esse texto j\u00e1 foi ensinado, acha o item do mapa com essa descri\u00e7\u00e3o exata
+      var chave = String(oi.descricao||'').trim().toUpperCase();
+      var descConhecida = aprendizados[chave];
+      if (descConhecida) {
+        var itemConhecido = itens.find(function(mi){ return mi.descricao === descConhecida; });
+        if (itemConhecido) { result[idx] = itemConhecido.id; return; }
+      }
+      var best=0,bestId="";
+      itens.forEach(function(mi){var sc=wordScore(oi.descricao,mi.descricao);if(sc>best){best=sc;bestId=mi.id;}});
+      result[idx]=best>=0.35?bestId:"";
+    });
+    return result;
+  };
+  var _sModoLer=useState(''),modoLer=_slicedToArray(_sModoLer,2)[0],setModoLer=_slicedToArray(_sModoLer,2)[1];
+  // v17: o leitor grátis agora é global (parsearPDFTextoLerIAGlobal, logo acima de ModalLerComIA); aqui só aponta para ele.
+  var parsearPDFTextoLerIA = parsearPDFTextoLerIAGlobal;
 
   var lerGratis=function(){
     if(!arquivo){setErro("Selecione um PDF primeiro.");return;}
@@ -2345,12 +2979,42 @@ function ModalLerComIA(_ref_ia) {
           // quantidade e total encontrados no pr\u00f3prio documento), n\u00e3o precisa mais dividir por nada aqui.
           setCusto(null);
           setResultado(parsed);
-          setMatchs(ms); setStep(3);
+          setMatchs(ms); iniciarConferencia(parsed.itens, ms); setStep(3);
         })
         .catch(function(err){ setErro("Erro ao ler o PDF: "+(err.message||"")); setStep(1); });
     };
     reader.onerror=function(){ setErro("Erro ao ler o arquivo."); setStep(1); };
     reader.readAsArrayBuffer(arquivo);
+  };
+  // v17: lê o texto do PDF no navegador (mesmo leitor do modo grátis) só para pegar quantidade e unidade de cada linha.
+  // Nunca trava nem derruba o modo IA: qualquer falha (ou 8s sem resposta) devolve lista vazia.
+  var lerLocalQtdUnid=function(){
+    return new Promise(function(resolve){
+      var fim=function(v){ resolve(v||[]); };
+      try{
+        if(typeof pdfjsLib==="undefined"||!arquivo){ fim([]); return; }
+        setTimeout(function(){ fim([]); },8000);
+        pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js";
+        var rd=new FileReader();
+        rd.onload=function(e){
+          try{
+            pdfjsLib.getDocument({data:new Uint8Array(e.target.result)}).promise
+              .then(function(pdf){
+                var pr=[]; for(var p=1;p<=pdf.numPages;p++) pr.push(pdf.getPage(p).then(function(pg){return pg.getTextContent();}));
+                return Promise.all(pr);
+              })
+              .then(function(paginas){
+                var txts=[];
+                paginas.forEach(function(content){ (content.items||[]).forEach(function(it){ var s=it.str||""; if(s.trim()!=="") txts.push(s); }); });
+                fim(parsearPDFTextoLerIA(txts));
+              })
+              .catch(function(){ fim([]); });
+          }catch(err){ fim([]); }
+        };
+        rd.onerror=function(){ fim([]); };
+        rd.readAsArrayBuffer(arquivo);
+      }catch(err){ fim([]); }
+    });
   };
   var lerComIA=function(){
     if(!arquivo){setErro("Selecione um PDF primeiro.");return;}
@@ -2394,9 +3058,15 @@ function ModalLerComIA(_ref_ia) {
             tokens_input:inp,tokens_output:out,custo_brl:custoBRL,
             itens_lidos:(parsed.itens||[]).length,obra_id:mapa.obra||""
           }).then(function(){if(onIaUso)onIaUso({custo:custoBRL});});
-          setResultado(parsed);
-          var ms=fazerMatchs(parsed.itens||[]);
-          setMatchs(ms);setStep(3);
+          // v17: a IA só devolve descrição e preço. A quantidade e a unidade que o PDF escreve vêm da leitura
+          // local do mesmo arquivo (a mesma do modo grátis), juntadas só quando o preço e a descrição batem.
+          // Se a leitura local falhar ou não achar nada, segue como antes (sem quantidade/unidade, só o preço).
+          return lerLocalQtdUnid().then(function(locais){
+            try{ parsed.itens=ConfUn.mesclar(parsed.itens||[],locais); }catch(e){}
+            setResultado(parsed);
+            var ms=fazerMatchs(parsed.itens||[]);
+            setMatchs(ms);iniciarConferencia(parsed.itens||[],ms);setStep(3);
+          });
         });
       })
       .catch(function(e){
@@ -2413,10 +3083,19 @@ function ModalLerComIA(_ref_ia) {
   var confirmar=function(){
     if(!resultado)return;
     var ligs={};
+    var docI=ConfUn.infoDoc(resultado.itens);
     (resultado.itens||[]).forEach(function(oi,idx){
       var mapaItemId=matchs[idx];
       if(!mapaItemId) return;
-      ligs[mapaItemId]={descPDF:oi.descricao,preco:oi.preco,fornId:fornId,orcIdx:idx};
+      var lig={descPDF:oi.descricao,preco:oi.preco,fornId:fornId,orcIdx:idx};
+      // v17: só se a pessoa digitou/confirmou uma conta válida o preço muda; sem conta entra exatamente como veio no PDF
+      var vm=linhaVM(oi,mapaItemId,docI);
+      var calc=vm?ConfUn.calcConta(vm,contas[idx]):null;
+      if(vm&&calc&&calc.estado==="ok"){
+        lig.preco=calc.resultado;
+        lig.conta={op:calc.op,n:calc.n,precoOriginal:oi.preco,unidPdf:vm.uP,unidMapa:vm.uM,nota:ConfUn.notaConta(vm,calc)};
+      }
+      ligs[mapaItemId]=lig;
     });
     if(!Object.keys(ligs).length){setErro("Nenhum item casado para salvar.");return;}
     // FIX: alimenta a memória (aprendizados) — cada casamento confirmado aqui ensina que aquele
@@ -2427,14 +3106,42 @@ function ModalLerComIA(_ref_ia) {
       var itemMapa = itens.find(function(i){ return i.id === mid; });
       if(itemMapa && itemMapa.descricao) onAprendizadoSalvo(ligs[mid].descPDF, itemMapa.descricao);
     });
+    // v17: memória das contas (só agora, ao clicar PREENCHER MAPA — cancelar não grava nada)
+    Object.keys(ligs).forEach(function(mid){
+      var lig=ligs[mid], oi=(resultado.itens||[])[lig.orcIdx], cta=contas[lig.orcIdx], mi=itemMapaDe(mid);
+      if(!oi||!mi||!fornNome) return;
+      var chave=ConfUn.chaveMem(fornNome,oi.descricao), existente=aprendizadosConta[chave];
+      if(lig.conta&&(!cta||cta.lembrar!==false)){
+        var valor=ConfUn.valMem(lig.conta.op,lig.conta.n,mi.unid,aprendizadosUnidade);
+        if(existente!==valor) onContaSalva(fornNome,oi.descricao,valor);
+      } else if(existente&&cta&&(cta.esq||(lig.conta&&cta.lembrar===false))){
+        onContaEsquecida(fornNome,oi.descricao);
+      }
+    });
     onConfirm(ligs);
   };
   var stOvl={position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(10,20,50,0.65)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"};
-  var stMod={background:"#fff",borderRadius:12,width:"92%",maxWidth:720,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"};
+  // v17: no passo 3 a janela é mais larga (980 em vez de 720) para caber tudo que a pessoa precisa para conferir cada linha
+  var stMod={background:"#fff",borderRadius:12,width:"92%",maxWidth:step===3?980:720,maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"};
   var stHdr={background:"#1a3a78",color:"#fff",padding:"12px 18px",display:"flex",alignItems:"center",gap:10};
-  var stFtr={padding:"12px 18px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10};
+  var stFtr={padding:"12px 18px",borderTop:"1px solid #eef0f8",background:"#fafbff",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"};
   var qtCasados=Object.values(matchs).filter(function(v){return !!v;}).length;
   var qtSem=resultado?((resultado.itens||[]).length-qtCasados):0;
+  // v17: conferência de cada linha casada (o que o PDF traz × o que o mapa espera × o que os outros cobram)
+  var docI=resultado?ConfUn.infoDoc(resultado.itens):null;
+  var confPorIdx={}, nConferir=0, nContasAplic=0, nQtdIgual=0, primeiroPreco=null;
+  if(resultado&&step===3){
+    (resultado.itens||[]).forEach(function(oi,idx){
+      var mid=matchs[idx]; if(!mid||!oi) return;
+      var vm=linhaVM(oi,mid,docI); if(!vm) return;
+      var calc=ConfUn.calcConta(vm,contas[idx]);
+      var est=ConfUn.estadoLinha(vm,contas[idx],calc);
+      confPorIdx[idx]={vm:vm,calc:calc,est:est};
+      if(ConfUn.precisaConferir(est)){ nConferir++; if(primeiroPreco===null) primeiroPreco=vm.preco; }
+      if(est==="conta"||est==="conta_lembrada") nContasAplic++;
+      if(vm.sQ&&vm.sQ.t==="igual") nQtdIgual++;
+    });
+  }
   return CE("div",{style:stOvl},
     CE("div",{style:stMod},
       CE("div",{style:stHdr},
@@ -2511,6 +3218,15 @@ function ModalLerComIA(_ref_ia) {
           CE("div",{style:{background:"#e6f4ea",borderRadius:6,padding:"4px 12px",color:"#186818",fontWeight:700}},qtCasados+" casados automaticamente"),
           qtSem>0&&CE("div",{style:{background:"#fff3e0",borderRadius:6,padding:"4px 12px",color:"#e65100",fontWeight:700}},qtSem+" sem correspond\xEAncia")
         ),
+        // v17: resumo da conferência (o que este arquivo permite conferir)
+        CE("div",{"data-cfu":"resumo",style:{display:"flex",gap:8,marginBottom:10,fontSize:11,flexWrap:"wrap",alignItems:"center"}},
+          CE("span",{style:{fontWeight:800,color:"#1a2a4a"}},"Confer\xEAncia:"),
+          docI&&docI.semUnidade&&CE("span",{style:{background:"#eceff5",borderRadius:6,padding:"4px 10px",color:"#4a566e",fontWeight:700}},"este PDF n\xE3o traz coluna de unidade"),
+          docI&&!docI.temLeitura&&CE("span",{style:{background:"#eceff5",borderRadius:6,padding:"4px 10px",color:"#4a566e",fontWeight:700}},"quantidade e unidade n\xE3o lidas neste arquivo (s\xF3 o pre\xE7o \xE9 conferido)"),
+          nQtdIgual>0&&CE("span",{style:{background:"#e6f4ea",borderRadius:6,padding:"4px 10px",color:"#14591f",fontWeight:700}},nQtdIgual+" com quantidade igual"),
+          nContasAplic>0&&CE("span",{"data-cfu":"resumo-contas",style:{background:"#e6f0ff",borderRadius:6,padding:"4px 10px",color:"#1f4585",fontWeight:700}},nContasAplic+(nContasAplic===1?" conta aplicada":" contas aplicadas")),
+          CE("span",{"data-cfu":"resumo-conferir",style:{background:nConferir>0?"#fff1cc":"#eceff5",borderRadius:6,padding:"4px 10px",color:nConferir>0?"#7a4a00":"#4a566e",fontWeight:700}},nConferir+" para conferir")
+        ),
         CE("div",{style:{display:"flex",gap:8,marginBottom:10,alignItems:"center",flexWrap:"wrap"}},
           CE("input",{
             value:busca3,
@@ -2525,44 +3241,84 @@ function ModalLerComIA(_ref_ia) {
           },
             CE("option",{value:"todos"},"Todos ("+((resultado.itens||[]).length)+")"),
             CE("option",{value:"casados"},"Casados ("+qtCasados+")"),
-            CE("option",{value:"sem"},"Sem correspond\xEAncia ("+qtSem+")")
+            CE("option",{value:"sem"},"Sem correspond\xEAncia ("+qtSem+")"),
+            CE("option",{value:"conferir"},"Para conferir ("+nConferir+")")
           ),
           busca3&&CE("button",{
             onClick:function(){setBusca3("");},
             style:{padding:"7px 10px",borderRadius:7,border:"1px solid #d0d8f0",fontSize:11,cursor:"pointer",background:"#fff",color:"#888"}
           },"\u2715 Limpar")
         ),
-        CE("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
+        CE("table",{style:Object.assign({width:"100%",borderCollapse:"collapse",fontSize:11},estreito?{display:"block"}:{})},
           CE("colgroup",null,CE("col",{style:{width:"48%"}}),CE("col",{style:{width:"88px"}}),CE("col",null)),
-          CE("thead",null,CE("tr",{style:{background:"#eef1fa"}},
+          CE("thead",{style:estreito?{position:"absolute",width:1,height:1,overflow:"hidden",clip:"rect(0 0 0 0)",whiteSpace:"nowrap"}:undefined},CE("tr",{style:{background:"#eef1fa"}},
             CE("th",{style:{padding:"7px 10px",textAlign:"left"}},"Item do or\xE7amento"),
             CE("th",{style:{padding:"7px 10px",textAlign:"right"}},"Pre\xE7o unit."),
             CE("th",{style:{padding:"7px 10px",textAlign:"left"}},"Insumo no mapa")
           )),
-          CE("tbody",null,(resultado.itens||[]).map(function(oi,originalIdx){return {oi:oi,originalIdx:originalIdx};}).filter(function(item){
+          CE("tbody",{style:estreito?{display:"block"}:undefined},(resultado.itens||[]).map(function(oi,originalIdx){return {oi:oi,originalIdx:originalIdx};}).filter(function(item){
             var buscaOk=!busca3||normalizar(item.oi.descricao).indexOf(normalizar(busca3))>=0;
-            var tipoOk=filtroTipo==="todos"||(filtroTipo==="casados"&&!!matchs[item.originalIdx])||(filtroTipo==="sem"&&!matchs[item.originalIdx]);
+            var tipoOk=filtroTipo==="todos"||(filtroTipo==="casados"&&!!matchs[item.originalIdx])||(filtroTipo==="sem"&&!matchs[item.originalIdx])||(filtroTipo==="conferir"&&!!confPorIdx[item.originalIdx]&&ConfUn.precisaConferir(confPorIdx[item.originalIdx].est));
             return buscaOk&&tipoOk;
           }).map(function(item){
             var oi=item.oi, idx=item.originalIdx;
             var matched=matchs[idx];
-            return CE("tr",{key:idx,style:{borderBottom:"1px solid #f0f2f8",background:idx%2?"#f8faff":"#fff"}},
-              CE("td",{style:{padding:"7px 10px",color:"#222"}},oi.descricao),
-              CE("td",{style:{padding:"7px 10px",textAlign:"right",fontWeight:700,color:"#186818",whiteSpace:"nowrap"}},"R$ "+fmtBRL(oi.preco)),
-              CE("td",{style:{padding:"6px 8px"}},
-                CE("div",{
-                  onClick:function(){setSeletorAberto(idx);setSeletorBusca("");},
-                  style:{
-                    padding:"6px 10px",borderRadius:5,cursor:"pointer",fontSize:10,
-                    border:"1.5px solid "+(matchs[idx]?"#b0d0b0":"#f0b080"),
-                    background:matchs[idx]?"#f0f8f0":"#fff8f0",
-                    display:"flex",alignItems:"center",gap:4,minHeight:28
-                  }
-                },
-                  CE("span",{style:{flex:1,color:matchs[idx]?"#186818":"#aaa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
-                    matchs[idx] ? getItemDesc(matchs[idx]) : "toque para selecionar..."
+            // v17: confer\u00EAncia desta linha (s\u00F3 existe para linhas casadas com um insumo do mapa)
+            var cf=confPorIdx[idx]||null;
+            var precisa=!!cf&&ConfUn.precisaConferir(cf.est);
+            var aberto=!!abertos[idx]&&!!cf;
+            var fundo=precisa?"#fffdf2":(idx%2?"#f8faff":"#fff");
+            var hh=cf?{
+              op:function(op){ setConta(idx,{op:op,mem:false,certo:false}); },
+              n:function(txt){ setConta(idx,{n:txt,mem:false,certo:false}); },
+              lembrar:function(b){ setConta(idx,{lembrar:b}); },
+              usarSug:function(){ setConta(idx,{op:cf.vm.sug.op,n:String(cf.vm.sug.n),mem:false,certo:false}); },
+              certo:function(){ setConta(idx,{certo:true,n:"",mem:false,esq:false}); setAbertos(function(p){var n=Object.assign({},p);n[idx]=false;return n;}); },
+              trocar:function(){ setConta(idx,{mem:false}); },
+              esquecer:function(){ setConta(idx,{n:"",mem:false,esq:true,certo:false}); setAbertos(function(p){var n=Object.assign({},p);n[idx]=!!cf.vm.flagged;return n;}); }
+            }:null;
+            return CE(React.Fragment,{key:idx},
+              CE("tr",{"data-linha":"orc",style:Object.assign({borderBottom:cf?"none":"1px solid #f0f2f8",background:fundo},estreito?{display:"grid",gridTemplateColumns:"minmax(0,1fr) auto"}:{})},
+                CE("td",{style:Object.assign({padding:"7px 10px 4px",color:"#222",verticalAlign:"top"},estreito?{gridColumn:1,minWidth:0}:{})},
+                  CE("div",null,oi.descricao),
+                  cf&&CE("div",{"data-cfu":"tiras-pdf",style:{display:"flex",flexWrap:"wrap",gap:5,marginTop:5}},ConfUn.tirasPDF(cf.vm)),
+                  // linha ainda sem insumo do mapa: mostra mesmo assim o que o leitor achou (ajuda a escolher o insumo certo)
+                  !cf&&ConfUn.numero(oi.qtd)!==null&&CE("div",{"data-cfu":"lido-pdf",style:{fontSize:10.5,color:"#6a7690",marginTop:3}},"qtd "+ConfUn.fmtN(ConfUn.numero(oi.qtd))+(oi.unidade?" \u00B7 unid. "+oi.unidade:" \u00B7 sem unidade lida"))
+                ),
+                CE("td",{style:Object.assign({padding:"7px 10px 4px",textAlign:"right",whiteSpace:"nowrap",verticalAlign:"top"},estreito?{gridColumn:2}:{})},
+                  CE("div",{style:{fontWeight:700,color:"#186818"}},"R$ "+fmtBRL(oi.preco)),
+                  cf&&CE("div",{style:{fontSize:10,color:"#6a7690",fontWeight:400}},"cada, no PDF")
+                ),
+                CE("td",{style:Object.assign({padding:"6px 8px 4px",verticalAlign:"top"},estreito?{gridColumn:"1 / -1",minWidth:0}:{})},
+                  CE("div",{
+                    onClick:function(){setSeletorAberto(idx);setSeletorBusca("");},
+                    style:{
+                      padding:"6px 10px",borderRadius:5,cursor:"pointer",fontSize:10,
+                      border:"1.5px solid "+(matchs[idx]?"#b0d0b0":"#f0b080"),
+                      background:matchs[idx]?"#f0f8f0":"#fff8f0",
+                      display:"flex",alignItems:"center",gap:4,minHeight:28
+                    }
+                  },
+                    CE("span",{style:{flex:1,color:matchs[idx]?"#186818":"#aaa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},
+                      matchs[idx] ? getItemDesc(matchs[idx]) : "toque para selecionar..."
+                    ),
+                    CE("span",{style:{color:"#aaa",fontSize:9,flexShrink:0}},"\u25BC")
                   ),
-                  CE("span",{style:{color:"#aaa",fontSize:9,flexShrink:0}},"\u25BC")
+                  cf&&CE("div",{"data-cfu":"tiras-mapa",style:{display:"flex",flexWrap:"wrap",gap:5,marginTop:5}},ConfUn.tirasMapa(cf.vm))
+                )
+              ),
+              cf&&CE("tr",{"data-linha":"conf",style:Object.assign({background:fundo,borderBottom:aberto?"none":"1px solid #f0f2f8"},estreito?{display:"block"}:{})},
+                CE("td",{colSpan:3,style:Object.assign({padding:"2px 10px 8px"},estreito?{display:"block"}:{})},
+                  CE("div",{style:{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}},
+                    CE("div",{style:{flex:1,minWidth:220}},ConfUn.linhaOutros(cf.vm)),
+                    ConfUn.pilula(cf.est,cf.vm,cf.calc),
+                    CE("button",{"data-cfu":"botao-conta",type:"button",onClick:function(){alternarPainel(idx,cf.vm);},style:{border:"1.5px solid #1a3a78",color:"#1a3a78",background:aberto?"#e6edfb":"#fff",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}},"\xD7 conta")
+                  )
+                )
+              ),
+              cf&&aberto&&CE("tr",{"data-linha":"painel",style:Object.assign({background:fundo,borderBottom:"1px solid #f0f2f8"},estreito?{display:"block"}:{})},
+                CE("td",{colSpan:3,style:Object.assign({padding:"0 10px 10px"},estreito?{display:"block"}:{})},
+                  ConfUn.painel({vm:cf.vm,conta:contas[idx]||{op:"mul",n:"",lembrar:true},calc:cf.calc,h:hh,fornNome:fornNome})
                 )
               )
             );
@@ -2587,6 +3343,13 @@ function ModalLerComIA(_ref_ia) {
         ),
         step===3&&CE(React.Fragment,null,
           custo&&CE("span",{style:{fontSize:10,color:"#888"}},"Custo: R$ "+custo.brl.toFixed(3).replace(".",",")),
+          // v17: avisa, antes de preencher, quantas linhas ficaram com aviso sem resposta (nunca trava o botão)
+          (nConferir>0||nContasAplic>0)&&CE("div",{"data-cfu":"rodape",style:{flex:estreito?"1 1 100%":1,minWidth:200,background:nConferir>0?"#fff6e0":"#e6f0ff",border:"1px solid "+(nConferir>0?"#f0c060":"#b8d0f5"),borderRadius:6,padding:"6px 10px",fontSize:11,color:nConferir>0?"#6a4300":"#1f4585",display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+            nConferir>0&&ConfUn.ico("warn","#b36b00",14),
+            nConferir>0&&CE("b",null,nConferir+(nConferir===1?" linha para conferir.":" linhas para conferir.")),
+            nConferir>0&&(nConferir===1&&primeiroPreco!==null?" Se clicar assim, ela vai com "+ConfUn.fmtM(primeiroPreco)+", sem conta.":" Se clicar assim, elas v\xE3o com o pre\xE7o do PDF, sem conta."),
+            nContasAplic>0&&CE("span",{style:{fontWeight:700}},(nConferir>0?"\xB7 ":"")+nContasAplic+(nContasAplic===1?" conta aplicada.":" contas aplicadas."))
+          ),
           CE("div",{style:{flex:1}}),
           CE("button",{style:{background:"none",border:"1px solid #d0d8e8",borderRadius:7,padding:"7px 16px",fontSize:12,cursor:"pointer"},onClick:function(){setStep(1);}}, "VOLTAR"),
           CE("button",{
@@ -2620,7 +3383,7 @@ function ModalLerComIA(_ref_ia) {
           CE("div",{
             onClick:function(){
               var idx=seletorAberto;
-              setMatchs(function(prev){var n=Object.assign({},prev);n[idx]="";return n;});
+              trocarMatch(idx,"");
               setSeletorAberto(null);setSeletorBusca("");
             },
             style:{padding:"14px 16px",borderBottom:"1px solid #222",color:"#888",fontSize:12,cursor:"pointer"}
@@ -2638,7 +3401,7 @@ function ModalLerComIA(_ref_ia) {
               key:mi.id,
               onClick:function(){
                 var idx=seletorAberto;
-                setMatchs(function(prev){var n=Object.assign({},prev);n[idx]=mi.id;return n;});
+                trocarMatch(idx,mi.id);
                 setSeletorAberto(null);setSeletorBusca("");
               },
               style:{

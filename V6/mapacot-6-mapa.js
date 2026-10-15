@@ -557,17 +557,44 @@ var _useState27 = useState(init),
   // vice-versa — cada função de cruzamento continua enxergando só o que é dela.
   var _useStateAprU=useState({}),aprendizadosUnidade=_slicedToArray(_useStateAprU,2)[0],setAprendizadosUnidade=_slicedToArray(_useStateAprU,2)[1];
   var PREFIXO_APRENDIZADO_UNIDADE = "UNID::";
+  // v17 (conferência de unidade/quantidade/preço com "conta"): as contas que o Claudio mandou LEMBRAR ficam na
+  // MESMA tabela de aprendizado, com a chave "CONTA::FORNECEDOR::TEXTO DO ORÇAMENTO" e o valor "mul|100|RL"
+  // (operação | número | unidade do insumo do mapa). Guardadas aqui com a chave inteira, separadas dos outros dois
+  // tipos para nunca aparecerem como "insumo ensinado" nem como "unidade ensinada".
+  var _useStateAprC=useState({}),aprendizadosConta=_slicedToArray(_useStateAprC,2)[0],setAprendizadosConta=_slicedToArray(_useStateAprC,2)[1];
+  var PREFIXO_APRENDIZADO_CONTA = "CONTA::";
   useEffect(function(){
     sbBuscarAprendizados().then(function(m){
-      var soInsumo = {}, soUnidade = {};
+      var soInsumo = {}, soUnidade = {}, soConta = {};
       Object.keys(m||{}).forEach(function(chave){
         if (chave.indexOf(PREFIXO_APRENDIZADO_UNIDADE) === 0) soUnidade[chave.slice(PREFIXO_APRENDIZADO_UNIDADE.length)] = m[chave];
+        else if (chave.indexOf(PREFIXO_APRENDIZADO_CONTA) === 0) soConta[chave] = m[chave];
         else soInsumo[chave] = m[chave];
       });
       setAprendizados(soInsumo);
       setAprendizadosUnidade(soUnidade);
+      setAprendizadosConta(soConta);
     });
   },[]);
+  var registrarAprendizadoConta = function(fornNome, textoOrcamento, valor){
+    var chave = ConfUn.chaveMem(fornNome, textoOrcamento);
+    logEventoDiag("ENSINAR SISTEMA (conta): \"" + chave.slice(0,60) + "\" \u2192 " + valor);
+    // se já existia uma conta lembrada para esta chave, apaga a antiga antes de gravar a nova (nunca fica linha duplicada,
+    // mesmo que a tabela não tenha chave única nessa coluna)
+    var jaExistia = aprendizadosConta[chave] !== undefined;
+    var gravar = function(){ return sbSalvarAprendizado(chave, valor); };
+    (jaExistia ? sbExcluirAprendizado(chave).then(gravar) : gravar()).catch(function(){
+      window.avisarErroSalvamento('Não foi possível salvar a conta para lembrar. Verifique sua conexão.');
+    });
+    setAprendizadosConta(function(prev){ var n = Object.assign({}, prev); n[chave] = valor; return n; });
+  };
+  var esquecerAprendizadoConta = function(fornNome, textoOrcamento){
+    var chave = ConfUn.chaveMem(fornNome, textoOrcamento);
+    logEventoDiag("ENSINAR SISTEMA (esquecer conta): \"" + chave.slice(0,60) + "\"");
+    sbExcluirAprendizado(chave).then(function(ok){
+      if(ok) setAprendizadosConta(function(prev){ var n = Object.assign({}, prev); delete n[chave]; return n; });
+    });
+  };
   var registrarAprendizado = function(textoOriginal, insumoDescricao){
     logEventoDiag("ENSINAR SISTEMA: \"" + String(textoOriginal||'').slice(0,40) + "\" \u2192 " + insumoDescricao);
     sbSalvarAprendizado(textoOriginal, insumoDescricao).catch(function(){
@@ -1217,6 +1244,8 @@ var _useState27 = useState(init),
         if (!lig || !lig.fornId) return;
         var txt = textoDetalheDoOrcamento(lig.descPDF);
         if (!txt) return;
+        // v17: quando o preço entrou convertido pela "conta" do Claudio, o Detalhe registra a origem (ex.: "... · R$ 4,20 POR MT × 100")
+        if (lig.conta && lig.conta.nota) txt = textoDetalheDoOrcamento(txt + " \u00B7 " + lig.conta.nota);
         var key = itemMapaId + "_" + lig.fornId;
         var atual = String(det[key] == null ? "" : det[key]).trim();
         var gravadoAntes = auto[key] == null ? null : String(auto[key]).trim();
@@ -3305,6 +3334,8 @@ var _useState27 = useState(init),
   })),
   showCasar && /*#__PURE__*/React.createElement(ModalCasarInsumos, {
     mapa: mapa, itens: itens,
+    aprendizadosConta: aprendizadosConta, aprendizadosUnidade: aprendizadosUnidade,
+    onContaSalva: registrarAprendizadoConta, onContaEsquecida: esquecerAprendizadoConta,
     onClose: function(){ setShowCasar(false); },
     onAprendizadoSalvo: registrarAprendizado,
     onConfirm: function(ligs) {
@@ -3319,12 +3350,15 @@ var _useState27 = useState(init),
   showLerIA && /*#__PURE__*/React.createElement(ModalLerComIA, {
     mapa: mapa, itens: itens,
     aprendizados: aprendizados,
+    aprendizadosConta: aprendizadosConta, aprendizadosUnidade: aprendizadosUnidade,
+    onContaSalva: registrarAprendizadoConta, onContaEsquecida: esquecerAprendizadoConta,
     insumoSinonimos: cadastros.insumoSinonimos || {},
     onClose: function(){ setShowLerIA(false); },
     onAprendizadoSalvo: registrarAprendizado,
     onConfirm: function(ligs) {
       var qtdLigs = Object.keys(ligs).length;
-      logEventoDiag("LER COM IA: " + qtdLigs + " pre\u00e7o(s) importado(s) para o mapa " + (mapa.numero != null ? mapa.numero : "?"));
+      var qtdComConta = Object.keys(ligs).filter(function(k){ return !!ligs[k].conta; }).length;
+      logEventoDiag("LER COM IA: " + qtdLigs + " pre\u00e7o(s) importado(s) para o mapa " + (mapa.numero != null ? mapa.numero : "?") + (qtdComConta ? " (" + qtdComConta + " com conta)" : ""));
       Object.keys(ligs).forEach(function(itemMapaId) {
         var lig=ligs[itemMapaId];
         setPrecoDireto(itemMapaId, lig.fornId, fmtBRL(lig.preco));
