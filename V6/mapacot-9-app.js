@@ -1531,7 +1531,7 @@ function App() {
     onClick: function onClick() {
       return setShowNew(true);
     }
-  }, /*#__PURE__*/React.createElement(IcoPlus, null), " NOVO MAPA")))), /*#__PURE__*/React.createElement("main", {
+  }, /*#__PURE__*/React.createElement(IcoPlus, null), " NOVO MAPA"))), /*#__PURE__*/React.createElement(MapacotJanelaSeguro, null)), /*#__PURE__*/React.createElement("main", {
     style: {
       maxWidth: 1100,
       margin: "0 auto",
@@ -2191,6 +2191,243 @@ function AvisoConflitoVersao() {
       }, '\u2715')
     )
   );
+}
+
+// ─── NOVO (05/11/2026 — pedido do Claudio): botões de janela no canto direito do cabeçalho da TELA INICIAL ───
+// Três botões no estilo da janela do Windows (— ❐ ✕), para não precisar usar os botões do navegador/Windows,
+// que minimizam ou fecham TODA a janela de uma vez:
+//   —  OCULTAR TELA  : tapa o sistema com uma tela azul "MAPACOT"; clique (ou Esc) volta exatamente onde estava.
+//                      Um site NÃO consegue minimizar a janela do Windows — por isso este botão só oculta; nada é fechado nem apagado.
+//   ❐  TELA CHEIA    : usa o recurso do próprio navegador (igual ao F11); o ícone acompanha o estado real.
+//   ✕  FECHAR        : pergunta antes; espera as gravações dos mapas terminarem; tenta fechar SÓ esta aba/janela.
+//                      Se o navegador bloquear (acontece em aba comum), avisa "Ctrl + W" — nunca finge que fechou.
+// Só aparecem na tela inicial (a tela do mapa aberto tem o próprio cabeçalho) e ficam ocultos em janelas < 1100 px ou de toque.
+// NÃO leem nem gravam nada no banco. O CSS vem junto deste componente (se só um arquivo for atualizado, nada fica "desconfigurado").
+var MCJ_FONTE = "'DM Sans','Segoe UI',Arial,sans-serif";
+var MCJ_CSS =
+  ".mcwin{position:absolute;top:0;right:0;display:flex;z-index:101}" +
+  ".mcwin button{all:unset;box-sizing:border-box;width:46px;height:34px;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.88);cursor:pointer;position:relative}" +
+  ".mcwin button:hover,.mcwin button:focus-visible{background:rgba(255,255,255,.14);color:#fff}" +
+  ".mcwin button.x:hover,.mcwin button.x:focus-visible{background:#e81123;color:#fff}" +
+  ".mcwin button:focus-visible{outline:2px solid #f0a500;outline-offset:-2px}" +
+  ".mcwin svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.2;display:block}" +
+  ".mcwin .tip{position:absolute;top:38px;right:0;background:#fff;color:#0f1f3d;border:1px solid #cfd8ea;border-radius:5px;padding:4px 9px;font:600 11px 'Segoe UI',Arial,sans-serif;white-space:nowrap;box-shadow:0 4px 14px rgba(15,31,61,.25);display:none;pointer-events:none}" +
+  ".mcwin button:hover .tip,.mcwin button:focus-visible .tip{display:block}" +
+  // afasta só um pouco os botões CADASTROS / RELATÓRIOS / NOVO MAPA em janelas entre 1100 e 1420 px, para nunca ficarem por baixo dos 3 botões
+  // (a % do padding é a largura do próprio cabeçalho, já sem a barra de rolagem do navegador)
+  "@media(max-width:1420px){header>div:not(.mcwin){padding-right:max(20px,calc(160px - (100% - 1100px)/2))!important}}" +
+  // janelas menores que 1100 px e telas de toque (tablet/celular): os botões não aparecem e o cabeçalho fica exatamente como era
+  "@media(max-width:1099px),(pointer:coarse){.mcwin{display:none!important}header>div:not(.mcwin){padding-right:20px!important}}" +
+  "@media print{.mcwin{display:none!important}}";
+
+function mcjEmTelaCheia() {
+  try { return !!document.fullscreenElement; } catch (e) { return false; }
+}
+function mcjTemTelaCheia() {
+  try { return !!(document.documentElement && document.documentElement.requestFullscreen); } catch (e) { return false; }
+}
+// Espera as filas de gravação dos mapas (estadoSalvamentoMapa, do mapacot-1-core.js) esvaziarem.
+// Só LÊ essas filas — não grava nada. Devolve "ok", "falha" (a última gravação de algum mapa deu erro) ou "tempo".
+function mcjEsperarGravacoes(limiteMs) {
+  var filas = [];
+  try {
+    var est = window.estadoSalvamentoMapa || {};
+    Object.keys(est).forEach(function (k) {
+      if (est[k] && est[k].fila && typeof est[k].fila.then === "function") {
+        filas.push(est[k].fila.then(function () { return true; }, function () { return false; }));
+      }
+    });
+  } catch (e) {}
+  var tempo = new Promise(function (resolve) { setTimeout(function () { resolve("tempo"); }, limiteMs); });
+  var todas = Promise.all(filas).then(function (rs) {
+    return rs.every(function (x) { return x; }) ? "ok" : "falha";
+  });
+  return Promise.race([todas, tempo]);
+}
+function mcjIcone(tipo) {
+  var h = React.createElement;
+  if (tipo === "min") return h("svg", { viewBox: "0 0 12 12", "aria-hidden": "true" }, h("path", { d: "M1 6h10" }));
+  if (tipo === "fs") return h("svg", { viewBox: "0 0 12 12", "aria-hidden": "true" }, h("path", { d: "M1 4.5V1h3.5M7.5 1H11v3.5M11 7.5V11H7.5M4.5 11H1V7.5" }));
+  if (tipo === "rest") return h("svg", { viewBox: "0 0 12 12", "aria-hidden": "true" }, h("rect", { x: 1.5, y: 3.5, width: 7, height: 7 }), h("path", { d: "M3.5 3.5V1.5h7v7h-2" }));
+  return h("svg", { viewBox: "0 0 12 12", "aria-hidden": "true" }, h("path", { d: "M1.5 1.5l9 9M10.5 1.5l-9 9" }));
+}
+var MCJ_BTN_CINZA = { all: "unset", boxSizing: "border-box", cursor: "pointer", padding: "9px 16px", borderRadius: 8, background: "#eef1f8", color: "#0f1f3d", fontWeight: 700, fontSize: 12, fontFamily: MCJ_FONTE };
+var MCJ_BTN_VERM = { all: "unset", boxSizing: "border-box", cursor: "pointer", padding: "9px 16px", borderRadius: 8, background: "#e81123", color: "#fff", fontWeight: 700, fontSize: 12, fontFamily: MCJ_FONTE };
+
+function MapacotJanelaBotoes() {
+  var h = React.createElement;
+  var _o = React.useState(false), oculta = _o[0], setOculta = _o[1];
+  var _f = React.useState(mcjEmTelaCheia), emFs = _f[0], setEmFs = _f[1];
+  var _c = React.useState(null), fechando = _c[0], setFechando = _c[1]; // null | "confirma" | "aguarda" | "alerta"
+  var _a = React.useState(null), aviso = _a[0], setAviso = _a[1];       // null | { k: "ctrlw" | "fs", seguro: bool }
+  var vivo = React.useRef(true);
+  var timerAviso = React.useRef(null);
+  var btnOcultarRef = React.useRef(null);
+  var ovRef = React.useRef(null);
+  var cancelaRef = React.useRef(null);
+  var confirmaRef = React.useRef(null);
+
+  React.useEffect(function () {
+    vivo.current = true;
+    return function () { vivo.current = false; if (timerAviso.current) clearTimeout(timerAviso.current); };
+  }, []);
+
+  // ícone/rótulo de tela cheia sempre acompanham o estado real do navegador (inclusive quando o usuário sai com Esc)
+  React.useEffect(function () {
+    var aoMudar = function () { setEmFs(mcjEmTelaCheia()); };
+    document.addEventListener("fullscreenchange", aoMudar);
+    return function () { document.removeEventListener("fullscreenchange", aoMudar); };
+  }, []);
+
+  // Esc: volta da tela oculta / cancela a pergunta de fechar
+  React.useEffect(function () {
+    if (!oculta && fechando !== "confirma" && fechando !== "alerta") return;
+    var aoTeclar = function (e) {
+      if (e.key !== "Escape") return;
+      e.preventDefault(); e.stopPropagation();
+      if (oculta) voltarDaOculta(); else setFechando(null);
+    };
+    document.addEventListener("keydown", aoTeclar, true);
+    return function () { document.removeEventListener("keydown", aoTeclar, true); };
+  }, [oculta, fechando]);
+
+  // foco: a tela oculta recebe o foco (nada digitado vai parar num campo escondido); a pergunta de fechar começa em CANCELAR
+  React.useEffect(function () {
+    try {
+      if (oculta && ovRef.current) ovRef.current.focus();
+      else if ((fechando === "confirma" || fechando === "alerta") && cancelaRef.current) cancelaRef.current.focus();
+    } catch (e) {}
+  }, [oculta, fechando]);
+
+  function voltarDaOculta() {
+    setOculta(false);
+    try { setTimeout(function () { if (btnOcultarRef.current) btnOcultarRef.current.focus(); }, 0); } catch (e) {}
+  }
+  function mostrarAviso(a, ms) {
+    setAviso(a);
+    if (timerAviso.current) clearTimeout(timerAviso.current);
+    timerAviso.current = setTimeout(function () { if (vivo.current) setAviso(null); }, ms || 12000);
+  }
+  function alternarTelaCheia() {
+    try {
+      if (mcjEmTelaCheia()) {
+        var p = document.exitFullscreen && document.exitFullscreen();
+        if (p && p.catch) p.catch(function () {});
+      } else {
+        var q = document.documentElement.requestFullscreen();
+        if (q && q.catch) q.catch(function () { if (vivo.current) mostrarAviso({ k: "fs" }, 8000); });
+      }
+    } catch (e) { mostrarAviso({ k: "fs" }, 8000); }
+  }
+  // tenta fechar só esta aba/janela; se o navegador não deixar (aba comum), avisa — nunca finge que fechou
+  function tentarFechar(seguro) {
+    try { window.close(); } catch (e) {}
+    setTimeout(function () {
+      if (!vivo.current) return;
+      setFechando(null);
+      mostrarAviso({ k: "ctrlw", seguro: seguro }, 15000);
+    }, 800);
+  }
+  function confirmarFechar() {
+    setFechando("aguarda");
+    var t0 = Date.now();
+    mcjEsperarGravacoes(10000).then(function (res) {
+      var resta = Math.max(0, 1500 - (Date.now() - t0)); // pelo menos ~1,5 s para gravações de cadastros que não têm fila
+      return new Promise(function (resolve) { setTimeout(function () { resolve(res); }, resta); });
+    }).then(function (res) {
+      if (!vivo.current) return;
+      if (res !== "ok") { setFechando("alerta"); return; }
+      tentarFechar(true);
+    }, function () { if (vivo.current) setFechando("alerta"); });
+  }
+  function tabNoDialogo(e, primeiro, ultimo) {
+    if (e.key !== "Tab") return;
+    var ativo = document.activeElement;
+    if (e.shiftKey && ativo === primeiro.current) { e.preventDefault(); ultimo.current && ultimo.current.focus(); }
+    else if (!e.shiftKey && ativo === ultimo.current) { e.preventDefault(); primeiro.current && primeiro.current.focus(); }
+  }
+
+  var temFs = mcjTemTelaCheia();
+  var nodes = [];
+
+  nodes.push(h("div", { key: "bot", className: "mcwin", role: "group", "aria-label": "Janela do MAPACOT" },
+    h("style", null, MCJ_CSS),
+    h("button", { type: "button", className: "m", ref: btnOcultarRef, "aria-label": "Ocultar tela", onClick: function () { setOculta(true); } },
+      mcjIcone("min"), h("span", { className: "tip" }, "Ocultar tela")),
+    temFs && h("button", { type: "button", className: "f", "aria-label": emFs ? "Sair da tela cheia" : "Tela cheia", onClick: alternarTelaCheia },
+      mcjIcone(emFs ? "rest" : "fs"), h("span", { className: "tip" }, emFs ? "Sair da tela cheia" : "Tela cheia")),
+    h("button", { type: "button", className: "x", "aria-label": "Fechar o MAPACOT", onClick: function () { setFechando("confirma"); } },
+      mcjIcone("x"), h("span", { className: "tip" }, "Fechar o MAPACOT"))
+  ));
+
+  // as camadas abaixo vão para o <body> (o cabeçalho cria uma "camada" própria e os modais do sistema ficariam por cima)
+  if (oculta) {
+    nodes.push(ReactDOM.createPortal(
+      h("div", {
+        key: "ocultar", ref: ovRef, tabIndex: -1, role: "button", "aria-label": "Tela oculta. Clique para voltar ao MAPACOT",
+        onClick: voltarDaOculta,
+        onKeyDown: function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); voltarDaOculta(); } },
+        style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#0f1f3d", zIndex: 2000000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: 24, fontFamily: MCJ_FONTE, color: "#fff", cursor: "pointer", outline: "none", textAlign: "center" }
+      },
+        h("div", { style: { width: 64, height: 64, background: "#f0a500", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 24, color: "#0f1f3d" } }, "MC"),
+        h("div", { style: { fontWeight: 700, fontSize: 22, letterSpacing: 1 } }, "MAPACOT"),
+        h("div", { style: { fontSize: 13, color: "#9db4d8", letterSpacing: .5 } }, "TELA OCULTA · CLIQUE EM QUALQUER LUGAR (OU TECLE ESC) PARA VOLTAR")
+      ), document.body, "mcj-ocultar"));
+  }
+
+  if (fechando) {
+    var titulo, texto, botoes;
+    if (fechando === "confirma") {
+      titulo = "FECHAR O MAPACOT?";
+      texto = "O MAPACOT confere se os mapas terminaram de gravar antes de fechar. Só o MAPACOT será fechado; as outras abas e janelas do navegador continuam abertas.";
+      botoes = [
+        h("button", { key: "c", type: "button", ref: cancelaRef, style: MCJ_BTN_CINZA, onClick: function () { setFechando(null); }, onKeyDown: function (e) { tabNoDialogo(e, cancelaRef, confirmaRef); } }, "CANCELAR"),
+        h("button", { key: "f", type: "button", ref: confirmaRef, style: MCJ_BTN_VERM, onClick: confirmarFechar, onKeyDown: function (e) { tabNoDialogo(e, cancelaRef, confirmaRef); } }, "FECHAR O MAPACOT")
+      ];
+    } else if (fechando === "alerta") {
+      titulo = "ATENÇÃO — GRAVAÇÃO NÃO CONCLUÍDA";
+      texto = "A gravação de um mapa não terminou ou deu erro. Se fechar agora, a última alteração pode não ser salva. Confira a conexão e tente de novo, ou feche mesmo assim.";
+      botoes = [
+        h("button", { key: "c", type: "button", ref: cancelaRef, style: MCJ_BTN_CINZA, onClick: function () { setFechando(null); }, onKeyDown: function (e) { tabNoDialogo(e, cancelaRef, confirmaRef); } }, "VOLTAR"),
+        h("button", { key: "f", type: "button", ref: confirmaRef, style: MCJ_BTN_VERM, onClick: function () { setFechando(null); tentarFechar(false); }, onKeyDown: function (e) { tabNoDialogo(e, cancelaRef, confirmaRef); } }, "FECHAR MESMO ASSIM")
+      ];
+    } else {
+      titulo = "AGUARDE, SALVANDO…";
+      texto = "Conferindo se os mapas terminaram de gravar. O sistema fecha sozinho assim que terminar (poucos segundos).";
+      botoes = null;
+    }
+    nodes.push(ReactDOM.createPortal(
+      h("div", { key: "fechar", role: "dialog", "aria-modal": "true", "aria-label": titulo, style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(10,18,38,.62)", zIndex: 2000000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: MCJ_FONTE } },
+        h("div", { style: { background: "#fff", borderRadius: 12, width: 420, maxWidth: "100%", padding: "22px 24px", boxShadow: "0 18px 50px rgba(0,0,0,.4)" } },
+          h("div", { style: { fontWeight: 800, fontSize: 16, color: "#0f1f3d", marginBottom: 8 } }, titulo),
+          h("div", { style: { fontSize: 13, color: "#46536b", lineHeight: 1.5, marginBottom: botoes ? 18 : 0 } }, texto),
+          botoes && h("div", { style: { display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" } }, botoes)
+        )
+      ), document.body, "mcj-fechar"));
+  }
+
+  if (aviso) {
+    var corpo;
+    if (aviso.k === "fs") {
+      corpo = ["O navegador não permitiu a tela cheia agora. Tente de novo ou use a tecla ", h("b", { key: "b" }, "F11"), "."];
+    } else {
+      corpo = ["Este navegador não deixou fechar a aba por botão. Feche com ", h("b", { key: "b1" }, "Ctrl + W"), " ou pelo ✕ do navegador. ",
+        aviso.seguro ? h("b", { key: "b2" }, "Pode fechar com segurança: os mapas já estão gravados.") : null];
+    }
+    nodes.push(ReactDOM.createPortal(
+      h("div", { key: "aviso", role: "alert", onClick: function () { setAviso(null); }, style: { position: "fixed", left: "50%", top: 60, transform: "translateX(-50%)", zIndex: 2000001, background: "#0f1f3d", color: "#fff", fontFamily: MCJ_FONTE, fontSize: 13, lineHeight: 1.45, padding: "12px 18px", borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,.35)", borderLeft: "5px solid #f0a500", maxWidth: "min(560px, calc(100vw - 24px))", cursor: "pointer" } }, corpo),
+      document.body, "mcj-aviso"));
+  }
+
+  return h(React.Fragment, null, nodes);
+}
+
+// Proteção extra: se algo inesperado acontecer DENTRO dos botões, eles somem — o resto do sistema continua normal.
+class MapacotJanelaSeguro extends React.Component {
+  constructor(props) { super(props); this.state = { erro: false }; }
+  static getDerivedStateFromError() { return { erro: true }; }
+  componentDidCatch(e) { try { logEventoDiag("✖ botoes de janela desativados por erro: " + (e && e.message)); } catch (x) {} }
+  render() { return this.state.erro ? null : React.createElement(MapacotJanelaBotoes, null); }
 }
 
 function Root() {
