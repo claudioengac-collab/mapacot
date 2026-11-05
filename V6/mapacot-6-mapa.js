@@ -17,6 +17,18 @@ function BancoSobreRobo(props) {
   return React.createElement("div", { "data-banco-sobre-robo": "1", style: { position: "fixed", left: 0, top: 0, width: 0, height: 0, zIndex: 9000 } }, props.children);
 }
 
+// NOVO (atalho "Auditoria deste mapa"): rede de segurança. Se a janela da auditoria falhar ao desenhar, ela some e o MAPA continua como estava.
+class AuditoriaMapaSegura extends React.Component {
+  constructor(props) { super(props); this.state = { erro: false }; }
+  static getDerivedStateFromError() { return { erro: true }; }
+  componentDidCatch(e) {
+    try { logEventoDiag("\u2716 Auditoria do mapa fechada por erro: " + (e && e.message)); } catch (x) {}
+    try { if (this.props.onErro) this.props.onErro(); } catch (x) {}
+    try { alert("N\u00c3O FOI POSS\u00cdVEL ABRIR A AUDITORIA DESTE MAPA. O MAPA N\u00c3O FOI ALTERADO."); } catch (x) {}
+  }
+  render() { return this.state.erro ? null : this.props.children; }
+}
+
 function fmtBytes(bytes) {
   var n = Number(bytes) || 0;
   if (n < 1024 * 1024) return Math.round(n / 1024) + " KB";
@@ -752,6 +764,9 @@ var _useState27 = useState(init),
       window.removeEventListener('resize', aoRolar);
     };
   }, []);
+  var _useStateAudMapa = useState(false),
+    showAudMapa = _slicedToArray(_useStateAudMapa, 2)[0],
+    setShowAudMapa = _slicedToArray(_useStateAudMapa, 2)[1];
   var _useStateCad = useState(false),
     _useStateCad2 = _slicedToArray(_useStateCad, 2),
     showCadEditor = _useStateCad2[0],
@@ -2877,6 +2892,10 @@ var _useState27 = useState(init),
         onClick: function(){ sbGetPedidos().then(function(d){ setPedidos(d||[]); }); setShowPedidos(true); setShowConfigMenu(false); },
         style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
       }, "\uD83D\uDCCB Ver Pedidos"),
+      mapa.numero != null && String(mapa.numero).trim() !== "" && /*#__PURE__*/React.createElement("div", {
+        onClick: function(){ logEventoDiag("AUDITORIA aberta pelo menu do mapa " + mapa.numero); setShowAudMapa(true); setShowConfigMenu(false); },
+        style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
+      }, "\uD83D\uDCCA Auditoria deste mapa"),
       /*#__PURE__*/React.createElement("div", {
         onClick: function(){ logEventoDiag("PDF de Insumos gerado: mapa " + (mapa.numero != null ? mapa.numero : "?")); abrirPDF(buildInsumosHTML(mapa.obra, clock, itensAtivos)); setShowConfigMenu(false); },
         style: { display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:6, fontSize:12, color:"#333", cursor:"pointer" }
@@ -3332,6 +3351,17 @@ var _useState27 = useState(init),
     onLimparOrcamento: onLimparOrcamento,
     onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraGerEd(obra); setShowGerEd(true); }, 200); }
   })),
+  showAudMapa && /*#__PURE__*/React.createElement(AuditoriaMapaSegura, { onErro: function () { setShowAudMapa(false); } }, /*#__PURE__*/React.createElement(BancoSobreRobo, { sobre: !!showAdicionarVarios }, /*#__PURE__*/React.createElement(ReportsModal, {
+    open: true,
+    onClose: function onClose() { setShowAudMapa(false); },
+    mapas: mapas,
+    currentMapa: mapa,
+    cadastros: cadastros,
+    orcamentos: orcamentos,
+    associacoes: associacoes,
+    abaInicial: "auditoria",
+    mapaNumInicial: mapa.numero
+  }))),
   showCasar && /*#__PURE__*/React.createElement(ModalCasarInsumos, {
     mapa: mapa, itens: itens,
     aprendizadosConta: aprendizadosConta, aprendizadosUnidade: aprendizadosUnidade,

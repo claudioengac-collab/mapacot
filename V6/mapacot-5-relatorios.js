@@ -382,7 +382,7 @@ function ReportsModal(_ref12) {
     orcamentos = _ref12.orcamentos || {},
     associacoes = _ref12.associacoes || [];
   var mapasComCurrent = _currentMapa ? mapas.map(function(m){ return m.id === _currentMapa.id ? _currentMapa : m; }) : mapas;
-  var _useState19 = useState("periodo"),
+  var _useState19 = useState(_ref12.abaInicial || "periodo"),
     _useState20 = _slicedToArray(_useState19, 2),
     tab = _useState20[0],
     setTab = _useState20[1];
@@ -416,7 +416,7 @@ function ReportsModal(_ref12) {
     almoxF = _slicedToArray(_useStateAlmoxF, 2)[0],
     setAlmoxF = _slicedToArray(_useStateAlmoxF, 2)[1];
   var _audFPadrao = { inicio: "", fim: "", base: "atendimento", obra: "", mapaNum: "", insumo: "", fornecedor: "", fornecedores: [], situ: [] };
-  var _useStateAudF = useState(_audFPadrao),
+  var _useStateAudF = useState(function () { return _ref12.mapaNumInicial != null && String(_ref12.mapaNumInicial).trim() !== "" ? Object.assign({}, _audFPadrao, { mapaNum: String(_ref12.mapaNumInicial).trim() }) : _audFPadrao; }),
     audF = _slicedToArray(_useStateAudF, 2)[0],
     setAudF = _slicedToArray(_useStateAudF, 2)[1];
   // NOVO (09/10/2026 — atendimento nos relatórios): interruptor do relatório e leitura dos pedidos ao abrir o
@@ -433,6 +433,13 @@ function ReportsModal(_ref12) {
     setPedidosRel(null);
     sbGetPedidosComStatus().then(function (r) { if (vivo) setPedidosRel(r); });
     return function () { vivo = false; };
+  }, [open]);
+  useEffect(function () {
+    if (!open || !_ref12.abaInicial) return undefined;
+    var t = setTimeout(function () {
+      try { var el = document.querySelector('[data-rel-tab="' + _ref12.abaInicial + '"]'); if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) {}
+    }, 0);
+    return function () { clearTimeout(t); };
   }, [open]);
   var insumosFiltrados = React.useMemo(function () {
     var b = normalizeBusca(buscaInsumo);
@@ -538,6 +545,7 @@ function ReportsModal(_ref12) {
       lbl = _ref14[1];
     return /*#__PURE__*/React.createElement("button", {
       key: id,
+      "data-rel-tab": id,
       onClick: function onClick() {
         return setTab(id);
       },
