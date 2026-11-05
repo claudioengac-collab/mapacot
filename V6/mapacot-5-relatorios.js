@@ -182,7 +182,9 @@ function gerarRelatorioAuditoria(res, f) {
     ".chip{display:inline-block;font-size:7px;font-weight:800;padding:1px 5px;border-radius:8px;margin-top:2px;border:1px solid currentColor;white-space:nowrap}.rasc{display:block;width:max-content;font-size:6px;font-weight:800;color:#b34700;border:1px solid #b34700;border-radius:6px;padding:0 2px;margin:2px auto 0}" +
     ".av{background:#fff8ec;border:1px solid #f0dba0;color:#6b4a00;padding:6px 8px;margin:6px 0;font-size:9px;text-transform:none}.rod{margin-top:8px;color:#5a6579;font-size:8px;text-transform:none}" +
     ".fech{page-break-before:always}.tiles{display:flex;gap:8px;margin:8px 0}.tile{flex:1;border:1px solid #c9d1e3;padding:8px 10px;border-radius:5px}.tile .k{font-size:8px;font-weight:700;color:#5a6579}.tile .v{font-size:16px;font-weight:700}.tile.bad{background:#fbe3e0;border-color:#a3231a;color:#a3231a}.tile.ok{background:#dff1e3;border-color:#186818;color:#186818}" +
-    ".mini{width:auto;min-width:300px;margin:4px 0 10px}.mini td,.mini th{text-align:left}.mini .n{text-align:right}</style>";
+    ".mini{width:auto;min-width:300px;margin:4px 0 10px}.mini td,.mini th{text-align:left}.mini .n{text-align:right}" +
+    // SÓ NA TELA (não afeta impressão/PDF): margem de 8px em qualquer tela; a partir de 1200px, folha centralizada (sem brecha entre as regras)
+    "@media screen{body{margin:8px}}@media screen and (min-width:1200px){html{background:#e8ecf4;padding:18px}body{max-width:1560px;margin:0 auto;padding:20px 26px 30px;background:#fff;border:1px solid #d0d8ea;border-radius:6px;box-shadow:0 6px 22px rgba(15,31,61,.12)}}</style>";
   function dif(mv) {
     if (mv.tipo === "almox") return "<td class=\"dif d-almox\"><b>—</b><span class=\"chip\">só almox</span></td>";
     if (mv.classe === "semPreco") return "<td class=\"dif d-semPreco\"><b>—</b><span class=\"chip\">pedido sem preço</span></td>";
