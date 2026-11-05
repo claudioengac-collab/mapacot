@@ -1,3 +1,376 @@
+
+// ─── AUDITORIA DE ATENDIMENTOS (PROTÓTIPO DE ESTUDO — não publicado) ──────────────────────────
+// Só LÊ: mapas já em memória + pedidos já lidos pela janela de relatórios. Não grava nada.
+// Reaproveita as contas que já existem: calcResumo (menor preço do Resumo), a mesma regra do selo
+// PEDIDO/ALMOX/FALTA (pedidos não cancelados, 1ª linha do item por pedido; retiradas não estornadas).
+function audEsc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function audCent(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+function audDkPedido(po) {
+  var raw = (po && (po.data_emissao || po.criado_em)) || "";
+  if (!raw) return "";
+  if (String(raw).length === 10) return String(raw);
+  return almoxDataLocalKey(raw);
+}
+function audDkFmt(dk) { return dk ? dk.slice(8, 10) + "/" + dk.slice(5, 7) + "/" + dk.slice(0, 4) : "—"; }
+function audSinal(n, casas) {
+  var v = audCent(n);
+  if (v === 0) return fmtMoney(0);
+  return (v > 0 ? "+ " : "− ") + fmtMoney(Math.abs(v));
+}
+// f = { inicio, fim, base: "atendimento" | "criacao", obra, mapaNum, insumo, fornecedores: [nomes], fornecedor: "texto ainda digitado",
+//       situ: ["igual","caro","abaixo","almox","nao","semcomp"] (o que o usuário MARCOU em MOSTRAR; sem a propriedade = tudo) }
+function coletarAuditoria(mapas, pedidosLista, f) {
+  f = f || {};
+  var obraF = (f.obra || "").trim().toUpperCase();
+  var insF = (f.insumo || "").trim().toUpperCase();
+  var numF = String(f.mapaNum == null ? "" : f.mapaNum).trim();
+  // fornecedores escolhidos (vários) + o que ainda está digitado; vazio = todos os fornecedores com pedido
+  var termosForn = [].concat(Array.isArray(f.fornecedores) ? f.fornecedores : [], [f.fornecedor || ""]).map(normalizeBusca).filter(Boolean);
+  var fornF = termosForn.length > 0;
+  var fornOk = function (po) {
+    if (!fornF) return true;
+    var nf = normalizeBusca(po && po.fornecedor_nome);
+    return termosForn.some(function (t) { return nf.indexOf(t) !== -1; });
+  };
+  // situações marcadas em MOSTRAR (sem a propriedade = tudo; lista vazia = nada)
+  var situSet = Array.isArray(f.situ) ? f.situ : null;
+  var situOk = function (k) { return !situSet || situSet.indexOf(k) !== -1; };
+  var chaveSitu = function (mv) { return mv.tipo === "almox" ? "almox" : (mv.classe === "semPreco" || mv.classe === "semResumo" ? "semcomp" : mv.classe); };
+  var porCriacao = f.base === "criacao";
+  var temPeriodo = !!(f.inicio || f.fim);
+  var pedidos = (pedidosLista || []).filter(function (po) { return po && po.status !== "cancelado"; });
+  // índice item_id -> pedidos que o citam (só a 1ª linha do item em cada pedido, igual ao selo)
+  var idx = Object.create(null);
+  pedidos.forEach(function (po) {
+    var visto = Object.create(null);
+    (po.itens || []).forEach(function (l) {
+      if (!l || l.item_id === undefined || l.item_id === null || visto[l.item_id]) return;
+      visto[l.item_id] = true;
+      (idx[l.item_id] = idx[l.item_id] || []).push({ po: po, l: l, ok: fornOk(po) });
+    });
+  });
+  var conhecidos = Object.create(null);
+  (mapas || []).forEach(function (m) { ((m && m.itens) || []).forEach(function (it) { conhecidos[it.id] = true; }); });
+  var itens = [];
+  (mapas || []).forEach(function (m) {
+    if (!m) return;
+    if (obraF && (m.obra || "").toUpperCase().indexOf(obraF) === -1) return;
+    if (numF && String(m.numero) !== numF) return;
+    var dkCriacao = almoxDataLocalKey(m.criadoEm);
+    if (porCriacao) {
+      if (f.inicio && (!dkCriacao || dkCriacao < f.inicio)) return;
+      if (f.fim && (!dkCriacao || dkCriacao > f.fim)) return;
+    }
+    ((m.itens || [])).forEach(function (it) {
+      if (!it) return;
+      var txt = ((it.descricao || "") + " " + (it.detalhe || "")).toUpperCase();
+      if (insF && txt.indexOf(insF) === -1) return;
+      var qtTotal = parseNumBR(it.qt) || 0;
+      var res = calcResumo(it, m.fornecedores || [], m.precos || {});
+      var movs = [];
+      var qtPedida = 0, qtAlmox = 0;
+      (idx[it.id] || []).forEach(function (x) {
+        var qt = Number(x.l.qt_pedida) || 0;
+        qtPedida += qt; // a quantidade do selo (PEDIDO/FALTA) é sempre a real, com ou sem filtro de fornecedor
+        if (!x.ok) return; // pedido de outro fornecedor: conta no selo, mas a linha não aparece
+        var vu = Number(x.l.vl_unit);
+        var vt = x.l.vl_total !== undefined && x.l.vl_total !== null && x.l.vl_total !== "" ? Number(x.l.vl_total) : vu * qt;
+        var mv = { tipo: "pedido", dk: audDkPedido(x.po), numero: x.po.numero, status: x.po.status || "", qt: qt,
+          vlUnit: isNaN(vu) ? 0 : vu, vlTotal: isNaN(vt) ? 0 : audCent(vt), forn: x.po.fornecedor_nome || "", obs: x.po.observacao || "",
+          classe: "", difUnit: null, difTot: null, difPct: null, baseTot: null };
+        if (!(mv.vlUnit > 0)) mv.classe = "semPreco";
+        else if (res.vlUnit === null || res.vlUnit === undefined) mv.classe = "semResumo";
+        else {
+          mv.baseTot = audCent(res.vlUnit * qt); // tudo em centavos por linha: o que aparece na tela fecha com os totais
+          mv.difUnit = audCent(mv.vlUnit - res.vlUnit);
+          mv.difTot = audCent(mv.vlTotal - mv.baseTot);
+          mv.difPct = mv.baseTot > 0 ? (mv.difTot / mv.baseTot) * 100 : null;
+          mv.classe = mv.difUnit > 0 ? "caro" : (mv.difUnit < 0 ? "abaixo" : "igual");
+        }
+        movs.push(mv);
+      });
+      ((m.almox || {})[it.id] || []).forEach(function (r) {
+        if (!r || r.estornado) return;
+        var qt = Number(r.qt) || 0;
+        qtAlmox += qt;
+        if (fornF) return; // com fornecedor escolhido não se mostra almoxarifado
+        movs.push({ tipo: "almox", dk: almoxDataLocalKey(r.data), qt: qt, por: r.por || "", obs: r.obs || "", classe: "almox" });
+      });
+      qtAlmox = Math.round(qtAlmox * 1000) / 1000;
+      movs.sort(function (a, b) {
+        if (a.dk !== b.dk) return (a.dk || "9") < (b.dk || "9") ? -1 : 1;
+        if (a.tipo !== b.tipo) return a.tipo === "pedido" ? -1 : 1;
+        return (a.numero || 0) - (b.numero || 0);
+      });
+      if (fornF && !movs.length) return; // filtro de fornecedor: só entra item que tem linha de pedido dele
+      if (it.excluido && !movs.length) return; // riscado sem movimento some; riscado COM compra continua (o gasto não pode sumir)
+      if (!porCriacao && temPeriodo) {
+        var dentro = movs.some(function (mv) { return mv.dk && (!f.inicio || mv.dk >= f.inicio) && (!f.fim || mv.dk <= f.fim); });
+        if (!dentro) return;
+      }
+      // MOSTRAR: só ficam as linhas das situações marcadas; item sem movimento = "não comprado"
+      var mostradas = movs.filter(function (mv) { return situOk(chaveSitu(mv)); });
+      if (movs.length ? !mostradas.length : !situOk("nao")) return;
+      movs = mostradas;
+      itens.push({ obra: m.obra || "", mapaNum: m.numero, mapaId: m.id, itemNum: it.num, itemId: it.id, descricao: it.descricao || "", detalhe: it.detalhe || "",
+        unid: it.unid || "", riscado: !!it.excluido, qtTotal: qtTotal, qtPedida: qtPedida, qtAlmox: qtAlmox,
+        falta: Math.max(0, Math.round((qtTotal - qtPedida - qtAlmox) * 1000) / 1000), criacaoDk: dkCriacao,
+        resumo: { vlUnit: res.vlUnit, vlTotal: res.vlTotal, forn: res.forn || "", detalhe: res.minFornId ? ((m.detalhes || {})[it.id + "_" + res.minFornId] || "") : "" },
+        movs: movs });
+    });
+  });
+  itens.sort(function (a, b) {
+    if (a.obra !== b.obra) return a.obra < b.obra ? -1 : 1;
+    if ((a.mapaNum || 0) !== (b.mapaNum || 0)) return (a.mapaNum || 0) - (b.mapaNum || 0);
+    return (Number(a.itemNum) || 0) - (Number(b.itemNum) || 0);
+  });
+  // fechamento
+  var tot = { baseTot: 0, pedTot: 0, dif: 0, linhas: { igual: 0, caro: 0, abaixo: 0, semResumo: 0, semPreco: 0 }, difCaro: 0, difAbaixo: 0, naoComprados: 0, naoCompradosVal: 0, almoxRegs: 0, caros: [] };
+  itens.forEach(function (it) {
+    var tinhaMov = false;
+    it.movs.forEach(function (mv) {
+      tinhaMov = true;
+      if (mv.tipo === "almox") { tot.almoxRegs++; return; }
+      tot.linhas[mv.classe]++;
+      if (mv.classe === "igual" || mv.classe === "caro" || mv.classe === "abaixo") {
+        tot.baseTot += mv.baseTot; tot.pedTot += mv.vlTotal; tot.dif += mv.difTot;
+        if (mv.classe === "caro") { tot.difCaro += mv.difTot; tot.caros.push({ mapaNum: it.mapaNum, descricao: it.descricao, numero: mv.numero, difTot: mv.difTot, difPct: mv.difPct }); }
+        if (mv.classe === "abaixo") tot.difAbaixo += mv.difTot;
+      }
+    });
+    if (!tinhaMov) { tot.naoComprados++; tot.naoCompradosVal += it.resumo.vlTotal || 0; }
+  });
+  ["baseTot", "pedTot", "dif", "difCaro", "difAbaixo", "naoCompradosVal"].forEach(function (k) { tot[k] = audCent(tot[k]); });
+  tot.caros.sort(function (a, b) { return b.difTot - a.difTot; });
+  // avisos: pedidos (não cancelados) que citam itens que não existem em nenhum mapa lido
+  var orfaos = [];
+  pedidos.forEach(function (po) {
+    if (!fornOk(po)) return;
+    var algum = (po.itens || []).some(function (l) { return l && l.item_id !== undefined && l.item_id !== null && !conhecidos[l.item_id]; });
+    if (algum) orfaos.push(po.numero);
+  });
+  return { itens: itens, tot: tot, orfaos: orfaos, limite: (pedidosLista || []).length >= 1000 };
+}
+function gerarRelatorioAuditoria(res, f) {
+  f = f || {};
+  var esc = audEsc;
+  var base = f.base === "criacao" ? "data de criação do mapa" : "data do atendimento";
+  var periodoTxt = (f.inicio || f.fim) ? ((f.inicio ? almoxFmtData(f.inicio + "T12:00:00") : "início") + " a " + (f.fim ? almoxFmtData(f.fim + "T12:00:00") : "hoje") + " (" + base + ")") : "todo o período";
+  var SITU_ROT = { igual: "No menor preço", caro: "Mais caro", abaixo: "Abaixo do Resumo (mais barato)", almox: "Só almox", nao: "Não comprado", semcomp: "Sem comparação" };
+  var SITU_ORDEM = ["igual", "caro", "abaixo", "almox", "nao", "semcomp"];
+  var marcada = function (k) { return !Array.isArray(f.situ) || f.situ.indexOf(k) !== -1; };
+  var mostrarTxt = SITU_ORDEM.filter(marcada).map(function (k) { return SITU_ROT[k]; }).join(", ") || "nenhuma";
+  var termosTxt = [].concat(Array.isArray(f.fornecedores) ? f.fornecedores : [], [f.fornecedor || ""]).map(function (x) { return String(x).trim().toUpperCase(); }).filter(Boolean);
+  var fornTxt = termosTxt.join(" · ");
+  var meta = "Período: " + periodoTxt + " · Obra: " + esc(f.obra && f.obra.trim() ? f.obra.trim().toUpperCase() : "todas") +
+    " · Mapa: " + esc(f.mapaNum && String(f.mapaNum).trim() ? String(f.mapaNum).trim() : "todos") +
+    " · Insumo: " + esc(f.insumo && f.insumo.trim() ? f.insumo.trim().toUpperCase() : "todos") +
+    " · Fornecedor do pedido: " + esc(fornTxt || "todos") +
+    " · Situações marcadas: " + esc(mostrarTxt) + " · Valores em R$ · Diferença = Pedido − Resumo · Gerado em " + new Date().toLocaleString("pt-BR");
+  var css = "<style>@page{size:A4 landscape;margin:8mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:9px;color:#1b2333;margin:0;text-transform:uppercase}" +
+    "h1{font-size:14px;color:#0f1f3d;margin:0 0 3px}.meta{color:#555;font-size:9px;margin-bottom:8px;text-transform:none}" +
+    ".ob{background:#2a5298;color:#fff;padding:5px 8px;font-weight:700;font-size:10px;margin-top:10px;-webkit-print-color-adjust:exact;print-color-adjust:exact}" +
+    "table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:8.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}thead{display:table-header-group}tbody{page-break-inside:avoid}" +
+    "th,td{border:1px solid #c9d1e3;padding:3px 4px;vertical-align:top;line-height:1.28;overflow-wrap:anywhere}th{background:#e3e9f6;font-size:8px;text-align:center;vertical-align:bottom}" +
+    "th.g{color:#fff;font-size:8.5px;vertical-align:middle;letter-spacing:.04em}.g1{background:#2a5298}.g2{background:#7b5e00}.g3{background:#1a3a5c}.g4{background:#3d4350}" +
+    ".n{text-align:right}.c{text-align:center}.dt{text-align:center;white-space:nowrap}.res{background:#fff8dc}.ped{background:#eef4ff}" +
+    ".det{display:block;font-size:7.5px;color:#7b5e00;font-style:italic;text-transform:none;margin-top:1px}.obs{display:block;font-size:7.5px;color:#5a6579;font-style:italic;text-transform:none;margin-top:1px}" +
+    ".l{display:block;font-weight:700;font-size:7.5px;white-space:nowrap}.lp{color:#186818}.la{color:#1a4aa0}.lf{color:#b34700}" +
+    ".alm{background:#e1ecff;color:#1a4aa0;font-weight:700;text-align:center;vertical-align:middle}.sem{background:#ffeed9;color:#b34700;font-weight:700;text-align:center;vertical-align:middle}" +
+    ".dif{text-align:center;vertical-align:middle}.dif b{display:block;font-size:9px}.dif i{display:block;font-style:normal;font-size:8px}" +
+    ".d-caro{background:#fbe3e0;color:#a3231a}.d-abaixo{background:#dff1e3;color:#186818}.d-igual{background:#eef0f5;color:#3d4350}.d-almox{background:#e1ecff;color:#1a4aa0}.d-nao,.d-semResumo,.d-semPreco{background:#ffeed9;color:#b34700}" +
+    ".chip{display:inline-block;font-size:7px;font-weight:800;padding:1px 5px;border-radius:8px;margin-top:2px;border:1px solid currentColor;white-space:nowrap}.rasc{display:block;width:max-content;font-size:6px;font-weight:800;color:#b34700;border:1px solid #b34700;border-radius:6px;padding:0 2px;margin:2px auto 0}" +
+    ".av{background:#fff8ec;border:1px solid #f0dba0;color:#6b4a00;padding:6px 8px;margin:6px 0;font-size:9px;text-transform:none}.rod{margin-top:8px;color:#5a6579;font-size:8px;text-transform:none}" +
+    ".fech{page-break-before:always}.tiles{display:flex;gap:8px;margin:8px 0}.tile{flex:1;border:1px solid #c9d1e3;padding:8px 10px;border-radius:5px}.tile .k{font-size:8px;font-weight:700;color:#5a6579}.tile .v{font-size:16px;font-weight:700}.tile.bad{background:#fbe3e0;border-color:#a3231a;color:#a3231a}.tile.ok{background:#dff1e3;border-color:#186818;color:#186818}" +
+    ".mini{width:auto;min-width:300px;margin:4px 0 10px}.mini td,.mini th{text-align:left}.mini .n{text-align:right}</style>";
+  function dif(mv) {
+    if (mv.tipo === "almox") return "<td class=\"dif d-almox\"><b>—</b><span class=\"chip\">só almox</span></td>";
+    if (mv.classe === "semPreco") return "<td class=\"dif d-semPreco\"><b>—</b><span class=\"chip\">pedido sem preço</span></td>";
+    if (mv.classe === "semResumo") return "<td class=\"dif d-semResumo\"><b>—</b><span class=\"chip\">sem resumo</span></td>";
+    var rot = mv.classe === "caro" ? "mais caro" : (mv.classe === "abaixo" ? "abaixo do resumo" : "no menor preço");
+    var pct = mv.difPct === null ? "" : (mv.difPct > 0 ? "+ " : (mv.difPct < 0 ? "− " : "")) + Math.abs(Math.round(mv.difPct * 10) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
+    var linha1 = mv.classe === "igual" ? "0,00" : audSinal(mv.difUnit) + " / un";
+    var linha2 = mv.classe === "igual" ? "" : audSinal(mv.difTot) + " · " + pct;
+    return "<td class=\"dif d-" + mv.classe + "\"><b>" + linha1 + "</b>" + (linha2 ? "<i>" + linha2 + "</i>" : "") + "<span class=\"chip\">" + rot + "</span></td>";
+  }
+  var porObra = [], atual = null;
+  res.itens.forEach(function (it) {
+    if (!atual || atual.obra !== it.obra) { atual = { obra: it.obra, itens: [] }; porObra.push(atual); }
+    atual.itens.push(it);
+  });
+  var head = "<thead><tr><th class=\"g g1\" colspan=\"6\">Item e atendimento</th><th class=\"g g2\" colspan=\"3\">Resumo · menor preço do mapa</th><th class=\"g g3\" colspan=\"5\">Pedido gerado</th><th class=\"g g4\">Diferença</th></tr>" +
+    "<tr><th>Item</th><th>MP nº</th><th>Qtd. do mapa</th><th>Criação do mapa</th><th>Data do atendimento</th><th style=\"text-align:left\">Descrição do insumo / detalhe</th><th>Vl. unit.</th><th>Vl. total</th><th>Fornecedor ganhador</th><th>Pedido nº</th><th>Qt.</th><th>Vl. unit.</th><th>Vl. total</th><th>Fornecedor do pedido</th><th>Pedido − Resumo</th></tr></thead>";
+  var colg = "<colgroup><col style=\"width:34px\"><col style=\"width:34px\"><col style=\"width:76px\"><col style=\"width:64px\"><col style=\"width:70px\"><col><col style=\"width:52px\"><col style=\"width:62px\"><col style=\"width:84px\"><col style=\"width:48px\"><col style=\"width:40px\"><col style=\"width:52px\"><col style=\"width:62px\"><col style=\"width:84px\"><col style=\"width:98px\"></colgroup>";
+  var corpo = porObra.map(function (g) {
+    var tbs = g.itens.map(function (it) {
+      var movs = it.movs.length ? it.movs : [null];
+      var n = movs.length;
+      var qtLinhas = "<b>" + atendFmtQtd(it.qtTotal) + " " + esc(it.unid) + "</b>";
+      if (it.qtPedida > 0) qtLinhas += "<span class=\"l lp\">PEDIDO " + atendFmtQtd(it.qtPedida) + "</span>";
+      if (it.qtAlmox > 0) qtLinhas += "<span class=\"l la\">ALMOX " + atendFmtQtd(it.qtAlmox) + "</span>";
+      if (it.qtTotal > 0 && it.qtPedida + it.qtAlmox >= it.qtTotal) qtLinhas += "<span class=\"l lp\">ATENDIDO</span>";
+      else if (it.qtPedida > 0 || it.qtAlmox > 0) qtLinhas += "<span class=\"l lf\">FALTA " + atendFmtQtd(it.falta) + "</span>";
+      else qtLinhas += "<span class=\"l lf\">FALTA " + atendFmtQtd(it.falta) + "</span>";
+      if (it.qtPedida + it.qtAlmox > it.qtTotal && it.qtTotal > 0) qtLinhas += "<span class=\"l lf\">ACIMA DA QT.</span>";
+      var rs = it.resumo;
+      var esq = "<td class=\"c\" rowspan=\"" + n + "\">" + esc(it.itemNum) + "</td><td class=\"c\" rowspan=\"" + n + "\">" + esc(it.mapaNum) + "</td><td rowspan=\"" + n + "\">" + qtLinhas + "</td><td class=\"dt\" rowspan=\"" + n + "\">" + audDkFmt(it.criacaoDk) + "</td>";
+      var desc = "<td rowspan=\"" + n + "\"><b>" + esc(it.descricao) + "</b>" + (it.riscado ? "<span class=\"chip\" style=\"color:#b34700\">item riscado no mapa</span>" : "") + (it.detalhe ? "<span class=\"det\">" + esc(it.detalhe) + "</span>" : "") + "</td>";
+      var resCel = "<td class=\"n res\" rowspan=\"" + n + "\">" + (rs.vlUnit === null || rs.vlUnit === undefined ? "—" : fmtMoney(rs.vlUnit)) + "</td><td class=\"n res\" rowspan=\"" + n + "\">" + (rs.vlTotal === null || rs.vlTotal === undefined ? "—" : fmtMoney(rs.vlTotal)) + "</td><td class=\"res\" rowspan=\"" + n + "\">" + esc(rs.forn || "—") + (rs.detalhe ? "<span class=\"det\">↳ " + esc(rs.detalhe) + "</span>" : "") + "</td>";
+      var trs = movs.map(function (mv, k) {
+        var ini = k === 0 ? esq : "";
+        var dtCel, meio, fim;
+        if (mv === null) {
+          dtCel = "<td class=\"dt\">—</td>";
+          meio = "<td class=\"sem\" colspan=\"5\">Nada comprado ainda · falta " + atendFmtQtd(it.falta) + " " + esc(it.unid) + "</td>";
+          fim = "<td class=\"dif d-nao\"><b>—</b><span class=\"chip\">não comprado</span></td>";
+        } else if (mv.tipo === "almox") {
+          dtCel = "<td class=\"dt\">" + audDkFmt(mv.dk) + "</td>";
+          meio = "<td class=\"alm\" colspan=\"5\">Saiu do almoxarifado · " + atendFmtQtd(mv.qt) + " " + esc(it.unid) + (mv.por ? " · retirado por " + esc(mv.por) : "") + (it.qtPedida === 0 ? " · sem compra" : "") + "</td>";
+          fim = dif(mv);
+        } else {
+          dtCel = "<td class=\"dt\">" + audDkFmt(mv.dk) + "</td>";
+          meio = "<td class=\"c ped\">" + esc(mv.numero) + (mv.status === "rascunho" ? "<span class=\"rasc\">RASCUNHO</span>" : "") + "</td><td class=\"n ped\">" + atendFmtQtd(mv.qt) + "</td><td class=\"n ped\">" + (mv.vlUnit > 0 ? fmtMoney(mv.vlUnit) : "—") + "</td><td class=\"n ped\">" + (mv.vlUnit > 0 ? fmtMoney(mv.vlTotal) : "—") + "</td><td class=\"ped\">" + esc(mv.forn) + (mv.obs ? "<span class=\"obs\">Obs. do pedido: " + esc(mv.obs) + "</span>" : "") + "</td>";
+          fim = dif(mv);
+        }
+        return "<tr>" + ini + dtCel + (k === 0 ? desc + resCel : "") + meio + fim + "</tr>";
+      }).join("");
+      return "<tbody>" + trs + "</tbody>";
+    }).join("");
+    return "<div class=\"ob\">OBRA: " + esc(g.obra || "—") + "</div><table>" + colg + head + tbs + "</table>";
+  }).join("");
+  var t = res.tot;
+  var avisos = "";
+  if (res.limite) avisos += "<div class=\"av\">ATENÇÃO: foram lidos exatamente 1000 pedidos (limite da leitura). Pedidos mais antigos podem não ter entrado; itens podem aparecer como não comprados por esse motivo.</div>";
+  if (res.orfaos.length) avisos += "<div class=\"av\">Pedidos que citam itens que não existem mais em nenhum mapa (fora da comparação): " + res.orfaos.map(esc).join(", ") + ".</div>";
+  var temComp = marcada("igual") || marcada("caro") || marcada("abaixo") || marcada("semcomp");
+  var difRot = t.dif > 0 ? "COMPROU A MAIS" : (t.dif < 0 ? "COMPROU A MENOS" : "NO MENOR PREÇO");
+  var difPctT = t.baseTot > 0 ? (t.dif / t.baseTot) * 100 : 0;
+  var difPctTxt = (difPctT > 0 ? "+ " : (difPctT < 0 ? "− " : "")) + Math.abs(Math.round(difPctT * 10) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
+  var fech = "<div class=\"fech\"><h1>FECHAMENTO DA AUDITORIA" + (fornTxt ? " — FORNECEDOR" + (termosTxt.length > 1 ? "ES" : "") + ": " + esc(fornTxt) : "") + "</h1><div class=\"meta\">Mesmo período e filtros das páginas anteriores · Valores em R$" + (fornTxt ? " · Soma só os pedidos do fornecedor escolhido" : "") + " · Soma só as linhas mostradas (situações marcadas)" + "</div>" +
+    (temComp ? (
+    "<div class=\"tiles\"><div class=\"tile\"><div class=\"k\">TOTAL PELO RESUMO (MESMAS QUANTIDADES COMPRADAS)</div><div class=\"v\">" + fmtMoney(t.baseTot) + "</div></div>" +
+    "<div class=\"tile\"><div class=\"k\">TOTAL DOS PEDIDOS</div><div class=\"v\">" + fmtMoney(t.pedTot) + "</div></div>" +
+    "<div class=\"tile " + (t.dif > 0 ? "bad" : (t.dif < 0 ? "ok" : "")) + "\"><div class=\"k\">DIFERENÇA · " + difRot + "</div><div class=\"v\">" + audSinal(t.dif) + " (" + difPctTxt + ")</div></div></div>" +
+    "<table class=\"mini\"><thead><tr><th>Situação</th><th>Linhas de pedido</th><th>Diferença</th></tr></thead><tbody>" +
+    (marcada("igual") ? "<tr><td>No menor preço</td><td class=\"n\">" + t.linhas.igual + "</td><td class=\"n\">0,00</td></tr>" : "") +
+    (marcada("caro") ? "<tr><td>Mais caro que o Resumo</td><td class=\"n\">" + t.linhas.caro + "</td><td class=\"n\">" + audSinal(t.difCaro) + "</td></tr>" : "") +
+    (marcada("abaixo") ? "<tr><td>Abaixo do Resumo</td><td class=\"n\">" + t.linhas.abaixo + "</td><td class=\"n\">" + audSinal(t.difAbaixo) + "</td></tr>" : "") +
+    (marcada("semcomp") ? "<tr><td>Sem Resumo para comparar</td><td class=\"n\">" + t.linhas.semResumo + "</td><td class=\"n\">—</td></tr><tr><td>Pedido sem preço</td><td class=\"n\">" + t.linhas.semPreco + "</td><td class=\"n\">—</td></tr>" : "") +
+    "</tbody></table>"
+    ) : "<div class=\"av\" style=\"background:#eef4ff;border-color:#b9c3da;color:#1a2f5a\">Nas situações marcadas não há linha de pedido, então não há valor para comparar. Abaixo, só a contagem do que você marcou.</div>") +
+    ((!fornTxt && (marcada("nao") || marcada("almox"))) ? "<table class=\"mini\"><tbody>" +
+      (marcada("nao") ? "<tr><td>Itens não comprados</td><td class=\"n\">" + t.naoComprados + "</td><td class=\"n\">" + fmtMoney(t.naoCompradosVal) + " pelo Resumo</td></tr>" : "") +
+      (marcada("almox") ? "<tr><td>Retiradas do almoxarifado</td><td class=\"n\">" + t.almoxRegs + "</td><td class=\"n\">sem valor</td></tr>" : "") + "</tbody></table>" : "") +
+    ((t.caros.length && marcada("caro")) ? "<h1 style=\"font-size:11px;margin-top:8px\">ONDE COMPREI MAIS CARO (MAIOR DIFERENÇA PRIMEIRO)</h1><table class=\"mini\"><thead><tr><th>MP</th><th>Insumo</th><th>Pedido</th><th>Diferença</th></tr></thead><tbody>" +
+      t.caros.slice(0, 15).map(function (c) { return "<tr><td>" + esc(c.mapaNum) + "</td><td>" + esc(c.descricao) + "</td><td>" + esc(c.numero) + "</td><td class=\"n\">" + audSinal(c.difTot) + (c.difPct === null ? "" : " (+ " + Math.abs(Math.round(c.difPct * 10) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%)") + "</td></tr>"; }).join("") + "</tbody></table>" : "") +
+    "<div class=\"rod\">Pedidos cancelados e retiradas estornadas ficaram de fora; item riscado só aparece se tiver compra ou retirada. Os preços unitários já trazem os percentuais aplicados no mapa (frete, impostos e outras despesas), por isso o Resumo e o Pedido são comparados direto. O fechamento soma só as linhas que aparecem, conforme as situações marcadas." + (fornTxt ? " Com fornecedor escolhido, itens não comprados e retiradas do almoxarifado não são listados." : "") + "</div></div>";
+  return "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Auditoria de atendimentos</title>" + css + "</head><body><h1>AUDITORIA DE ATENDIMENTOS — CONTROLE DE MOVIMENTO</h1><div class=\"meta\">" + meta + "</div>" + avisos + corpo + fech + "</body></html>";
+}
+// fornecedores que realmente têm pedido (não cancelado) — são as únicas sugestões do filtro "Fornecedor do pedido"
+function audFornecedoresDosPedidos(pr) {
+  var visto = Object.create(null), out = [];
+  ((pr && pr.ok && pr.lista) || []).forEach(function (po) {
+    if (!po || po.status === "cancelado") return;
+    var n = String(po.fornecedor_nome || "").trim();
+    var k = normalizeBusca(n);
+    if (!k || visto[k]) return;
+    visto[k] = true;
+    out.push(n);
+  });
+  return out.sort(function (a, b) { return a.localeCompare(b, "pt-BR"); });
+}
+var AUD_SITU = [
+  ["igual", "NO MENOR PREÇO", "Pedido igual ao menor preço do Resumo", "#eef0f5", "#3d4350"],
+  ["caro", "MAIS CARO", "Pedido acima do menor preço do Resumo", "#fbe3e0", "#a3231a"],
+  ["abaixo", "ABAIXO DO RESUMO", "Mais barato: pedido abaixo do menor preço", "#dff1e3", "#186818"],
+  ["almox", "SÓ ALMOX", "Saiu do almoxarifado (sem compra)", "#e1ecff", "#1a4aa0"],
+  ["nao", "NÃO COMPRADO", "Item ainda sem pedido nem retirada", "#ffeed9", "#b34700"],
+  ["semcomp", "SEM COMPARAÇÃO", "Pedido sem preço ou sem Resumo", "#ffeed9", "#b34700"]
+];
+function AuditoriaRelatorioForm(_refAu) {
+  var cadastros = _refAu.cadastros || {}, f = _refAu.f, setF = _refAu.setF, fornecedores = _refAu.fornecedores || [];
+  var upd = function (campo, valor) { setF(function (p) { var n = Object.assign({}, p); n[campo] = valor; return n; }); };
+  var escolhidos = f.fornecedores || [];
+  var situ = f.situ || [];
+  var temForn = escolhidos.length > 0 || String(f.fornecedor || "").trim() !== "";
+  // com fornecedor escolhido, "só almox" e "não comprado" não se aplicam (não têm fornecedor) e são desmarcados
+  var semNaoAplicaveis = function (l) { return l.filter(function (k) { return k !== "almox" && k !== "nao"; }); };
+  var pill = function (ativo) {
+    return { border: "1px solid " + (ativo ? "#2a5298" : "#bbb"), background: ativo ? "#2a5298" : "#fff", color: ativo ? "#fff" : "#333", borderRadius: 14, padding: "5px 12px", fontSize: 12, cursor: "pointer" };
+  };
+  var addForn = function (nome) {
+    nome = String(nome || "").trim().toUpperCase();
+    if (!nome) return;
+    setF(function (p) {
+      var n = Object.assign({}, p), l = p.fornecedores || [];
+      var ja = l.some(function (x) { return normalizeBusca(x) === normalizeBusca(nome); });
+      n.fornecedores = ja ? l : l.concat([nome]);
+      n.fornecedor = "";
+      n.situ = semNaoAplicaveis(p.situ || []);
+      return n;
+    });
+  };
+  var delForn = function (nome) { setF(function (p) { var n = Object.assign({}, p); n.fornecedores = (p.fornecedores || []).filter(function (x) { return x !== nome; }); return n; }); };
+  var digitaForn = function (v) { setF(function (p) { var n = Object.assign({}, p); n.fornecedor = v; if (String(v).trim()) n.situ = semNaoAplicaveis(p.situ || []); return n; }); };
+  var alterna = function (k) { setF(function (p) { var l = p.situ || []; var n = Object.assign({}, p); n.situ = l.indexOf(k) >= 0 ? l.filter(function (x) { return x !== k; }) : l.concat([k]); return n; }); };
+  var marcarTodas = function () { setF(function (p) { var n = Object.assign({}, p); n.situ = AUD_SITU.map(function (o) { return o[0]; }).filter(function (k) { var tf = (p.fornecedores || []).length > 0 || String(p.fornecedor || "").trim() !== ""; return !(tf && (k === "almox" || k === "nao")); }); return n; }); };
+  var limpar = function () { upd("situ", []); };
+  var link = { cursor: "pointer", color: "#2a5298", fontSize: 11, fontWeight: 700, textDecoration: "underline" };
+  return /*#__PURE__*/React.createElement(React.Fragment, null,
+    /*#__PURE__*/React.createElement("div", { style: SC.rDesc }, "Compara o que foi comprado (pedidos) com o menor preço do Resumo de cada item. Retiradas do almoxarifado aparecem sem preço."),
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", columnGap: 10, marginTop: 6 } },
+      /*#__PURE__*/React.createElement("div", { style: { minWidth: 0 } },
+        /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "DATA INICIAL (OPCIONAL)"),
+        /*#__PURE__*/React.createElement("input", { "data-aud-f": "inicio", type: "date", style: SC.inp, value: f.inicio, onChange: function (e) { upd("inicio", e.target.value); } })),
+      /*#__PURE__*/React.createElement("div", { style: { minWidth: 0 } },
+        /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "DATA FINAL (OPCIONAL)"),
+        /*#__PURE__*/React.createElement("input", { "data-aud-f": "fim", type: "date", style: SC.inp, value: f.fim, onChange: function (e) { upd("fim", e.target.value); } }))),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "O PERÍODO VALE PARA"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+      /*#__PURE__*/React.createElement("span", { "data-aud-base": "atendimento", onClick: function () { upd("base", "atendimento"); }, style: pill(f.base !== "criacao") }, "Data do atendimento"),
+      /*#__PURE__*/React.createElement("span", { "data-aud-base": "criacao", onClick: function () { upd("base", "criacao"); }, style: pill(f.base === "criacao") }, "Data de criação do mapa")),
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", columnGap: 10 } },
+      /*#__PURE__*/React.createElement("div", { style: { minWidth: 0 } },
+        /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "OBRA (VAZIO = TODAS)"),
+        /*#__PURE__*/React.createElement(AutocompleteInput, {
+          value: f.obra, onChange: function (v) { upd("obra", v); }, suggestions: cadastros.obras || [], placeholder: "BUSCAR OU DIGITAR OBRA...", showOnFocus: true,
+          xStyle: { marginBottom: 4 }, inputStyle: { border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none" }
+        })),
+      /*#__PURE__*/React.createElement("div", { style: { minWidth: 0 } },
+        /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "FORNECEDOR (VAZIO = TODOS)"),
+        /*#__PURE__*/React.createElement(AutocompleteInput, {
+          key: "forn" + escolhidos.length, value: f.fornecedor || "", onChange: digitaForn, onCommit: addForn, suggestions: fornecedores.filter(function (n) { return !escolhidos.some(function (x) { return normalizeBusca(x) === normalizeBusca(n); }); }), placeholder: escolhidos.length ? "ADICIONAR OUTRO FORNECEDOR..." : "BUSCAR FORNECEDOR...", showOnFocus: true,
+          xStyle: { marginBottom: 4 }, inputStyle: { border: "1.5px solid #dde1e9", borderRadius: 8, padding: "10px 12px", fontSize: 13, outline: "none" }
+        }))),
+    escolhidos.length > 0 && /*#__PURE__*/React.createElement("div", { "data-aud-forn-lista": "1", style: { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 2 } },
+      escolhidos.map(function (n) {
+        return /*#__PURE__*/React.createElement("span", { key: n, "data-aud-forn-chip": n, style: { display: "inline-flex", alignItems: "center", gap: 6, background: "#eef4ff", border: "1px solid #2a5298", color: "#1a3a6c", borderRadius: 14, padding: "3px 6px 3px 10px", fontSize: 11, fontWeight: 700 } },
+          n, /*#__PURE__*/React.createElement("span", { "data-aud-forn-del": n, onClick: function () { delForn(n); }, style: { cursor: "pointer", background: "#2a5298", color: "#fff", borderRadius: "50%", width: 16, height: 16, lineHeight: "16px", textAlign: "center", fontSize: 10 } }, "✕"));
+      })),
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "112px minmax(0,1fr)", columnGap: 10 } },
+      /*#__PURE__*/React.createElement("div", { style: { minWidth: 0 } },
+        /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "MAPA Nº"),
+        /*#__PURE__*/React.createElement("input", { "data-aud-f": "mapaNum", style: SC.inp, value: f.mapaNum, inputMode: "numeric", placeholder: "EX.: 43", onChange: function (e) { upd("mapaNum", e.target.value.replace(/[^0-9]/g, "")); } })),
+      /*#__PURE__*/React.createElement("div", { style: { minWidth: 0 } },
+        /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "INSUMO (VAZIO = TODOS)"),
+        /*#__PURE__*/React.createElement("input", { "data-aud-f": "insumo", style: SC.inp, value: f.insumo, placeholder: "PARTE DO NOME DO INSUMO...", onChange: function (e) { upd("insumo", e.target.value.toUpperCase()); } }))),
+    /*#__PURE__*/React.createElement("label", { style: SC.lbl }, "MOSTRAR (MARQUE O QUE QUER VER)"),
+    /*#__PURE__*/React.createElement("div", { style: { display: "flex", gap: 14, marginBottom: 6 } },
+      /*#__PURE__*/React.createElement("span", { "data-aud-situ-todas": "1", onClick: marcarTodas, style: link }, "MARCAR TODAS"),
+      /*#__PURE__*/React.createElement("span", { "data-aud-situ-limpar": "1", onClick: limpar, style: link }, "LIMPAR")),
+    /*#__PURE__*/React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(215px,1fr))", gap: 6 } },
+      AUD_SITU.map(function (o) {
+        var desligada = temForn && (o[0] === "almox" || o[0] === "nao");
+        var on = !desligada && situ.indexOf(o[0]) >= 0;
+        return /*#__PURE__*/React.createElement("label", { key: o[0], style: { display: "flex", alignItems: "flex-start", gap: 8, border: "1.5px solid " + (on ? "#2a5298" : "#dde1e9"), background: on ? "#f3f7ff" : "#fff", borderRadius: 10, padding: "7px 9px", cursor: desligada ? "not-allowed" : "pointer", opacity: desligada ? 0.45 : 1, minWidth: 0 } },
+          /*#__PURE__*/React.createElement("input", { type: "checkbox", "data-aud-situ": o[0], checked: on, disabled: desligada, onChange: function () { alterna(o[0]); }, style: { width: 18, height: 18, marginTop: 1, flex: "none", accentColor: "#2a5298" } }),
+          /*#__PURE__*/React.createElement("span", { style: { display: "flex", flexDirection: "column", gap: 2, minWidth: 0 } },
+            /*#__PURE__*/React.createElement("span", { style: { alignSelf: "flex-start", background: o[3], color: o[4], border: "1px solid " + o[4], borderRadius: 10, padding: "1px 8px", fontSize: 10, fontWeight: 800, letterSpacing: 0.2 } }, o[1]),
+            /*#__PURE__*/React.createElement("span", { style: { fontSize: 10.5, color: "#667", lineHeight: 1.25 } }, o[2])));
+      })),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "#888", marginTop: 8 } }, "Nenhuma opção marcada = o relatório não é gerado. Com fornecedor escolhido, SÓ ALMOX e NÃO COMPRADO ficam desligados. Pedido cancelado e retirada estornada não entram, igual ao selo do mapa. Os preços já trazem os percentuais aplicados no mapa."));
+}
+
 function ReportsModal(_ref12) {
   var _currentMapa = _ref12.currentMapa || null;
   var open = _ref12.open,
@@ -40,6 +413,10 @@ function ReportsModal(_ref12) {
   var _useStateAlmoxF = useState(_almoxFPadrao),
     almoxF = _slicedToArray(_useStateAlmoxF, 2)[0],
     setAlmoxF = _slicedToArray(_useStateAlmoxF, 2)[1];
+  var _audFPadrao = { inicio: "", fim: "", base: "atendimento", obra: "", mapaNum: "", insumo: "", fornecedor: "", fornecedores: [], situ: [] };
+  var _useStateAudF = useState(_audFPadrao),
+    audF = _slicedToArray(_useStateAudF, 2)[0],
+    setAudF = _slicedToArray(_useStateAudF, 2)[1];
   // NOVO (09/10/2026 — atendimento nos relatórios): interruptor do relatório e leitura dos pedidos ao abrir o
   // painel (os pedidos ficam numa tabela à parte; o relatório precisa deles para saber o que já foi atendido).
   var _useStateModoRel = useState("comprar"),
@@ -74,6 +451,7 @@ function ReportsModal(_ref12) {
     setBuscaInsumo("");
     setInsumosMarcados(new Set());
     setAlmoxF(_almoxFPadrao);
+    setAudF(_audFPadrao);
     setModoRel("comprar");
   };
   var fecharLimpando = function fecharLimpando() { limparCampos(); onClose(); };
@@ -148,10 +526,11 @@ function ReportsModal(_ref12) {
   }, /*#__PURE__*/React.createElement(IcoClose, null))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
+      overflowX: "auto",
       borderBottom: "2px solid #e8eaf0",
       background: "#f8f9fb"
     }
-  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["orcamento", "OR\xC7AMENTO"], ["insumo", "POR INSUMO"], ["almox", "ALMOXARIFADO"]].map(function (_ref13) {
+  }, [["periodo", "POR PERÍODO"], ["obra", "POR OBRA"], ["orcamento", "OR\xC7AMENTO"], ["insumo", "POR INSUMO"], ["almox", "ALMOXARIFADO"], ["auditoria", "AUDITORIA"]].map(function (_ref13) {
     var _ref14 = _slicedToArray(_ref13, 2),
       id = _ref14[0],
       lbl = _ref14[1];
@@ -331,8 +710,13 @@ function ReportsModal(_ref12) {
     cadastros: cadastros,
     f: almoxF,
     setF: setAlmoxF
+  }), tab === "auditoria" && /*#__PURE__*/React.createElement(AuditoriaRelatorioForm, {
+    cadastros: cadastros,
+    f: audF,
+    setF: setAudF,
+    fornecedores: audFornecedoresDosPedidos(pedidosRel)
   })), /*#__PURE__*/React.createElement("div", {
-    style: SC.mFtr
+    style: tab === "auditoria" ? Object.assign({}, SC.mFtr, { position: "sticky", bottom: 0, zIndex: 3, background: "#fff", boxShadow: "0 -8px 12px -10px rgba(15,31,61,0.35)", paddingBottom: "max(14px, env(safe-area-inset-bottom))" }) : SC.mFtr
   }, /*#__PURE__*/React.createElement("button", {
     style: SC.btnSec,
     onClick: fecharLimpando
@@ -403,6 +787,37 @@ function ReportsModal(_ref12) {
           limparCampos();
         } catch (erroRelAlmox) {
           alert("ERRO ao gerar o relat\u00f3rio do almoxarifado:\n" + (erroRelAlmox && erroRelAlmox.message ? erroRelAlmox.message : String(erroRelAlmox)));
+        }
+      }
+      if (tab === "auditoria") {
+        if (audF.inicio && audF.fim && audF.inicio > audF.fim) {
+          alert("A DATA INICIAL N\u00c3O PODE SER MAIOR QUE A DATA FINAL.");
+          return;
+        }
+        if (!audF.situ || !audF.situ.length) {
+          alert("MARQUE PELO MENOS UMA OPÇÃO EM MOSTRAR.");
+          return;
+        }
+        if (pedidosRel === null) {
+          alert("AINDA CARREGANDO OS PEDIDOS. AGUARDE ALGUNS SEGUNDOS E CLIQUE DE NOVO.");
+          return;
+        }
+        if (!pedidosRel.ok) {
+          alert("N\u00c3O FOI POSS\u00cdVEL LER OS PEDIDOS. A AUDITORIA PRECISA DELES. TENTE DE NOVO EM ALGUNS SEGUNDOS.");
+          return;
+        }
+        try {
+          var _resAud = coletarAuditoria(mapasComCurrent, pedidosRel.lista, audF);
+          if (!_resAud.itens.length) {
+            alert("NENHUM ITEM ENCONTRADO COM ESSES FILTROS.");
+            return;
+          }
+          if (_resAud.limite && !window.confirm("ATEN\u00c7\u00c3O: FORAM LIDOS 1000 PEDIDOS (LIMITE DA LEITURA).\n\nPedidos mais antigos podem n\u00e3o ter entrado e itens podem aparecer como n\u00e3o comprados por isso.\n\nDeseja continuar?")) return;
+          logEventoDiag("RELAT\u00d3RIO gerado: AUDITORIA (" + _resAud.itens.length + " item(ns))");
+          abrirPDF(gerarRelatorioAuditoria(_resAud, audF));
+          limparCampos();
+        } catch (erroRelAud) {
+          alert("ERRO ao gerar a auditoria:\n" + (erroRelAud && erroRelAud.message ? erroRelAud.message : String(erroRelAud)));
         }
       }
         if (tab === "insumo") {
