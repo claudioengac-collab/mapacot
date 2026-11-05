@@ -174,7 +174,7 @@ function gerarRelatorioAuditoria(res, f) {
     "th,td{border:1px solid #c9d1e3;padding:3px 4px;vertical-align:top;line-height:1.28;overflow-wrap:anywhere}th{background:#e3e9f6;font-size:8px;text-align:center;vertical-align:bottom}" +
     "th.g{color:#fff;font-size:8.5px;vertical-align:middle;letter-spacing:.04em}.g1{background:#2a5298}.g2{background:#7b5e00}.g3{background:#1a3a5c}.g4{background:#3d4350}" +
     ".n{text-align:right}.c{text-align:center}.dt{text-align:center;white-space:nowrap}.res{background:#fff8dc}.ped{background:#eef4ff}" +
-    ".det{display:block;font-size:7.5px;color:#7b5e00;font-style:italic;text-transform:none;margin-top:1px}.obs{display:block;font-size:7.5px;color:#5a6579;font-style:italic;text-transform:none;margin-top:1px}" +
+    ".det{display:block;font-size:7.5px;color:#7b5e00;font-style:italic;text-transform:none;margin-top:1px}.detf{display:block;border-top:1px dotted #c0cce0;margin-top:2px;padding-top:2px;text-align:left;font-size:7.5px;line-height:1.28;color:#4a6888;font-style:normal;font-weight:400;text-transform:none}.obs{display:block;font-size:7.5px;color:#5a6579;font-style:italic;text-transform:none;margin-top:1px}" +
     ".l{display:block;font-weight:700;font-size:7.5px;white-space:nowrap}.lp{color:#186818}.la{color:#1a4aa0}.lf{color:#b34700}" +
     ".alm{background:#e1ecff;color:#1a4aa0;font-weight:700;text-align:center;vertical-align:middle}.sem{background:#ffeed9;color:#b34700;font-weight:700;text-align:center;vertical-align:middle}" +
     ".dif{text-align:center;vertical-align:middle}.dif b{display:block;font-size:9px}.dif i{display:block;font-style:normal;font-size:8px}" +
@@ -184,7 +184,7 @@ function gerarRelatorioAuditoria(res, f) {
     ".fech{page-break-before:always}.tiles{display:flex;gap:8px;margin:8px 0}.tile{flex:1;border:1px solid #c9d1e3;padding:8px 10px;border-radius:5px}.tile .k{font-size:8px;font-weight:700;color:#5a6579}.tile .v{font-size:16px;font-weight:700}.tile.bad{background:#fbe3e0;border-color:#a3231a;color:#a3231a}.tile.ok{background:#dff1e3;border-color:#186818;color:#186818}" +
     ".mini{width:auto;min-width:300px;margin:4px 0 10px}.mini td,.mini th{text-align:left}.mini .n{text-align:right}" +
     // SÓ NA TELA (não afeta impressão/PDF): margem de 8px em qualquer tela (como padding, para a margem direita também aparecer quando a tela rola); largura mínima de 1024px (a tabela tem 861px de colunas fixas; abaixo disso a coluna da descrição era espremida a 1 letra por linha em tablet/janela estreita; nessa largura o navegador rola ou reduz o zoom em vez de espremer); a partir de 1200px, folha centralizada
-    "@media screen{body{margin:0;padding:8px;min-width:1024px}}@media screen and (min-width:1200px){html{background:#e8ecf4;padding:18px}body{max-width:1560px;margin:0 auto;padding:20px 26px 30px;background:#fff;border:1px solid #d0d8ea;border-radius:6px;box-shadow:0 6px 22px rgba(15,31,61,.12)}}</style>";
+    "@media screen{body{margin:0;padding:8px;min-width:1056px}}@media screen and (min-width:1200px){html{background:#e8ecf4;padding:18px}body{max-width:1560px;margin:0 auto;padding:20px 26px 30px;background:#fff;border:1px solid #d0d8ea;border-radius:6px;box-shadow:0 6px 22px rgba(15,31,61,.12)}}</style>";
   function dif(mv) {
     if (mv.tipo === "almox") return "<td class=\"dif d-almox\"><b>—</b><span class=\"chip\">só almox</span></td>";
     if (mv.classe === "semPreco") return "<td class=\"dif d-semPreco\"><b>—</b><span class=\"chip\">pedido sem preço</span></td>";
@@ -202,7 +202,7 @@ function gerarRelatorioAuditoria(res, f) {
   });
   var head = "<thead><tr><th class=\"g g1\" colspan=\"6\">Item e atendimento</th><th class=\"g g2\" colspan=\"3\">Resumo · menor preço do mapa</th><th class=\"g g3\" colspan=\"5\">Pedido gerado</th><th class=\"g g4\">Diferença</th></tr>" +
     "<tr><th>Item</th><th>MP nº</th><th>Qtd. do mapa</th><th>Criação do mapa</th><th>Data do atendimento</th><th style=\"text-align:left\">Descrição do insumo / detalhe</th><th>Vl. unit.</th><th>Vl. total</th><th>Fornecedor ganhador</th><th>Pedido nº</th><th>Qt.</th><th>Vl. unit.</th><th>Vl. total</th><th>Fornecedor do pedido</th><th>Pedido − Resumo</th></tr></thead>";
-  var colg = "<colgroup><col style=\"width:34px\"><col style=\"width:34px\"><col style=\"width:76px\"><col style=\"width:64px\"><col style=\"width:70px\"><col><col style=\"width:52px\"><col style=\"width:62px\"><col style=\"width:84px\"><col style=\"width:48px\"><col style=\"width:40px\"><col style=\"width:52px\"><col style=\"width:62px\"><col style=\"width:84px\"><col style=\"width:98px\"></colgroup>";
+  var colg = "<colgroup><col style=\"width:34px\"><col style=\"width:34px\"><col style=\"width:76px\"><col style=\"width:64px\"><col style=\"width:70px\"><col><col style=\"width:84px\"><col style=\"width:62px\"><col style=\"width:84px\"><col style=\"width:48px\"><col style=\"width:40px\"><col style=\"width:52px\"><col style=\"width:62px\"><col style=\"width:84px\"><col style=\"width:98px\"></colgroup>";
   var corpo = porObra.map(function (g) {
     var tbs = g.itens.map(function (it) {
       var movs = it.movs.length ? it.movs : [null];
@@ -217,7 +217,7 @@ function gerarRelatorioAuditoria(res, f) {
       var rs = it.resumo;
       var esq = "<td class=\"c\" rowspan=\"" + n + "\">" + esc(it.itemNum) + "</td><td class=\"c\" rowspan=\"" + n + "\">" + esc(it.mapaNum) + "</td><td rowspan=\"" + n + "\">" + qtLinhas + "</td><td class=\"dt\" rowspan=\"" + n + "\">" + audDkFmt(it.criacaoDk) + "</td>";
       var desc = "<td rowspan=\"" + n + "\"><b>" + esc(it.descricao) + "</b>" + (it.riscado ? "<span class=\"chip\" style=\"color:#b34700\">item riscado no mapa</span>" : "") + (it.detalhe ? "<span class=\"det\">" + esc(it.detalhe) + "</span>" : "") + "</td>";
-      var resCel = "<td class=\"n res\" rowspan=\"" + n + "\">" + (rs.vlUnit === null || rs.vlUnit === undefined ? "—" : fmtMoney(rs.vlUnit)) + "</td><td class=\"n res\" rowspan=\"" + n + "\">" + (rs.vlTotal === null || rs.vlTotal === undefined ? "—" : fmtMoney(rs.vlTotal)) + "</td><td class=\"res\" rowspan=\"" + n + "\">" + esc(rs.forn || "—") + (rs.detalhe ? "<span class=\"det\">↳ " + esc(rs.detalhe) + "</span>" : "") + "</td>";
+      var resCel = "<td class=\"n res\" rowspan=\"" + n + "\">" + (rs.vlUnit === null || rs.vlUnit === undefined ? "—" : fmtMoney(rs.vlUnit)) + (rs.detalhe ? "<span class=\"detf\">↳ " + esc(rs.detalhe) + "</span>" : "") + "</td><td class=\"n res\" rowspan=\"" + n + "\">" + (rs.vlTotal === null || rs.vlTotal === undefined ? "—" : fmtMoney(rs.vlTotal)) + "</td><td class=\"res\" rowspan=\"" + n + "\">" + esc(rs.forn || "—") + "</td>";
       var trs = movs.map(function (mv, k) {
         var ini = k === 0 ? esq : "";
         var dtCel, meio, fim;
