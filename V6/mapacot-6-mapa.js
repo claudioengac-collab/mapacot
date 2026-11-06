@@ -17,6 +17,63 @@ function BancoSobreRobo(props) {
   return React.createElement("div", { "data-banco-sobre-robo": "1", style: { position: "fixed", left: 0, top: 0, width: 0, height: 0, zIndex: 9000 } }, props.children);
 }
 
+// NOVO (pedido do Claudio — o % do fornecedor também precisa DESCONTAR): janela do botão "%" do cabeçalho
+// do fornecedor. Substitui o prompt nativo (que só pedia o número). O dado gravado continua sendo o mesmo
+// texto em mapa.percentuais — desconto = número com "-" na frente — então PDF, pedidos, ranking e
+// relatórios (que leem só mapa.precos) não mudam. O desconto do RODAPÉ (R$) não é tocado.
+function ModalPctMassa(_refPm) {
+  var nome = _refPm.nome || "ESTE FORNECEDOR", comPreco = _refPm.comPreco || 0, total = _refPm.total || 0;
+  var onAplicar = _refPm.onAplicar, onClose = _refPm.onClose;
+  var _pm1 = React.useState("soma"), modo = _pm1[0], setModo = _pm1[1];
+  var _pm2 = React.useState(""), txt = _pm2[0], setTxt = _pm2[1];
+  var n = parseNumBR(txt);
+  var temNum = txt !== "" && !isNaN(n);
+  var descInvalido = temNum && modo === "desc" && n >= 100;
+  var ok = temNum && !descInvalido;
+  var ex = ok ? (modo === "desc" ? 10 * (1 - n / 100) : 10 * (1 + n / 100)) : null;
+  function aplicar() { if (!ok) return; onAplicar((modo === "desc" && n !== 0 ? "-" : "") + txt); }
+  var segBtn = function (k, rotulo, corOn, bgOn) {
+    var on = modo === k;
+    return React.createElement("button", { "data-pct-modo": k, onClick: function () { setModo(k); },
+      style: { flex: 1, padding: "9px 6px", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", borderRadius: 6,
+        border: "2px solid " + (on ? corOn : "#d5d9e3"), background: on ? bgOn : "#fff", color: on ? corOn : "#777" } }, rotulo);
+  };
+  return React.createElement("div", { "data-modal-pct": "1", onClick: function (e) { if (e.target === e.currentTarget) onClose(); },
+    onKeyDown: function (e) { if (e.key === "Escape") onClose(); },
+    style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 12, overscrollBehavior: "none" } },
+    React.createElement("div", { style: { background: "#fff", borderRadius: 8, overflow: "hidden", width: "100%", maxWidth: 400, maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 32px rgba(0,0,0,0.3)" } },
+      React.createElement("div", { style: { background: "#2a5298", color: "#fff", padding: "11px 14px", fontWeight: 700, fontSize: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } },
+        React.createElement("span", null, "% EM TODOS OS ITENS — " + nome),
+        React.createElement("span", { "data-fechar-pct": "1", onClick: onClose, style: { cursor: "pointer", fontSize: 16 } }, "✕")),
+      React.createElement("div", { style: { padding: 14, overflowY: "auto" } },
+        React.createElement("div", { style: { display: "flex", gap: 8 } },
+          segBtn("soma", "+ SOMAR", "#b06000", "#fff8ec"), segBtn("desc", "− DESCONTAR", "#136c3a", "#e6f6ec")),
+        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginTop: 12 } },
+          React.createElement("input", { "data-campo": "pct-massa", autoFocus: true, value: txt, inputMode: "decimal", placeholder: "Percentual",
+            onChange: function (e) { var v = e.target.value.replace(/[^0-9,]/g, ""); if (v.split(",").length > 2) return; setTxt(v); }, maxLength: 9,
+            onKeyDown: function (e) { if (e.key === "Enter") { e.preventDefault(); aplicar(); } },
+            style: { flex: 1, boxSizing: "border-box", border: "2px solid " + (descInvalido ? "#c0392b" : modo === "desc" ? "#2e9e5b" : "#ffb03a"), borderRadius: 6, padding: "9px 10px", fontSize: 16, textAlign: "right", fontFamily: "inherit" } }),
+          React.createElement("span", { style: { fontSize: 16, fontWeight: 700, color: "#555" } }, "%")),
+        React.createElement("div", { "data-pct-exemplo": "1", style: { marginTop: 8, minHeight: 18, fontSize: 12, color: descInvalido ? "#c0392b" : "#136c3a", fontWeight: 700 } },
+          descInvalido ? "O desconto precisa ser menor que 100%." : (ex !== null ? "Exemplo: R$ 10,00 passa a R$ " + fmtBRL(ex) : "")),
+        React.createElement("div", { style: { marginTop: 8, fontSize: 11, color: "#666", lineHeight: 1.45 } },
+          "Vale para " + comPreco + " de " + total + " itens (os que já têm preço digitado). Substitui o % que cada item já tinha — não acumula. Digite 0 para tirar o %. O desconto do rodapé não é alterado.")),
+      React.createElement("div", { style: { display: "flex", gap: 8, justifyContent: "flex-end", padding: "10px 14px", borderTop: "1px solid #eee", background: "#fafbfd" } },
+        React.createElement("button", { "data-pct-cancelar": "1", onClick: onClose, style: { background: "#f0f0f0", border: "none", borderRadius: 4, padding: "9px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" } }, "CANCELAR"),
+        React.createElement("button", { "data-pct-aplicar": "1", disabled: !ok, onClick: aplicar, style: { background: ok ? "#1a4aa0" : "#9aa7c4", color: "#fff", border: "none", borderRadius: 4, padding: "9px 18px", fontSize: 12, fontWeight: 700, cursor: ok ? "pointer" : "not-allowed", fontFamily: "inherit" } }, "APLICAR")))
+  );
+}
+// NOVO: rede de segurança da janela do "%". Se ela falhar ao desenhar, ela some e o MAPA continua como estava (nenhum preço é alterado).
+class PctMassaSegura extends React.Component {
+  constructor(props) { super(props); this.state = { erro: false }; }
+  static getDerivedStateFromError() { return { erro: true }; }
+  componentDidCatch(e) {
+    try { logEventoDiag("✖ Janela do % fechada por erro: " + (e && e.message)); } catch (x) {}
+    try { if (this.props.onErro) this.props.onErro(); } catch (x) {}
+    try { alert("NÃO FOI POSSÍVEL ABRIR A JANELA DO %. NENHUM PREÇO FOI ALTERADO."); } catch (x) {}
+  }
+  render() { return this.state.erro ? null : this.props.children; }
+}
 // NOVO (atalho "Auditoria deste mapa"): rede de segurança. Se a janela da auditoria falhar ao desenhar, ela some e o MAPA continua como estava.
 class AuditoriaMapaSegura extends React.Component {
   constructor(props) { super(props); this.state = { erro: false }; }
@@ -764,6 +821,9 @@ var _useState27 = useState(init),
       window.removeEventListener('resize', aoRolar);
     };
   }, []);
+  var _useStatePctMassa = useState(null),
+    pctMassa = _slicedToArray(_useStatePctMassa, 2)[0],
+    setPctMassa = _slicedToArray(_useStatePctMassa, 2)[1];
   var _useStateAudMapa = useState(false),
     showAudMapa = _slicedToArray(_useStateAudMapa, 2)[0],
     setShowAudMapa = _slicedToArray(_useStateAudMapa, 2)[1];
@@ -1211,6 +1271,7 @@ var _useState27 = useState(init),
       var pct = parseNumBR(pctStr || "") || 0;
       (itensAtivos || []).forEach(function (item) {
         var key = "".concat(item.id, "_").concat(fid);
+        if ((itensAtendidosMap[item.id] || {}).atendido) return; // item já atendido: célula travada, o % em massa não mexe
         var baseAtual = novoPrecosBase[key] !== undefined ? novoPrecosBase[key] : m.precos[key];
         var base = parseMoney(baseAtual);
         if (base === null) return; // sem preço base ainda — nada a calcular
@@ -2050,17 +2111,15 @@ var _useState27 = useState(init),
       }, fornOcultos.has(f.id) ? "\uD83D\uDEAB" : "\uD83D\uDC41"),
       // FIX (pedido do Claudio — percentual por insumo): ícone pra aplicar um percentual de uma
       // vez em TODOS os itens deste fornecedor — junto dos ícones que já existiam aqui (excluir,
-      // mostrar/ocultar), seguindo o mesmo padrão visual e o mesmo mecanismo de confirmação
-      // simples (prompt) já usado em outras partes do sistema, sem precisar de um modal novo.
+      // mostrar/ocultar), seguindo o mesmo padrão visual. Agora abre a janela SOMAR / DESCONTAR
+      // (ModalPctMassa), no lugar do prompt nativo que só sabia somar.
       /*#__PURE__*/React.createElement("span", {
         onClick: function(){
-          var valor = window.prompt("Aplicar quantos % em TODOS os itens de \"" + (f.nome||"este fornecedor") + "\"?\n\n(Só é aplicado nos itens que já têm um preço digitado.)", "");
-          if (valor === null) return; // cancelou
-          var pctNum = parseNumBR(valor);
-          if (isNaN(pctNum)) { alert("Digite um número válido."); return; }
-          aplicarPctEmMassa(f.id, valor);
+          var cont = 0;
+          (itensAtivos || []).forEach(function (it) { if ((itensAtendidosMap[it.id] || {}).atendido) return; var k = it.id + "_" + f.id; var b = (precosBase && precosBase[k] !== undefined) ? precosBase[k] : precos[k]; if (parseMoney(b) !== null) cont++; });
+          setPctMassa({ fid: f.id, nome: f.nome, comPreco: cont, total: (itensAtivos || []).length });
         },
-        title: "Aplicar percentual em todos os itens deste fornecedor",
+        title: "Somar ou descontar um percentual em todos os itens deste fornecedor",
         style: { cursor:"pointer", fontSize:11, userSelect:"none", display:"inline-flex", alignItems:"center", background:"rgba(255,255,255,0.2)", borderRadius:3, padding:"2px 4px", fontWeight:700 }
       }, "%"))));
     }), emptyChunk && /*#__PURE__*/React.createElement("th", {
@@ -2366,6 +2425,8 @@ var _useState27 = useState(init),
         var baseAtualStr = (precosBase && precosBase[key] !== undefined) ? precosBase[key] : ((_precos$key = precos[key]) !== null && _precos$key !== void 0 ? _precos$key : "");
         var pctAtualStr = (percentuais && percentuais[key] !== undefined) ? percentuais[key] : "";
         var pctAtualNum = parseNumBR(pctAtualStr || "") || 0;
+        var pctNeg = String(pctAtualStr || "").charAt(0) === "-";
+        var pctAbsStr = pctNeg ? String(pctAtualStr).slice(1) : pctAtualStr;
         var cellBg = fornOcultos.has(f.id) ? bg : (isMin ? T.best : isRank2 ? "#ffe4b0" : isRank3 ? "#ffcece" : bg);
         var cellColor = fornOcultos.has(f.id) ? "#bbb" : (isMin ? "#1a6a1a" : isRank2 ? "#a05000" : isRank3 ? "#a01010" : undefined);
         return _isAtendido
@@ -2430,21 +2491,34 @@ var _useState27 = useState(init),
                 }
               }),
               /*#__PURE__*/React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 2, marginTop: 2 } },
+                // Área de toque maior que o botão desenhado (margem negativa: o layout da linha NÃO muda de tamanho).
+                /*#__PURE__*/React.createElement("span", {
+                  role: "button", "aria-disabled": fornOcultos.has(f.id) ? "true" : "false",
+                  title: pctNeg ? "DESCONTO (\u2212). Toque para trocar para SOMA (+)" : "SOMA (+). Toque para trocar para DESCONTO (\u2212)",
+                  onClick: function onClick() { if (fornOcultos.has(f.id)) return; if (!pctNeg && parseNumBR(pctAbsStr) >= 100) { alert("O desconto precisa ser menor que 100%. Reduza o percentual antes de trocar para desconto (−)."); return; } recalcularPrecoComPct(item.id, f.id, baseAtualStr, pctNeg ? pctAbsStr : "-" + pctAbsStr); },
+                  style: { display: "inline-flex", padding: "5px 4px", margin: "-5px -4px", cursor: fornOcultos.has(f.id) ? "default" : "pointer", userSelect: "none", WebkitTapHighlightColor: "transparent" }
+                }, /*#__PURE__*/React.createElement("span", {
+                  "data-pct-sinal": pctNeg ? "desc" : "soma",
+                  style: { width: 18, height: 14, boxSizing: "border-box", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, lineHeight: 1, borderRadius: 3,
+                    opacity: fornOcultos.has(f.id) ? 0.5 : 1,
+                    border: "1px solid " + (pctNeg ? "#2e9e5b" : "#ffb03a"), background: pctNeg ? "#e6f6ec" : "#fff8ec", color: pctNeg ? "#136c3a" : "#b06000" }
+                }, pctNeg ? "\u2212" : "+")),
                 /*#__PURE__*/React.createElement("input", {
-                  value: pctAtualStr,
+                  value: pctAbsStr,
                   placeholder: "%",
                   disabled: fornOcultos.has(f.id),
-                  title: "Percentual a somar sobre o preço deste item",
+                  title: "Percentual sobre o preço deste item (botão ao lado: + soma, \u2212 desconto)",
                   onChange: function onChange(e) {
                     var v = e.target.value.replace(/[^0-9.,]/g, "");
+                    if (pctNeg) { if (v !== "" && parseNumBR(v) >= 100) return; v = "-" + v; }
                     recalcularPrecoComPct(item.id, f.id, baseAtualStr, v);
                   },
                   style: {
-                    width: 30, textAlign: "center", fontSize: 9, border: "1px solid #ffb03a",
-                    background: "#fff8ec", color: "#b06000", fontWeight: 700, borderRadius: 3, padding: "1px 2px"
+                    width: 30, textAlign: "center", fontSize: 9, border: "1px solid " + (pctNeg ? "#2e9e5b" : "#ffb03a"),
+                    background: pctNeg ? "#eefaf2" : "#fff8ec", color: pctNeg ? "#136c3a" : "#b06000", fontWeight: 700, borderRadius: 3, padding: "1px 2px"
                   }
                 }),
-                /*#__PURE__*/React.createElement("span", { style: { fontSize: 9, color: "#b06000" } }, "%")
+                /*#__PURE__*/React.createElement("span", { style: { fontSize: 9, color: pctNeg ? "#136c3a" : "#b06000" } }, "%")
               ),
               // Só mostra o resultado calculado quando o percentual realmente muda o valor —
               // evita repetir o mesmo número duas vezes para fornecedores que não usam isso.
@@ -3351,6 +3425,7 @@ var _useState27 = useState(init),
     onLimparOrcamento: onLimparOrcamento,
     onGerenciarOrcamento: function(obra){ setShowCadEditor(false); setTimeout(function(){ setObraGerEd(obra); setShowGerEd(true); }, 200); }
   })),
+  pctMassa && /*#__PURE__*/React.createElement(PctMassaSegura, { onErro: function () { setPctMassa(null); } }, /*#__PURE__*/React.createElement(ModalPctMassa, { nome: pctMassa.nome, comPreco: pctMassa.comPreco, total: pctMassa.total, onClose: function () { setPctMassa(null); }, onAplicar: function (s) { aplicarPctEmMassa(pctMassa.fid, s); setPctMassa(null); } })),
   showAudMapa && /*#__PURE__*/React.createElement(AuditoriaMapaSegura, { onErro: function () { setShowAudMapa(false); } }, /*#__PURE__*/React.createElement(BancoSobreRobo, { sobre: !!showAdicionarVarios }, /*#__PURE__*/React.createElement(ReportsModal, {
     open: true,
     onClose: function onClose() { setShowAudMapa(false); },
