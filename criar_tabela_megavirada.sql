@@ -1,6 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════════
 -- CENTRAL MEGA DA VIRADA — tabela de sincronização (mesmo modelo do MAPACOT: id + dados)
 -- Onde rodar: painel do Supabase → SQL Editor → colar tudo → Run. Uma vez só.
+-- (Já aplicado no projeto "mapacot" em 10/11/2026.)
 -- O que faz: cria a tabela "megavirada", onde o aplicativo guarda o histórico de sorteios,
 -- os lotes de jogos e as configurações, para o celular e o notebook verem a mesma coisa.
 -- Não altera nem apaga nada do MAPACOT. Pode rodar de novo sem perder dados.
@@ -15,7 +16,7 @@ create table if not exists megavirada (
 -- A data da última gravação é sempre a do servidor (não depende do relógio de cada aparelho).
 -- É por ela que um aparelho percebe o que mudou no outro.
 create or replace function megavirada_carimbar()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql set search_path = '' as $$
 begin
   new.atualizado_em := clock_timestamp();
   if tg_op = 'UPDATE' then new.criado_em := old.criado_em; end if;
