@@ -529,6 +529,15 @@ table.map tfoot td { height: 24px; text-align: center; font-size: 10px; font-wei
   .actions-bar { bottom: 0; }
   .gcols { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 18px; align-items: start; }
 }
+.checks .grp { margin: 10px 0 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); }
+.checks .grp span { font-weight: 500; letter-spacing: 0; text-transform: none; }
+.checks .grp + .check { border-top: 0; }
+.check .d { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.check { padding: 6px 0; }
+.pr { display: flex; flex-direction: column; }
+.pr .kv { flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 0; }
+.pr .kv span { font-size: 12px; font-weight: 400; }
+.pr .kv b { font-size: 15px; text-align: left; }
 
 </style>
 
@@ -1325,7 +1334,7 @@ document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && 
 
 window.MV = { state: state, freq: freq, combos: combos, balance: balance, atrasos: atrasos, parseTable: parseTable, sel: sel, pool: pool, isVirada: isVirada, hist: function () { return H; }, render: render };
 /* ================= Gerador, Meus jogos e Conferir ================= */
-var CFG = { meta: 500, preco: 6, lote: 20, k: 6, cmp: 100, naoSena: true, seq: true, equil: true,
+var CFG = { v: 2, meta: 500, preco: 6, lote: 20, k: 6, cmp: 100, naoSena: false, seq: true, equil: true, div: false,
   f: { soma: { on: true, min: 120, max: 240 }, gap: { on: true, min: 30, max: 55 }, pares: { on: true, min: 2, max: 4 }, quad: { on: true, min: 3 } } };
 var F_LIM = { soma: [21, 345], gap: [5, 59], pares: [0, 6], quad: [1, 4] };
 var LOTES = [], CONF = null, dl = null, cfgTimer = 0;
@@ -1333,7 +1342,7 @@ var APOSTAS = { 6: 1, 7: 7, 8: 28, 9: 84 };
 var numAsc = function (a, b) { return a - b; };
 var rnd = function () { if (window.crypto && crypto.getRandomValues) { var a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] / 4294967296; } return Math.random(); };
 Object.assign(state, { q: 20, gview: 'config', gmodo: 'espalhado', prev: null, gmsg: null, busy: false, cfgOpen: false, poolSel: [], gar: 't4m4', fech: null,
-  jq: 0, jedit: false, jopen: {}, jdel: '', jmsg: null, exp: null, bak: null, cres: ['', '', '', '', '', ''], cn: '', cmsg: null });
+  jq: 0, jedit: false, jopen: {}, jdel: '', jmsg: null, exp: null, bak: null, prob: null, cres: ['', '', '', '', '', ''], cn: '', cmsg: null });
 
 function later() { clearTimeout(window.__lt); window.__lt = setTimeout(softRender, 220); }   // espera o toque seguinte antes de redesenhar
 function softRender() { var a = document.activeElement; if (a && a.tagName === 'INPUT' && ['checkbox', 'radio', 'file'].indexOf(a.type) < 0) window.__dirty = true; else render(); }
@@ -1344,7 +1353,10 @@ function mergeCfg(b) {
   var num = function (v, lo, hi, d) { v = Number(v); return isFinite(v) && v >= lo && v <= hi ? v : d; };
   CFG.meta = Math.round(num(b.meta, 1, 5000, CFG.meta)); CFG.preco = num(b.preco, 0.01, 1000, CFG.preco); CFG.lote = Math.round(num(b.lote, 1, 100, CFG.lote));
   CFG.k = Math.round(num(b.k, 6, 9, CFG.k)); CFG.cmp = Math.round(num(b.cmp, 1, 100000, CFG.cmp));
-  ['naoSena', 'seq', 'equil'].forEach(function (k) { if (typeof b[k] === 'boolean') CFG[k] = b[k]; });
+  ['naoSena', 'seq', 'equil', 'div'].forEach(function (k) { if (typeof b[k] === 'boolean') CFG[k] = b[k]; });
+  // Configuração gravada antes da versão 2: "não repetir sena já sorteada" era ligada por padrão e passou a vir desligada.
+  // Acontece uma vez; depois a escolha da pessoa vale e a configuração é regravada com v: 2.
+  if (!(b.v >= 2)) { CFG.naoSena = false; saveCfg(); }
   var f = b.f || {};
   Object.keys(F_LIM).forEach(function (k) { var s = f[k]; if (!s) return; if (typeof s.on === 'boolean') CFG.f[k].on = s.on; CFG.f[k].min = Math.round(num(s.min, F_LIM[k][0], F_LIM[k][1], CFG.f[k].min)); if (k !== 'quad') CFG.f[k].max = Math.round(num(s.max, F_LIM[k][0], F_LIM[k][1], CFG.f[k].max)); });
 }
@@ -1354,6 +1366,15 @@ function nextNum() { return LOTES.reduce(function (a, L) { return Math.max(a, L.
 function games() { var out = [], n = 0; LOTES.forEach(function (L) { L.jogos.forEach(function (g, i) { out.push({ L: L, i: i, g: g, n: ++n }); }); }); return out; }
 function allGames() { var all = []; LOTES.forEach(function (L) { L.jogos.forEach(function (g) { all.push(g); }); }); return all; }
 function custoDe(list) { return list.reduce(function (a, g) { return a + (APOSTAS[g.length] || 1) * CFG.preco; }, 0); }
+// Um jogo de 7, 8 ou 9 dezenas vale 7, 28 ou 84 apostas simples. Meta, custo, repetidos e chances contam sempre as apostas simples.
+function totalEq(list) { return list.reduce(function (a, g) { return a + (APOSTAS[g.length] || 1); }, 0); }
+var IDXC = {};
+function idxCached(v, k) { var key = v + ',' + k; return IDXC[key] || (IDXC[key] = idxSubsets(v, k)); }
+function simplesDe(g) { if (g.length === 6) return [g]; return idxCached(g.length, 6).map(function (ix) { return ix.map(function (i) { return g[i]; }); }); }
+function eqKeys(list) { var s = new Set(); list.forEach(function (g) { addKeys(g, s); }); return s; }
+function addKeys(g, keys) { simplesDe(g).forEach(function (x) { keys.add(x.join('-')); }); }
+function jaTem(g, keys) { var sm = simplesDe(g); for (var i = 0; i < sm.length; i++) if (keys.has(sm[i].join('-'))) return true; return false; }
+function fmtPct(x, d) { return (x * 100).toFixed(d == null ? 2 : d).replace('.', ','); }
 function usage(list) { var u = new Array(61).fill(0); list.forEach(function (g) { g.forEach(function (x) { u[x]++; }); }); return u; }
 function coverage(list) { var u = usage(list), c = 0; for (var i = 1; i <= 60; i++) if (u[i]) c++; return c; }
 function validGame(g) { return Array.isArray(g) && g.length >= 6 && g.length <= 9 && g.every(function (x, i) { return Number.isInteger(x) && x >= 1 && x <= 60 && (i === 0 || x > g[i - 1]); }); }
@@ -1385,16 +1406,21 @@ function pickGame(k, use, equil) {   // sorteia k dezenas; com "equilibrar", fav
   while (g.length < k && guard++ < 5000) { var r = rnd() * tot, j = 0; while (j < 59 && r >= w[j]) { r -= w[j]; j++; } if (w[j] === 0) continue; g.push(j + 1); tot -= w[j]; w[j] = 0; }
   return g.sort(numAsc);
 }
+// Trincas (3 dezenas) de um jogo de 6: dois jogos com uma trinca em comum têm 3 ou mais dezenas iguais.
+function trincas(g, out) { for (var a = 0; a < 4; a++) for (var b = a + 1; b < 5; b++) for (var c = b + 1; c < 6; c++) out.push((g[a] << 12) | (g[b] << 6) | g[c]); return out; }
+function trincasDe(list) { var s = new Set(), t = []; list.forEach(function (g) { if (g.length === 6) { t.length = 0; trincas(g, t).forEach(function (x) { s.add(x); }); } }); return s; }
 function generate(q, k) {
-  var all = allGames(), use = usage(all), keys = new Set(all.map(function (g) { return g.join('-'); })), out = [], tries = 0, limit = 3000 * q + 20000;
+  var all = allGames(), use = usage(all), keys = eqKeys(all), out = [], tries = 0, div = CFG.div && k === 6, tri = div ? trincasDe(all) : null, tg = [],
+    limit = (div ? 8000 : 3000) * q + (div ? 40000 : 20000);
   while (out.length < q && tries < limit) {
     tries++;
-    var g = pickGame(k, use, CFG.equil), key = g.join('-');
-    if (g.length !== k || keys.has(key)) continue;
+    var g = pickGame(k, use, CFG.equil);
+    if (g.length !== k || jaTem(g, keys)) continue;
     if (CFG.seq && badPattern(g)) continue;
     if (!passF(g)) continue;
     if (CFG.naoSena && jaSaiu(g)) continue;
-    keys.add(key); out.push(g); g.forEach(function (x) { use[x]++; });
+    if (div) { tg.length = 0; trincas(g, tg); if (tg.some(function (x) { return tri.has(x); })) continue; }   // diversidade máxima: nunca 3 dezenas iguais a outro jogo
+    addKeys(g, keys); if (div) tg.forEach(function (x) { tri.add(x); }); out.push(g); g.forEach(function (x) { use[x]++; });
   }
   return { jogos: out, tries: tries, faltou: q - out.length };
 }
@@ -1440,6 +1466,91 @@ function fechar(pool, t, m) {
   return res;
 }
 
+/* ---------- Verificação da garantia de um fechamento ---------- */
+function pc32(x) { x = x - ((x >>> 1) & 0x55555555); x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return (((x + (x >>> 4)) & 0x0F0F0F0F) * 0x01010101) >>> 24; }
+// Confere, sem confiar no gerador, todas as combinações de m dezenas do conjunto: em cada uma, algum jogo precisa ter pelo menos t delas.
+// Os jogos só usam dezenas do conjunto; então os acertos de um jogo dependem só das dezenas sorteadas dentro do conjunto, e qualquer
+// sorteio com m ou mais dentro contém uma dessas combinações. Por isso a conferência vale para todos os 50.063.860 resultados possíveis.
+function verificarGarantia(pool, jogos, t, m) {
+  pool = pool.slice().sort(numAsc);
+  var v = pool.length, pos = {}, gm = [], seen = new Set(), r = { ok: false, v: v, n: jogos.length, t: t, m: m, casos: 0, falhas: 0, exemplo: null, fora: 0, repetidos: 0 };
+  pool.forEach(function (x, ix) { pos[x] = ix; });
+  jogos.forEach(function (g) {
+    var mk = 0, bom = g.length === 6, key = g.join('-');
+    g.forEach(function (x) { if (pos[x] === undefined) bom = false; else mk |= 1 << pos[x]; });
+    if (!bom || pc32(mk) !== 6) r.fora++;
+    if (seen.has(key)) r.repetidos++; seen.add(key);
+    gm.push(mk);
+  });
+  function confere(mask) {
+    r.casos++;
+    for (var q = 0; q < gm.length; q++) if (pc32(gm[q] & mask) >= t) return;
+    r.falhas++; if (!r.exemplo) r.exemplo = pool.filter(function (x, ix) { return mask >> ix & 1; });
+  }
+  (function rec(st, k, mask) { if (k === 0) { confere(mask); return; } for (var a = st; a <= v - k; a++) rec(a + 1, k - 1, mask | (1 << a)); })(0, m, 0);
+  r.ok = r.falhas === 0 && r.fora === 0 && r.repetidos === 0 && r.n > 0;
+  return r;
+}
+function relatorioFech(fe) {
+  var g = GAR[fe.gar], v = fe.ver, L = [];
+  L.push('Relatório de auditoria do fechamento'); L.push('Verificador: versão 1 (confere todas as combinações do conjunto, sem usar o gerador)');
+  L.push('Garantia: ' + g.nome + ': ' + g.txt); L.push('Dezenas do conjunto (' + fe.pool.length + '): ' + fe.pool.map(f2).join(' ')); L.push('Jogos: ' + fe.jogos.length);
+  L.push('Combinações de ' + v.m + ' dezenas conferidas: ' + v.casos); L.push('Contraexemplos: ' + v.falhas); L.push('Jogos fora do conjunto ou inválidos: ' + v.fora + ' | jogos repetidos: ' + v.repetidos);
+  L.push('Resultado: ' + (v.ok ? 'GARANTIA VERIFICADA' : 'GARANTIA NÃO VERIFICADA'));
+  if (v.exemplo) L.push('Primeiro contraexemplo: ' + v.exemplo.map(f2).join(' '));
+  L.push(''); L.push('Jogos:'); fe.jogos.forEach(function (x, i) { L.push(String(i + 1).padStart(4, ' ') + '  ' + x.map(f2).join(' ')); });
+  return L.join('\r\n') + '\r\n';
+}
+
+/* ---------- Chances exatas de um conjunto de jogos ---------- */
+// Cada sorteio de 6 dezenas tem um número de 0 a 50.063.859 (posição na ordem das combinações). Marca num vetor de bits (6,3 MB) todo
+// sorteio que contém 4 ou 5 dezenas de algum jogo e conta: é o total exato de sorteios com pelo menos uma quadra ou quina.
+var TOTAL = 50063860;
+var BIN = (function () { var b = [], n, k; for (n = 0; n <= 60; n++) { b[n] = []; for (k = 0; k <= 6; k++) b[n][k] = k === 0 ? 1 : n === 0 ? 0 : b[n - 1][k - 1] + b[n - 1][k]; } return b; })();
+var MB = new Int32Array(6), MC = new Int32Array(6), OTH = new Int32Array(60);
+function setBit(bits, a) { var r = BIN[a[0] - 1][1] + BIN[a[1] - 1][2] + BIN[a[2] - 1][3] + BIN[a[3] - 1][4] + BIN[a[4] - 1][5] + BIN[a[5] - 1][6]; bits[r >>> 5] |= 1 << (r & 31); }
+function marcar(bits, s, t) {   // marca todos os sorteios que contêm as t dezenas de s (t = 4 ou 5)
+  var no = 0, p = 0, i, j, q, x, y, b = MB, c = MC;
+  for (i = 1; i <= 60; i++) { if (p < t && s[p] === i) p++; else OTH[no++] = i; }
+  for (i = 0; i < no; i++) {
+    x = OTH[i]; for (q = 0; q < t; q++) b[q] = s[q];
+    q = t; while (q > 0 && b[q - 1] > x) { b[q] = b[q - 1]; q--; } b[q] = x;
+    if (t === 5) { setBit(bits, b); continue; }
+    for (j = i + 1; j < no; j++) { y = OTH[j]; for (q = 0; q < 5; q++) c[q] = b[q]; q = 5; while (q > 0 && c[q - 1] > y) { c[q] = c[q - 1]; q--; } c[q] = y; setBit(bits, c); }
+  }
+}
+function conjKey(list) { var s = list.map(function (g) { return g.join('-'); }).join('|'), h = 2166136261, i; for (i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return list.length + ':' + (h >>> 0).toString(16); }
+function paresIguais(list) {   // quantos pares de jogos têm 0, 1, ... 6 dezenas iguais (só para jogos de 6 dezenas)
+  if (list.length > 3000 || list.some(function (g) { return g.length !== 6; })) return null;
+  var lo = [], hi = [], h = [0, 0, 0, 0, 0, 0, 0], i, j;
+  list.forEach(function (g) { var a = 0, b = 0; g.forEach(function (x) { if (x <= 30) a |= 1 << (x - 1); else b |= 1 << (x - 31); }); lo.push(a); hi.push(b); });
+  for (i = 0; i < list.length; i++) for (j = i + 1; j < list.length; j++) h[pc32(lo[i] & lo[j]) + pc32(hi[i] & hi[j])]++;
+  return h;
+}
+function probIni(list) {
+  var s4 = [], s5 = [], seen4 = new Set(), seen5 = new Set(), tot4 = 0;
+  list.forEach(function (g) {
+    idxCached(g.length, 4).forEach(function (ix) { var s = ix.map(function (i) { return g[i]; }), k = (s[0] << 18) | (s[1] << 12) | (s[2] << 6) | s[3]; tot4++; if (!seen4.has(k)) { seen4.add(k); s4.push(s); } });
+    idxCached(g.length, 5).forEach(function (ix) { var s = ix.map(function (i) { return g[i]; }), k = (s[0] << 24) | (s[1] << 18) | (s[2] << 12) | (s[3] << 6) | s[4]; if (!seen5.has(k)) { seen5.add(k); s5.push(s); } });
+  });
+  return { bits: new Uint32Array(Math.ceil(TOTAL / 32)), s4: s4, s5: s5, i4: 0, i5: 0, fase: 5, c5: 0, c4: 0, tot4: tot4, n: list.length, eq: totalEq(list), dist: eqKeys(list).size, pares: paresIguais(list), key: conjKey(list), feito: 0, total: s5.length * 55 + s4.length * 1540 };
+}
+function popBits(bits) { var n = 0, i; for (i = 0; i < bits.length; i++) if (bits[i]) n += pc32(bits[i]); return n; }
+function probStep(ctx, budget) {   // trabalha até gastar "budget" marcações; devolve true quando terminou
+  while (budget > 0) {
+    if (ctx.fase === 5) { if (ctx.i5 >= ctx.s5.length) { ctx.c5 = popBits(ctx.bits); ctx.fase = 4; continue; } marcar(ctx.bits, ctx.s5[ctx.i5++], 5); budget -= 55; ctx.feito += 55; }
+    else if (ctx.fase === 4) { if (ctx.i4 >= ctx.s4.length) { ctx.c4 = popBits(ctx.bits); ctx.fase = 0; return true; } marcar(ctx.bits, ctx.s4[ctx.i4++], 4); budget -= 1540; ctx.feito += 1540; }
+    else return true;
+  }
+  return ctx.fase === 0;
+}
+function probFim(ctx) {
+  var N = ctx.eq, c6 = ctx.dist, c5 = ctx.c5, c4 = ctx.c4;
+  return { key: ctx.key, n: ctx.n, eq: N, dist: ctx.dist, c6: c6, c5: c5, c4: c4, melhorSena: c6, melhorQuina: c5 - c6, melhorQuadra: c4 - c5, nada: TOTAL - c4,
+    esp: { sena: N / TOTAL, quina: 324 * N / TOTAL, quadra: 21465 * N / TOTAL }, sub4: { dist: ctx.s4.length, tot: ctx.tot4 }, pares: ctx.pares };
+}
+function probExata(list) { var ctx = probIni(list); while (!probStep(ctx, 1e12)); return probFim(ctx); }
+
 /* ---------- Gravação ---------- */
 // Na versão hospedada, confere o servidor antes de salvar jogos: assim este aparelho enxerga o que outro acabou de gravar.
 function emDia() { return window.__SYNC && window.__SYNC.fresh ? window.__SYNC.fresh().catch(function () {}) : Promise.resolve(); }
@@ -1460,17 +1571,19 @@ function saveFile(name, data) { var target = dl || window.__LOCAL_DL; if (!targe
 
 /* ---------- Tela: Gerador ---------- */
 function gstat() {
-  var all = allGames(), tot = all.length, falta = Math.max(0, CFG.meta - tot), gasto = custoDe(all);
-  return { all: all, tot: tot, falta: falta, gasto: gasto, total: gasto + falta * CFG.preco * APOSTAS[CFG.k], num: nextNum(), lotes: LOTES.length + Math.ceil(falta / CFG.lote) };
+  var all = allGames(), tot = all.length, eq = totalEq(all), falta = Math.max(0, CFG.meta - eq), gasto = custoDe(all), un = APOSTAS[CFG.k], mx = Math.floor(falta / un);
+  return { all: all, tot: tot, eq: eq, falta: falta, mx: mx, un: un, gasto: gasto, total: gasto + falta * CFG.preco, num: nextNum(), lotes: LOTES.length + Math.ceil(falta / (CFG.lote * un)) };
 }
-function qNow(st) { return Math.max(1, Math.min(state.q, st.falta || 1, 100)); }
+// A meta conta apostas simples: falta (em apostas simples) dividido pelo valor de um jogo é quantos jogos ainda cabem.
+function qNow(st) { return Math.max(1, Math.min(state.q, st.mx || 1, 100)); }
 function gerarLabel(st) { var q = qNow(st); return 'Gerar lote ' + st.num + ' · ' + pl(q, 'jogo', 'jogos') + ' · ' + fmtR(q * CFG.preco * APOSTAS[CFG.k]); }
 function metaCard(st) {
-  var h = '<section class="card"><div class="kv2"><b style="font-size:14px;font-weight:700">' + (st.falta ? 'Lote ' + st.num + ' de ' + Math.max(st.lotes, st.num) : 'Meta atingida') + '</b><span id="g-prog">' + fmtN(st.tot) + ' de ' + fmtN(CFG.meta) + ' gerados</span></div>' +
-    '<div class="prog" role="img" aria-label="' + st.tot + ' de ' + CFG.meta + ' jogos gerados"><i style="width:' + Math.min(100, st.tot / CFG.meta * 100).toFixed(1) + '%"></i></div>' +
+  var simples = st.eq === st.tot, prog = simples ? fmtN(st.tot) + ' de ' + fmtN(CFG.meta) + ' gerados' : fmtN(st.eq) + ' de ' + fmtN(CFG.meta) + ' apostas simples';
+  var h = '<section class="card"><div class="kv2"><b style="font-size:14px;font-weight:700">' + (st.mx ? 'Lote ' + st.num + ' de ' + Math.max(st.lotes, st.num) : st.falta ? 'Meta quase atingida' : 'Meta atingida') + '</b><span id="g-prog">' + prog + '</span></div>' +
+    '<div class="prog" role="img" aria-label="' + prog + '"><i style="width:' + Math.min(100, st.eq / CFG.meta * 100).toFixed(1) + '%"></i></div>' +
     '<div class="kv2"><span>Gasto até agora</span><b id="g-gasto">' + fmtR(st.gasto) + ' de ' + fmtR(st.total) + '</b></div>' +
     '<div class="kv2" style="align-items:center"><span>Preço da aposta simples</span><b>' + fmtR(CFG.preco) + ' · <button type="button" class="linkbtn" data-act="cfg" aria-expanded="' + state.cfgOpen + '">' + (state.cfgOpen ? 'fechar' : 'alterar') + '</button></b></div>';
-  if (state.cfgOpen) h += '<div class="frow"><label class="flabel" for="cfg-meta">Meta de jogos</label><input class="num" id="cfg-meta" data-chg="cfg-meta" type="text" inputmode="numeric" value="' + CFG.meta + '"></div>' +
+  if (state.cfgOpen) h += '<div class="frow"><label class="flabel" for="cfg-meta">Meta de apostas simples</label><input class="num" id="cfg-meta" data-chg="cfg-meta" type="text" inputmode="numeric" value="' + CFG.meta + '"></div>' +
     '<div class="frow"><label class="flabel" for="cfg-preco">Preço da aposta simples (R$)</label><input class="num" id="cfg-preco" data-chg="cfg-preco" type="text" inputmode="decimal" value="' + CFG.preco.toFixed(2).replace('.', ',') + '"></div>' +
     '<div class="frow"><label class="flabel" for="cfg-lote">Tamanho padrão do lote</label><input class="num" id="cfg-lote" data-chg="cfg-lote" type="text" inputmode="numeric" value="' + CFG.lote + '"></div>';
   return h + '</section>';
@@ -1488,30 +1601,40 @@ function viewGerador() {
   return h + '<div class="gcols"><div>' + metaCard(st) + '</div><div>' + (state.gmodo === 'fechamento' ? viewFech(st) : viewConfig(st)) + '</div></div>';
 }
 function viewConfig(st) {
-  var q = qNow(st), chk = function (id, on, label, extra) { return '<label class="check"><input type="checkbox" data-chg="' + id + '"' + (on ? ' checked' : '') + (extra ? ' disabled' : '') + '><span class="g">' + label + '</span>' + (extra ? '<span class="small">' + extra + '</span>' : '') + '</label>'; };
+  var q = qNow(st), chk = function (id, on, label, extra, desc) { return '<label class="check"><input type="checkbox" data-chg="' + id + '"' + (on ? ' checked' : '') + (extra ? ' disabled' : '') + '><span class="g">' + label + (desc ? '<span class="d">' + desc + '</span>' : '') + '</span>' + (extra ? '<span class="small">' + extra + '</span>' : '') + '</label>'; };
   return '<section class="card"><div style="display:flex;flex-direction:column;gap:6px"><label class="flabel" for="g-q">Quantos jogos gerar neste lote</label><div class="stepper">' +
     '<button type="button" class="btn" data-act="q-" aria-label="Diminuir quantidade">−</button><input class="num" id="g-q" data-chg="q" type="text" inputmode="numeric" value="' + q + '"><button type="button" class="btn" data-act="q+" aria-label="Aumentar quantidade">+</button></div></div>' +
     '<div class="frow"><span class="flabel" id="lb-k">Dezenas por jogo</span><div class="seg" role="group" aria-labelledby="lb-k">' + [6, 7, 8, 9].map(function (k) { return '<button type="button" data-act="kdez" data-v="' + k + '" aria-pressed="' + (CFG.k === k) + '" style="min-width:44px">' + k + '</button>'; }).join('') + '</div></div>' +
-    (CFG.k > 6 ? '<p class="small">Um jogo de ' + CFG.k + ' dezenas custa ' + APOSTAS[CFG.k] + ' apostas simples (' + fmtR(APOSTAS[CFG.k] * CFG.preco) + '). Os filtros avançados valem só para jogos de 6 dezenas.</p>' : '') +
+    (CFG.k > 6 ? '<p class="small">Um jogo de ' + CFG.k + ' dezenas vale ' + APOSTAS[CFG.k] + ' apostas simples (' + fmtR(APOSTAS[CFG.k] * CFG.preco) + ') e conta assim na meta. Os filtros avançados e a diversidade máxima valem só para jogos de 6 dezenas.</p>' : '') +
     '<div class="frow"><label class="flabel" for="g-cmp">Comparar com os últimos</label><span class="fctl"><input class="num" id="g-cmp" data-chg="cmp" type="text" inputmode="numeric" value="' + CFG.cmp + '" style="width:76px">sorteios</span></div></section>' +
-    '<section class="card checks">' + chk('r-rep', true, 'Nunca repetir jogo já gerado', 'sempre ligado') + chk('r-naoSena', CFG.naoSena, 'Não repetir sena já sorteada') + chk('r-seq', CFG.seq, 'Evitar sequências e datas') + chk('r-equil', CFG.equil, 'Equilibrar o uso das 60 dezenas') +
+    '<section class="card checks"><h3 class="grp">Integridade</h3>' + chk('r-rep', true, 'Nunca repetir jogo já gerado', 'sempre ligado', 'Vale também para as apostas simples dentro de jogos com 7 a 9 dezenas.') + '</section>' +
+    '<section class="card checks"><h3 class="grp">Diversidade</h3>' + chk('r-equil', CFG.equil, 'Equilibrar o uso das 60 dezenas', '', 'Dá mais peso às dezenas menos usadas até agora.') +
+    chk('r-div', CFG.div, 'Diversidade máxima', CFG.k > 6 ? 'só para 6 dezenas' : '', 'Nenhum par de jogos com 3 ou mais dezenas iguais. Com 500 jogos, a chance de pelo menos uma quadra sobe de 19,5% para 20,8% (conta exata), com o mesmo custo. Pode demorar mais para gerar perto da meta.') + '</section>' +
+    '<section class="card checks"><h3 class="grp">Preferências <span>não mudam a chance de nenhum jogo</span></h3>' + chk('r-seq', CFG.seq, 'Evitar sequências e datas', '', 'Recusa 3 dezenas seguidas, todas até 31, mesma linha ou coluna e saltos iguais. A ideia é dividir o prêmio com menos gente, se muitos apostadores jogam datas e sequências; não há dados para comprovar.') +
+    chk('r-naoSena', CFG.naoSena, 'Não repetir sena já sorteada', '', 'Cada sorteio é independente: uma sena que já saiu tem a mesma chance das outras.') +
     '<button type="button" class="rowlink" data-act="gview" data-v="filtros"><span><b>Filtros avançados</b><span>soma, gap, pares e quadrantes · ' + pl(filtersOn(), 'ligado', 'ligados') + '</span></span>' + CHEV_R + '</button></section>' +
-    (st.falta ? '<button type="button" class="btn primary big" id="g-go" data-act="gerar"' + (state.busy ? ' disabled' : '') + '>' + gerarLabel(st) + '</button>'
-      : '<div class="note">Você já tem os ' + fmtN(CFG.meta) + ' jogos da meta. Para gerar mais, aumente a meta em "alterar".</div>');
+    (st.mx ? '<button type="button" class="btn primary big" id="g-go" data-act="gerar"' + (state.busy ? ' disabled' : '') + '>' + gerarLabel(st) + '</button>'
+      : st.falta ? '<div class="note warn">Faltam ' + pl(st.falta, 'aposta simples', 'apostas simples') + ' para a meta, e um jogo de ' + CFG.k + ' dezenas vale ' + st.un + '. Escolha 6 dezenas ou aumente a meta em "alterar".</div>'
+      : '<div class="note">Você já tem as ' + fmtN(CFG.meta) + ' apostas simples da meta. Para gerar mais, aumente a meta em "alterar".</div>');
 }
-var sobraCache = { key: '', pct: 0 };
-function sobra() {
+var sobraCache = { key: '', pct: 0, cada: [0, 0, 0, 0] };
+function sobra() {   // amostra de 4.000 jogos sorteados ao acaso: quanto passa em todos os filtros ligados e quanto cada filtro, sozinho, descarta
   var key = JSON.stringify(CFG.f);
-  if (sobraCache.key !== key) { var ok = 0, M = 4000, u = new Array(61).fill(0); for (var i = 0; i < M; i++) if (passF(pickGame(6, u, false))) ok++; sobraCache = { key: key, pct: Math.round(ok / M * 100) }; }
+  if (sobraCache.key !== key) {
+    var ok = 0, M = 4000, u = new Array(61).fill(0), p = [0, 0, 0, 0], i, k;
+    for (i = 0; i < M; i++) { var g = pickGame(6, u, false), e = passEach(g, CFG.f); for (k = 0; k < 4; k++) if (e[k]) p[k]++; if (passF(g)) ok++; }
+    sobraCache = { key: key, pct: Math.round(ok / M * 100), cada: p.map(function (x) { return Math.round((1 - x / M) * 100); }) };
+  }
   return sobraCache.pct;
 }
 function viewFiltros() {
+  sobra();
   var f = CFG.f, S = lastN(CFG.cmp), pass = [0, 0, 0, 0], all = 0;
   S.forEach(function (d) { var p = passEach(d.d, f); for (var k = 0; k < 4; k++) if (p[k]) pass[k]++; if (passF(d.d)) all++; });
   var inp = function (id, v, label) { return '<input class="num" data-chg="' + id + '" id="' + id + '" type="text" inputmode="numeric" aria-label="' + label + '" value="' + v + '">'; };
   var card = function (k, i, nome, ctl, desc) {
     return '<section class="card" style="gap:4px;padding:10px 14px"><div class="frow" style="min-height:44px"><label class="check" style="border:0;font-size:15px;font-weight:600"><input type="checkbox" data-chg="f-' + k + '-on"' + (f[k].on ? ' checked' : '') + '>' + nome + '</label><span class="fctl">' + ctl + '</span></div>' +
-      '<span class="small">' + desc + '</span><span style="font-size:12px;font-weight:600">' + (S.length ? 'Passariam ' + fmtN(pass[i]) + ' dos últimos ' + pl(S.length, 'sorteio', 'sorteios') + '.' : 'Sem histórico para comparar.') + '</span></section>';
+      '<span class="small">' + desc + '</span><span style="font-size:12px;font-weight:600">' + (S.length ? 'Passariam ' + fmtN(pass[i]) + ' dos últimos ' + pl(S.length, 'sorteio', 'sorteios') + '.' : 'Sem histórico para comparar.') + ' Sozinho, descarta cerca de ' + sobraCache.cada[i] + '% das combinações.</span></section>';
   };
   return '<header class="top"><button type="button" class="linkbtn" data-act="gview" data-v="config" style="align-self:flex-start">‹ Voltar para o Gerador</button><h1>Filtros avançados</h1><p class="sub">Valem para os próximos lotes do modo Espalhado, em jogos de 6 dezenas</p></header>' +
     '<div class="grid2">' +
@@ -1519,7 +1642,7 @@ function viewFiltros() {
     card('gap', 1, 'Gap', 'de' + inp('f-gap-min', f.gap.min, 'Amplitude mínima') + 'a' + inp('f-gap-max', f.gap.max, 'Amplitude máxima'), 'Amplitude: a maior dezena do jogo menos a menor.') +
     card('pares', 2, 'Pares', 'de' + inp('f-pares-min', f.pares.min, 'Mínimo de pares') + 'a' + inp('f-pares-max', f.pares.max, 'Máximo de pares'), 'Quantidade de dezenas pares no jogo.') +
     card('quad', 3, 'Quadrantes', 'no mínimo' + inp('f-quad-min', f.quad.min, 'Mínimo de quadrantes'), 'Cantos do volante com pelo menos uma dezena.') + '</div>' +
-    '<div class="note"><b id="f-sobra">Sobram cerca de ' + sobra() + '% das combinações</b><br>' + (S.length ? 'Com os filtros ligados, passariam ' + fmtN(all) + ' dos últimos ' + pl(S.length, 'sorteio', 'sorteios') + '. ' : '') + 'Os filtros definem o formato dos jogos, não a chance de cada um.</div>' +
+    '<div class="note"><b id="f-sobra">Sobram cerca de ' + sobra() + '% das combinações</b><br>' + (S.length ? 'Com os filtros ligados, passariam ' + fmtN(all) + ' dos últimos ' + pl(S.length, 'sorteio', 'sorteios') + '. ' : '') + 'São preferências de formato: não mudam a chance de nenhum jogo, e o modo Fechamento não usa estes filtros.</div>' +
     '<button type="button" class="btn primary big" data-act="gview" data-v="config">Salvar filtros</button>';
 }
 function gameCard(g, n, S) {
@@ -1536,12 +1659,18 @@ function viewPrev() {
   var line = function (t) { return '<div style="display:flex;gap:8px;font-size:13px">' + ok + '<span>' + t + '</span></div>'; };
   return '<header class="top"><div class="top-row"><h1>Lote ' + p.num + ' gerado</h1><button type="button" class="linkbtn" data-act="prev-drop">Ajustar</button></div>' +
     '<p class="sub">' + pl(p.jogos.length, 'jogo', 'jogos') + ' · nenhum repetido · ' + fmtR(custoDe(p.jogos)) + '</p></header>' +
-    (p.faltou ? '<div class="note warn">Só consegui gerar ' + p.jogos.length + ' dos ' + (p.jogos.length + p.faltou) + ' jogos pedidos com estas regras. Afrouxe os filtros para completar o lote.</div>' : '') +
+    (p.faltou ? '<div class="note warn">Só consegui gerar ' + p.jogos.length + ' dos ' + (p.jogos.length + p.faltou) + ' jogos pedidos com estas regras. Afrouxe os filtros' + (CFG.div ? ' ou desligue a diversidade máxima' : '') + ' para completar o lote.</div>' : '') +
     '<section class="card"><h2>Equilíbrio do lote</h2>' + (p.k === 6 && filtersOn() ? line('Filtros avançados: ' + p.jogos.length + ' de ' + pl(p.jogos.length, 'jogo aprovado', 'jogos aprovados')) : '') +
     line('Cobertura: ' + coverage(p.jogos) + ' das 60 dezenas aparecem no lote') +
     (S.length ? '<p style="font-size:13px;padding-top:8px;border-top:1px solid var(--line-soft)"><b style="font-weight:600">Retroteste:</b> nos últimos ' + pl(S.length, 'sorteio', 'sorteios') + ', o lote teria feito ' + retroLine(tot).replace(/ · /g, ', ') + '.</p><p class="small">O retroteste mostra o passado. Não indica chance futura.</p>' : '') + '</section>' +
     '<div class="games">' + p.jogos.map(function (g, i) { return gameCard(g, base + i + 1, S); }).join('') + '</div>' +
     '<div class="actions-bar"><button type="button" class="btn big" data-act="prev-drop"' + (state.busy ? ' disabled' : '') + '>Descartar</button><button type="button" class="btn primary big grow" data-act="prev-save"' + (state.busy ? ' disabled' : '') + '>' + (state.busy ? 'Salvando…' : 'Salvar em Meus jogos') + '</button></div>';
+}
+function verNote(fe) {
+  var v = fe.ver;
+  if (v.ok) return '<div class="note" id="fe-ver"><b>GARANTIA VERIFICADA</b><br>Conferi as ' + fmtN(v.casos) + ' combinações de ' + v.m + ' dezenas das suas ' + v.v + ': em todas, pelo menos um dos ' + pl(v.n, 'jogo', 'jogos') + ' tem ' + v.t + ' ou mais dessas dezenas. Como os jogos só usam dezenas do conjunto, isso vale para qualquer um dos ' + fmtN(TOTAL) + ' sorteios possíveis em que ' + v.m + ' ou mais dezenas saiam do conjunto.' +
+    '<div class="row" style="margin-top:8px"><button type="button" class="btn grow" data-act="fech-rel">Baixar relatório de auditoria</button></div></div>';
+  return '<div class="note warn" id="fe-ver" role="alert"><b>GARANTIA NÃO VERIFICADA</b><br>A conferência achou ' + fmtN(v.falhas) + ' ' + (v.falhas === 1 ? 'combinação' : 'combinações') + ' sem cobertura' + (v.exemplo ? ' (por exemplo, ' + v.exemplo.map(f2).join(' ') + ')' : '') + (v.fora ? ', ' + v.fora + ' jogo(s) fora do conjunto' : '') + (v.repetidos ? ', ' + v.repetidos + ' jogo(s) repetido(s)' : '') + '. Não salve este fechamento.</div>';
 }
 function viewFech(st) {
   var gar = GAR[state.gar], sel = state.poolSel, fe = state.fech, i, cells = '';
@@ -1558,26 +1687,50 @@ function viewFech(st) {
       '<div class="kv"><span>Custo dos jogos novos</span><b>' + fmtR(custoDe(fe.novos)) + '</b></div>' +
       '<div class="kv"><span>Faltam ' + fmtN(st.falta) + ' para a meta</span><b>' + (cabe ? 'cabe' + (st.falta - fe.novos.length ? ', sobram ' + (st.falta - fe.novos.length) : '') : 'não cabe: passam ' + (fe.novos.length - st.falta)) + '</b></div></section>' +
       '<div class="mono">' + fe.jogos.slice(0, 5).map(function (g) { return g.map(f2).join(' '); }).join('\n') + (fe.jogos.length > 5 ? '\n… mais ' + (fe.jogos.length - 5) : '') + '</div>' +
+      verNote(fe) +
       (cabe ? '' : '<div class="note warn">Para salvar, diminua as dezenas ou aumente a meta em "alterar".</div>') +
-      '<button type="button" class="btn primary big" data-act="fech-save"' + (!cabe || !fe.novos.length || state.busy ? ' disabled' : '') + '>' + (state.busy ? 'Salvando…' : 'Salvar ' + pl(fe.novos.length, 'jogo', 'jogos') + ' em lotes de ' + CFG.lote) + '</button>';
+      '<button type="button" class="btn primary big" data-act="fech-save"' + (!cabe || !fe.novos.length || state.busy || !fe.ver.ok ? ' disabled' : '') + '>' + (state.busy ? 'Salvando…' : 'Salvar ' + pl(fe.novos.length, 'jogo', 'jogos') + ' em lotes de ' + CFG.lote) + '</button>';
   } else h += '<button type="button" class="btn primary big" data-act="fech-calc"' + (sel.length < 7 || sel.length > gar.max ? ' disabled' : '') + '>Calcular fechamento</button>';
-  return h + '<p class="small">O fechamento não aumenta a chance de sena. Ele concentra os jogos em menos dezenas em troca dessa garantia, e não usa os filtros nem as regras do modo Espalhado.</p>';
+  return h + '<p class="small">O fechamento não aumenta a chance de sena. Ele concentra os jogos em menos dezenas em troca dessa garantia, e não usa os filtros nem as regras do modo Espalhado. Com o mesmo dinheiro em jogos espalhados, a chance de pelo menos uma quadra é maior (18 dezenas, 305 jogos: 12,4% espalhados contra 6,0% no fechamento); o fechamento só garante o piso quando as sorteadas caem dentro das suas dezenas.</p>';
 }
 
 /* ---------- Tela: Meus jogos ---------- */
-function dupCount(list) { var s = new Set(), d = 0; list.forEach(function (g) { var k = g.join('-'); if (s.has(k)) d++; else s.add(k); }); return d; }
+function dupCount(list) { var s = new Set(), d = 0; list.forEach(function (g) { simplesDe(g).forEach(function (x) { var k = x.join('-'); if (s.has(k)) d++; else s.add(k); }); }); return d; }   // apostas simples que aparecem mais de uma vez
+function dec4(x) { return x.toFixed(x < 0.001 ? 6 : 4).replace('.', ','); }   // média de prêmios por sorteio: casas suficientes para a sena não virar 0
+function chanceTxt(c) {   // "1 em N" e a porcentagem, com casas suficientes para não virar 0
+  if (!c) return 'nenhum sorteio';
+  var p = c / TOTAL; return fmtPct(p, p >= 0.01 ? 2 : p >= 0.0001 ? 3 : 4) + '% (1 em ' + fmtN(Math.round(TOTAL / c)) + ')';
+}
+function probCard(all) {
+  if (!all.length) return '';
+  var p = state.prob, key = conjKey(all), h = '<section class="card" id="prob-card"><h2>Chances deste conjunto</h2>';
+  if (p && p.busy) return h + '<p class="small" role="status">Calculando sobre os 50.063.860 sorteios possíveis… <b id="prob-pct">' + p.pct + '%</b></p></section>';
+  if (!(p && p.res && p.res.key === key)) {
+    return h + '<p class="small">Conta exata sobre todos os ' + fmtN(TOTAL) + ' resultados possíveis, para os ' + pl(all.length, 'jogo salvo', 'jogos salvos') + '. Leva alguns segundos.' + (p && p.res ? ' Os jogos mudaram desde o último cálculo.' : '') + '</p>' +
+      '<div class="row"><button type="button" class="btn grow" data-act="prob-calc">Calcular chances exatas</button></div></section>';
+  }
+  var r = p.res, row = function (nome, c, id) { return '<div class="kv"><span>' + nome + '</span><b id="' + id + '">' + chanceTxt(c) + '</b></div>'; };
+  var ps = r.pares ? '<div class="kv"><span>Pares de jogos com 3 ou mais dezenas iguais</span><b id="pr-pares">' + fmtN(r.pares[3] + r.pares[4] + r.pares[5] + r.pares[6]) + ' de ' + fmtN(r.n * (r.n - 1) / 2) + '</b></div>' : '';
+  return h + '<p class="small">Contagem exata de sorteios, de um total de ' + fmtN(TOTAL) + '. "Pelo menos" inclui os resultados melhores.</p>' +
+    '<div class="pr">' + row('Pelo menos uma quadra', r.c4, 'pr-c4') + row('Pelo menos uma quina', r.c5, 'pr-c5') + row('Pelo menos uma sena', r.c6, 'pr-c6') + '</div>' +
+    '<p class="small" id="pr-det">Sorteios em que o melhor resultado seria: sena ' + fmtN(r.melhorSena) + ' · quina ' + fmtN(r.melhorQuina) + ' · quadra ' + fmtN(r.melhorQuadra) + ' · nenhum prêmio ' + fmtN(r.nada) + '.</p>' +
+    '<div class="pr"><div class="kv"><span>Prêmios esperados por sorteio (média)</span><b id="pr-esp">quadra ' + dec4(r.esp.quadra) + ' · quina ' + dec4(r.esp.quina) + ' · sena ' + dec4(r.esp.sena) + '</b></div>' + ps +
+    '<div class="kv"><span>Grupos de 4 dezenas diferentes nos jogos</span><b id="pr-sub4">' + fmtN(r.sub4.dist) + ' de ' + fmtN(r.sub4.tot) + '</b></div></div>' +
+    '<p class="small">A média de prêmios (linha "esperados") é a mesma para quaisquer jogos distintos do mesmo tamanho. Jogos que se parecem pouco fazem alguma quadra em mais sorteios, e a chance de sena é igual. São contas sobre os sorteios possíveis, não previsões.</p>' +
+    '<div class="row"><button type="button" class="btn grow" data-act="prob-calc">Calcular de novo</button></div></section>';
+}
 function viewJogos() {
   if (state.exp) return viewExport();
-  var all = allGames(), gs = games(), apost = LOTES.filter(function (L) { return L.apostado; }), nap = apost.reduce(function (a, L) { return a + L.jogos.length; }, 0), dups = dupCount(all), q = state.jq;
+  var all = allGames(), gs = games(), apost = LOTES.filter(function (L) { return L.apostado; }), nap = apost.reduce(function (a, L) { return a + L.jogos.length; }, 0), dups = dupCount(all), q = state.jq, eqN = totalEq(all);
   var h = '<header class="top"><div class="top-row"><h1>Meus jogos</h1>' + (all.length ? '<button type="button" class="linkbtn" data-act="jedit">' + (state.jedit ? 'Concluir' : 'Editar') + '</button>' : '') + '</div>' +
-    '<p class="sub" id="j-sub">' + fmtN(all.length) + ' de ' + fmtN(CFG.meta) + ' salvos · ' + pl(LOTES.length, 'lote', 'lotes') + ' · ' + (dups ? pl(dups, 'repetido', 'repetidos') : 'nenhum repetido') + '</p></header>';
+    '<p class="sub" id="j-sub">' + (eqN === all.length ? fmtN(all.length) + ' de ' + fmtN(CFG.meta) + ' salvos' : fmtN(eqN) + ' de ' + fmtN(CFG.meta) + ' apostas simples em ' + pl(all.length, 'jogo', 'jogos')) + ' · ' + pl(LOTES.length, 'lote', 'lotes') + ' · ' + (dups ? pl(dups, 'repetido', 'repetidos') : 'nenhum repetido') + '</p></header>';
   if (state.jmsg) h += '<div class="note' + (state.jmsg.warn ? ' warn' : '') + '" role="status">' + state.jmsg.html + '</div>';
   if (state.bak) h += '<section class="card"><h2>Restaurar backup</h2><p style="font-size:13px">O arquivo tem ' + pl(state.bak.n, 'jogo', 'jogos') + ' em ' + pl(state.bak.lotes.length, 'lote', 'lotes') + '. Restaurar substitui os ' + pl(all.length, 'jogo atual', 'jogos atuais') + '.</p><div class="row"><button type="button" class="btn primary grow" data-act="bak-ok">Restaurar</button><button type="button" class="btn grow" data-act="bak-no">Cancelar</button></div></section>';
   if (!all.length && !state.jedit) return h + '<section class="card"><h2>Nenhum jogo salvo ainda</h2><p class="small">Gere um lote na aba Gerador e toque em Salvar em Meus jogos. Os jogos aparecem aqui, iguais no celular e no notebook.</p><div class="row"><button type="button" class="btn" data-act="jedit">Restaurar um backup</button></div></section>';
-  h += '<div class="tiles"><div class="tile"><span class="small">Custo</span><b id="j-custo">' + fmtR(custoDe(all)) + '</b><span class="small">' + fmtN(all.length) + ' ' + (all.length === 1 ? 'jogo' : 'jogos') + '</span></div>' +
+  h += '<div class="tiles"><div class="tile"><span class="small">Custo</span><b id="j-custo">' + fmtR(custoDe(all)) + '</b><span class="small">' + fmtN(all.length) + ' ' + (all.length === 1 ? 'jogo' : 'jogos') + (eqN === all.length ? '' : ' · ' + fmtN(eqN) + ' simples') + '</span></div>' +
     '<div class="tile"><span class="small">Apostados</span><b id="j-apost">' + fmtN(nap) + ' de ' + fmtN(all.length) + '</b><span class="small">' + apost.length + ' de ' + pl(LOTES.length, 'lote', 'lotes') + '</span></div>' +
     '<div class="tile"><span class="small">Cobertura</span><b id="j-cob">' + coverage(all) + ' de 60</b><span class="small">dezenas usadas</span></div></div>' +
-    '<div class="row"><button type="button" class="btn grow" data-act="exp-open"' + (all.length ? '' : ' disabled') + '>Exportar jogos: PDF, Excel ou TXT</button></div>';
+    '<div class="row"><button type="button" class="btn grow" data-act="exp-open"' + (all.length ? '' : ' disabled') + '>Exportar jogos: PDF, Excel ou TXT</button></div>' + probCard(all);
   if (state.jedit) h += '<div class="row"><button type="button" class="btn grow" data-act="bak-save"' + (all.length ? '' : ' disabled') + '>Baixar backup</button><button type="button" class="btn grow" data-act="bak-load">Restaurar backup</button><input type="file" id="bakfile" data-chg="bakfile" accept=".json" hidden></div>';
   h += '<div class="frow" style="flex-wrap:nowrap"><label class="flabel" for="j-q" style="white-space:nowrap">Buscar dezena</label><input class="field" id="j-q" data-chg="jq" type="text" inputmode="numeric" placeholder="Ex.: 07" value="' + (q ? f2(q) : '') + '" style="flex:1;min-width:0"></div>';
   if (q) { var nq = gs.filter(function (x) { return x.g.indexOf(q) >= 0; }).length; h += '<p class="small" id="j-found">' + pl(nq, 'jogo', 'jogos') + ' com a dezena ' + f2(q) + '.</p>'; }
@@ -1637,10 +1790,19 @@ function buildPdf(list) {
 }
 
 /* ---------- Tela: Conferir ---------- */
+// Prêmios de um jogo de k dezenas com h acertos: cada uma das C(k,6) apostas simples vale sena (6 acertos), quina (5) ou quadra (4).
+// Com h acertos entre as k dezenas: senas C(h,6), quinas C(h,5)·(k−h), quadras C(h,4)·C(k−h,2).
+function premiosDe(g, s) { var k = g.length, h = 0; g.forEach(function (v) { if (s.has(v)) h++; }); return { h: h, sena: nCk(h, 6), quina: nCk(h, 5) * (k - h), quadra: nCk(h, 4) * nCk(k - h, 2) }; }
 function conferir(res) {
-  var s = new Set(res), c = [0, 0, 0, 0, 0, 0, 0], rows = games().map(function (x) { var h = 0; x.g.forEach(function (v) { if (s.has(v)) h++; }); h = Math.min(h, 6); c[h]++; return { x: x, h: h }; });
-  rows.sort(function (a, b) { return b.h - a.h || a.x.n - b.x.n; });
-  return { c: c, rows: rows };
+  var s = new Set(res), c = [0, 0, 0, 0, 0, 0, 0], tot = { sena: 0, quina: 0, quadra: 0 }, eq = 0, rows = games().map(function (x) {
+    var p = premiosDe(x.g, s), h = Math.min(p.h, 6); c[h]++; tot.sena += p.sena; tot.quina += p.quina; tot.quadra += p.quadra; eq += APOSTAS[x.g.length] || 1; return { x: x, h: h, p: p };
+  });
+  rows.sort(function (a, b) { return b.h - a.h || (b.p.quina + b.p.quadra) - (a.p.quina + a.p.quadra) || a.x.n - b.x.n; });
+  return { c: c, rows: rows, sena: tot.sena, quina: tot.quina, quadra: tot.quadra, eq: eq, nada: eq - tot.sena - tot.quina - tot.quadra };
+}
+function premioTxt(o) {
+  var parts = []; if (o.p.sena) parts.push(pl(o.p.sena, 'sena', 'senas')); if (o.p.quina) parts.push(pl(o.p.quina, 'quina', 'quinas')); if (o.p.quadra) parts.push(pl(o.p.quadra, 'quadra', 'quadras'));
+  return parts.join(' + ');
 }
 function viewConferir() {
   var n = games().length, h = '<header class="top"><h1>Conferir</h1><p class="sub">Mega da Virada · sorteio em 31/12/2026</p></header>';
@@ -1654,13 +1816,16 @@ function viewConferir() {
   h += '</section>';
   if (!(CONF && CONF.res)) return h + '<p class="small">' + (n ? pl(n, 'jogo salvo pronto', 'jogos salvos prontos') + ' para conferir.' : 'Você ainda não tem jogos salvos para conferir.') + '</p>';
   var r = conferir(CONF.res), names = { 4: ' · Quadra', 5: ' · Quina', 6: ' · Sena' }, set = new Set(CONF.res);
-  h += '<div class="tiles four"><div class="tile' + (r.c[6] ? ' hot' : '') + '"><b id="c-sena">' + r.c[6] + '</b><span class="small">Sena</span></div><div class="tile' + (r.c[5] ? ' hot' : '') + '"><b id="c-quina">' + r.c[5] + '</b><span class="small">Quina</span></div>' +
-    '<div class="tile' + (r.c[4] ? ' hot' : '') + '"><b id="c-quadra">' + r.c[4] + '</b><span class="small">Quadra</span></div><div class="tile"><b id="c-nada">' + fmtN(n - r.c[4] - r.c[5] - r.c[6]) + '</b><span class="small">Sem prêmio</span></div></div>';
+  var multi = r.eq !== n;
+  h += '<div class="tiles four"><div class="tile' + (r.sena ? ' hot' : '') + '"><b id="c-sena">' + fmtN(r.sena) + '</b><span class="small">Sena</span></div><div class="tile' + (r.quina ? ' hot' : '') + '"><b id="c-quina">' + fmtN(r.quina) + '</b><span class="small">Quina</span></div>' +
+    '<div class="tile' + (r.quadra ? ' hot' : '') + '"><b id="c-quadra">' + fmtN(r.quadra) + '</b><span class="small">Quadra</span></div><div class="tile"><b id="c-nada">' + fmtN(r.nada) + '</b><span class="small">Sem prêmio</span></div></div>' +
+    (multi ? '<p class="small" id="c-eq">Os números acima contam apostas simples: ' + pl(n, 'jogo', 'jogos') + ' valem ' + fmtN(r.eq) + ' apostas simples.</p>' : '');
   if (!n) return h + '<p class="small">Você ainda não tem jogos salvos para conferir.</p>';
   return h + '<h2>Jogos com mais acertos</h2><section class="card list">' + r.rows.slice(0, 20).map(function (o) {
-    return '<div class="jrow" style="flex-wrap:wrap;padding:8px 14px"><span class="id" style="flex:1 0 100%;display:flex;justify-content:space-between"><b style="color:var(--ink);font-size:13px">Jogo ' + o.x.n + ' · lote ' + o.x.L.num + '</b><span style="font-size:13px;color:var(--ink)">' + pl(o.h, 'acerto', 'acertos') + (names[o.h] || '') + '</span></span>' +
+    var lbl = o.x.g.length === 6 ? pl(o.h, 'acerto', 'acertos') + (names[o.h] || '') : pl(o.h, 'acerto', 'acertos') + (premioTxt(o) ? ' · ' + premioTxt(o) : '');
+    return '<div class="jrow" style="flex-wrap:wrap;padding:8px 14px"><span class="id" style="flex:1 0 100%;display:flex;justify-content:space-between;gap:8px"><b style="color:var(--ink);font-size:13px">Jogo ' + o.x.n + ' · lote ' + o.x.L.num + '</b><span style="font-size:13px;color:var(--ink);text-align:right">' + lbl + '</span></span>' +
       '<div class="balls">' + o.x.g.map(function (v) { return ball(v, set.has(v) ? 'hit' : 'dim'); }).join('') + '</div></div>';
-  }).join('') + '</section><p class="small">' + pl(n, 'jogo conferido', 'jogos conferidos') + '. Em jogos com mais de 6 dezenas, conto o melhor prêmio do jogo.</p>';
+  }).join('') + '</section><p class="small">' + pl(n, 'jogo conferido', 'jogos conferidos') + (multi ? ' (' + pl(r.eq, 'aposta simples', 'apostas simples') + ')' : '') + '.' + (multi ? ' Um jogo com mais de 6 dezenas vale várias apostas simples, e cada uma que acerta 4, 5 ou 6 dezenas conta como um prêmio, como na Caixa. Os valores em reais não são calculados.' : '') + '</p>';
 }
 function setConf(c) { CONF = c; state.cmsg = null; if (db) (c ? db.doc('conf/virada').set(c) : db.doc('conf/virada').delete()).catch(function () {}); }
 
@@ -1674,9 +1839,9 @@ ACTS['q+'] = function () { state.q = Math.min(100, qNow(gstat()) + 1); };
 ACTS.kdez = function (v) { CFG.k = +v; saveCfg(); };
 ACTS.gview = function (v) { state.gview = v; window.scrollTo(0, 0); };
 ACTS.gerar = function () {
-  var st = gstat(); if (!st.falta || state.busy) return;
+  var st = gstat(); if (!st.mx || state.busy) return;
   var q = qNow(st), r = generate(q, CFG.k);
-  if (!r.jogos.length) { state.gmsg = { warn: true, html: 'Não consegui gerar nenhum jogo com estas regras. Afrouxe os filtros avançados e tente de novo.' }; return; }
+  if (!r.jogos.length) { state.gmsg = { warn: true, html: 'Não consegui gerar nenhum jogo com estas regras. Afrouxe os filtros avançados' + (CFG.div ? ', desligue a diversidade máxima' : '') + ' e tente de novo.' }; return; }
   state.gmsg = null; state.prev = { num: st.num, jogos: r.jogos, faltou: r.faltou, k: CFG.k }; window.scrollTo(0, 0);
 };
 ACTS['prev-drop'] = function () { if (state.busy) return; state.prev = null; };
@@ -1685,7 +1850,7 @@ ACTS['prev-save'] = function () {
   var jogos = [];
   state.busy = true;
   emDia().then(function () {
-    var keys = new Set(allGames().map(function (g) { return g.join('-'); })); jogos = p.jogos.filter(function (g) { return !keys.has(g.join('-')); });   // outro aparelho pode ter salvo o mesmo jogo
+    var keys = eqKeys(allGames()); jogos = p.jogos.filter(function (g) { return !jaTem(g, keys); });   // outro aparelho pode ter salvo o mesmo jogo
     return putLote(nextNum(), jogos, 'espalhado');
   }).then(function () { state.busy = false; state.prev = null; state.q = CFG.lote; state.gmsg = { html: '<b>Lote salvo em Meus jogos.</b> ' + pl(jogos.length, 'jogo novo', 'jogos novos') + '.' }; render(); window.scrollTo(0, 0); })
     .catch(function () { state.busy = false; state.gmsg = null; state.prev = p; state.jmsg = null; render(); var m = document.querySelector('.actions-bar'); if (m) m.insertAdjacentHTML('beforebegin', '<div class="note warn" role="alert">Não consegui salvar o lote agora. Tente de novo em instantes; os jogos continuam nesta tela.</div>'); });
@@ -1701,8 +1866,8 @@ ACTS['fech-calc'] = function () {
   if (pool.length < 7 || pool.length > gar.max) return;
   state.fech = { busy: true }; render();
   setTimeout(function () {
-    var jogos = fechar(pool, gar.t, gar.m), keys = new Set(allGames().map(function (g) { return g.join('-'); }));
-    state.fech = { pool: pool, gar: state.gar, jogos: jogos, novos: jogos.filter(function (g) { return !keys.has(g.join('-')); }) }; render();
+    var jogos = fechar(pool, gar.t, gar.m), keys = eqKeys(allGames());
+    state.fech = { pool: pool, gar: state.gar, jogos: jogos, novos: jogos.filter(function (g) { return !jaTem(g, keys); }), ver: verificarGarantia(pool, jogos, gar.t, gar.m) }; render();
   }, 30);
   return false;
 };
@@ -1711,12 +1876,27 @@ ACTS['fech-save'] = function () {
   var novos = [], n = 0;
   state.busy = true;
   emDia().then(function () {
-    var keys = new Set(allGames().map(function (g) { return g.join('-'); })), chain = Promise.resolve(), num = nextNum();
-    novos = fe.novos.filter(function (g) { return !keys.has(g.join('-')); });
+    var keys = eqKeys(allGames()), chain = Promise.resolve(), num = nextNum();
+    novos = fe.novos.filter(function (g) { return !jaTem(g, keys); });
     for (var i = 0; i < novos.length; i += CFG.lote) (function (part, k) { chain = chain.then(function () { n++; return putLote(num + k, part, 'fechamento'); }); })(novos.slice(i, i + CFG.lote), i / CFG.lote);
     return chain;
   }).then(function () { state.busy = false; state.fech = null; state.gmsg = { html: '<b>Fechamento salvo em Meus jogos.</b> ' + pl(novos.length, 'jogo', 'jogos') + ' em ' + pl(n, 'lote', 'lotes') + '.' }; render(); window.scrollTo(0, 0); })
     .catch(function () { state.busy = false; state.fech = null; state.gmsg = { warn: true, html: 'Não consegui salvar todos os lotes do fechamento. Confira Meus jogos e calcule de novo: o que já foi salvo não se repete.' }; render(); });
+};
+ACTS['fech-rel'] = function () {
+  var fe = state.fech; if (!fe || !fe.ver) return;
+  saveFile('auditoria-fechamento.txt', relatorioFech(fe)).then(function () { state.gmsg = { html: 'Relatório de auditoria entregue para salvar.' }; render(); })
+    .catch(function (err) { state.gmsg = err && err.code === 'declined' ? { html: 'Download cancelado.' } : { warn: true, html: 'Não consegui baixar o relatório nesta tela.' }; render(); });
+};
+ACTS['prob-calc'] = function () {
+  var all = allGames(); if (!all.length || (state.prob && state.prob.busy)) return;
+  var ctx = probIni(all); state.prob = { busy: true, pct: 0, res: state.prob && state.prob.res }; render();
+  (function tick() {
+    var fim = probStep(ctx, 400000);
+    if (!fim) { var el = document.getElementById('prob-pct'); if (el) el.textContent = Math.min(99, Math.floor(ctx.feito / ctx.total * 100)) + '%'; setTimeout(tick, 0); return; }
+    state.prob = { res: probFim(ctx) }; render();
+  })();
+  return false;
 };
 ACTS.jedit = function () { state.jedit = !state.jedit; state.jdel = ''; state.jmsg = null; };
 ACTS.jtoggle = function (v) { state.jopen[v] = !state.jopen[v]; };
@@ -1783,6 +1963,7 @@ CHG.cmp = function (t) { var n = toInt(t.value); CFG.cmp = n > 0 ? Math.min(n, 1
 CHG['r-naoSena'] = function (t) { CFG.naoSena = t.checked; saveCfg(); };
 CHG['r-seq'] = function (t) { CFG.seq = t.checked; saveCfg(); };
 CHG['r-equil'] = function (t) { CFG.equil = t.checked; saveCfg(); };
+CHG['r-div'] = function (t) { CFG.div = t.checked; saveCfg(); };
 CHG['cfg-meta'] = function (t) { var n = toInt(t.value); if (n >= 1 && n <= 5000) CFG.meta = n; saveCfg(); later(); };
 CHG['cfg-preco'] = function (t) { var n = toMoney(t.value); if (n > 0 && n <= 1000) CFG.preco = Math.round(n * 100) / 100; saveCfg(); later(); };
 CHG['cfg-lote'] = function (t) { var n = toInt(t.value); if (n >= 1 && n <= 100) { CFG.lote = n; state.q = n; } saveCfg(); later(); };
@@ -1834,7 +2015,8 @@ HOOKS.push(function () {
 });
 
 Object.assign(window.MV, { cfg: function () { return CFG; }, lotes: function () { return LOTES; }, conf: function () { return CONF; }, games: games, generate: generate, badPattern: badPattern, passF: passF, passEach: passEach, metrics: metrics,
-  jaSaiu: jaSaiu, fechar: fechar, conferir: conferir, retro: retro, lastN: lastN, txtOf: txtOf, validGame: validGame, setRng: function (f) { rnd = f; sobraCache.key = ''; }, GAR: GAR });
+  jaSaiu: jaSaiu, fechar: fechar, conferir: conferir, retro: retro, lastN: lastN, txtOf: txtOf, validGame: validGame, setRng: function (f) { rnd = f; sobraCache.key = ''; }, GAR: GAR,
+  premiosDe: premiosDe, verificarGarantia: verificarGarantia, relatorioFech: relatorioFech, probExata: probExata, probIni: probIni, probStep: probStep, probFim: probFim, paresIguais: paresIguais, eqKeys: eqKeys, simplesDe: simplesDe, totalEq: totalEq, dupCount: dupCount, trincas: trincas, gstat: gstat });
 
 start();
 })();
