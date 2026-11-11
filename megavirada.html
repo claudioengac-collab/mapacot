@@ -997,7 +997,9 @@ var CHEV_U = '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="cu
 var H = [];            // todos os sorteios, do mais antigo ao mais recente: {n, ymd, d:[6], g, p}
 var META = null, db = null, dbState = 'loading';
 var VIRADA_FORA_DE_3112 = { 2955: true };   // a Mega da Virada de 2025 foi sorteada em 01/01/2026
-function isVirada(s) { var y = Math.floor(s.ymd / 10000); return (s.ymd % 10000 === 1231 && y >= 2009) || VIRADA_FORA_DE_3112[s.n] === true; }
+// A Mega da Virada de 2026 será sorteada em 01/01/2027, às 11h (apostas até 22h de 31/12/2026, segundo a Caixa).
+// Um eventual sorteio comum de 31/12/2026 não é a Virada.
+function isVirada(s) { var y = Math.floor(s.ymd / 10000); return (s.ymd % 10000 === 1231 && y >= 2009 && s.ymd !== 20261231) || VIRADA_FORA_DE_3112[s.n] === true || s.ymd === 20270101; }
 function rowToDraw(r) { return { n: r[0], ymd: r[1], d: [r[2], r[3], r[4], r[5], r[6], r[7]], g: r[8] || 0, p: r[9] || 0 }; }
 function drawToRow(s) { return [s.n, s.ymd].concat(s.d, [s.g || 0, s.p || 0]); }
 function chunkId(n) { return 'p' + f2(Math.floor((n - 1) / 500) + 1); }
@@ -1174,7 +1176,7 @@ function viewSoon(tab) {
   var info = {
     'gerador': ['Gerador', 'Etapa 2', ['Lotes de 20 jogos com controle de custo e da meta de 500', 'Filtros avançados: soma, gap, pares e quadrantes', 'Nunca repetir jogo, evitar sena já sorteada e equilibrar as 60 dezenas', 'Retroteste de cada jogo contra os últimos sorteios', 'Modo Fechamento, com garantia de quadra']],
     'meus-jogos': ['Meus jogos', 'Etapa 3', ['Jogos salvos por lote, iguais no celular e no notebook', 'Custo, cobertura das dezenas e lotes já apostados', 'Exportar em PDF, Excel e TXT']],
-    'conferir': ['Conferir', 'Etapa 3', ['Resultado da Mega da Virada de 31/12', 'Quantos jogos fizeram sena, quina ou quadra', 'Jogos com mais acertos, com as dezenas em destaque']]
+    'conferir': ['Conferir', 'Etapa 3', ['Resultado da Mega da Virada (sorteio em 01/01/2027)', 'Quantos jogos fizeram sena, quina ou quadra', 'Jogos com mais acertos, com as dezenas em destaque']]
   }[tab];
   return '<header class="top"><h1>' + info[0] + '</h1><p class="sub">' + info[1] + ' da construção · ainda não disponível</p></header>' +
     '<section class="card soon"><h2>O que vai entrar aqui</h2><ul>' + info[2].map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul><p class="small">Por enquanto, a aba Histórico já funciona com os dados reais.</p></section>';
@@ -1805,7 +1807,7 @@ function premioTxt(o) {
   return parts.join(' + ');
 }
 function viewConferir() {
-  var n = games().length, h = '<header class="top"><h1>Conferir</h1><p class="sub">Mega da Virada · sorteio em 31/12/2026</p></header>';
+  var n = games().length, h = '<header class="top"><h1>Conferir</h1><p class="sub">Mega da Virada · sorteio em 01/01/2027, às 11h</p></header>';
   if (state.cmsg) h += '<div class="note' + (state.cmsg.warn ? ' warn' : '') + '" role="status">' + state.cmsg.html + '</div>';
   h += '<section class="card"><h2>Dezenas sorteadas</h2>';
   if (CONF && CONF.res) h += '<div class="balls" style="justify-content:space-between">' + CONF.res.map(function (x) { return ball(x, 'big'); }).join('') + '</div><p class="small" id="c-origem">' + esc(CONF.origem || '') + '</p><div class="row"><button type="button" class="btn grow" data-act="c-clear">Trocar o resultado</button></div>';
