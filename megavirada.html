@@ -1220,6 +1220,12 @@ function parseTable(rows) {
   }
   return { list: out, bad: bad, hasX: hasX };
 }
+function fullRef(ws) {   // a planilha da Caixa vem com <dimension ref="A1:T1"> (só a linha 1) e o leitor confiaria nisso: recalcula pelas células que existem
+  var r = 0, c = 0, k, a, cur;
+  for (k in ws) { if (k.charAt(0) === '!') continue; a = XLSX.utils.decode_cell(k); if (a.r > r) r = a.r; if (a.c > c) c = a.c; }
+  cur = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  if (r > cur.e.r || c > cur.e.c) ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(r, cur.e.r), c: Math.max(c, cur.e.c) } });
+}
 function readFile(file) {
   return file.arrayBuffer().then(function (buf) {
     if (!window.XLSX) throw new Error('A leitura de planilhas não carregou. Recarregue a página e tente de novo.');
@@ -1227,7 +1233,7 @@ function readFile(file) {
     if (isText) { var txt = new TextDecoder('utf-8').decode(buf); var sep = (txt.split('\n')[0].match(/;/g) || []).length >= 6 ? ';' : (txt.split('\n')[0].match(/\t/g) || []).length >= 6 ? '\t' : ','; wb = XLSX.read(txt, { type: 'string', raw: true, FS: sep }); }
     else wb = XLSX.read(buf, { type: 'array' });
     var best = { list: [], bad: 0 };
-    wb.SheetNames.forEach(function (nm) { var p = parseTable(XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, raw: true, defval: null })); if (p.list.length > best.list.length) best = p; });
+    wb.SheetNames.forEach(function (nm) { fullRef(wb.Sheets[nm]); var p = parseTable(XLSX.utils.sheet_to_json(wb.Sheets[nm], { header: 1, raw: true, defval: null })); if (p.list.length > best.list.length) best = p; });
     return best;
   });
 }
