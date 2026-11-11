@@ -761,6 +761,39 @@ var _useState27 = useState(init),
   var _useStateAnexosErro = useState(""),
     anexosErro = _slicedToArray(_useStateAnexosErro, 2)[0],
     setAnexosErro = _slicedToArray(_useStateAnexosErro, 2)[1];
+  // NOVO (v25 — pedido do Claudio, 06/11/2026: anexar VÁRIOS arquivos de uma vez): estado extra do envio em lote.
+  //   anexosOk         → aviso verde "✅ N arquivos anexados." (some ao fechar o painel ou ao começar outro envio)
+  //   anexosLote       → progresso do envio em andamento {chave, rotulo, atual, total, nome}; null = nada sendo enviado
+  //   anexosLoteRef    → trava SÍNCRONA: só um envio em lote por vez (o botão também fica desligado enquanto envia)
+  //   anexosAbertoRef  → qual painel está aberto AGORA (para avisar uma falha que termine depois de o painel ter sido fechado)
+  //   anexosMontadoRef → false depois que o usuário sai do mapa (aí o envio para de mandar arquivos novos)
+  //   anexosListaRef   → caixa rolável da lista (rola até o fim quando entra arquivo novo)
+  var _useStateAnexosOk = useState(""),
+    anexosOk = _slicedToArray(_useStateAnexosOk, 2)[0],
+    setAnexosOk = _slicedToArray(_useStateAnexosOk, 2)[1];
+  var _useStateAnexosLote = useState(null),
+    anexosLote = _slicedToArray(_useStateAnexosLote, 2)[0],
+    setAnexosLote = _slicedToArray(_useStateAnexosLote, 2)[1];
+  var anexosLoteRef = useRef(null);
+  var anexosAbertoRef = useRef(null);
+  var anexosMontadoRef = useRef(true);
+  var anexosListaRef = useRef(null);
+  anexosAbertoRef.current = anexosAbertoPara;
+  useEffect(function () {
+    anexosMontadoRef.current = true;
+    return function () { anexosMontadoRef.current = false; };
+  }, []);
+  var anexosLoteAqui = !!(anexosLote && anexosAbertoPara && anexosLote.chave === (anexosAbertoPara.tipo === "geral" ? "geral" : "forn_" + anexosAbertoPara.fornId));
+  var qtdAnexosAbertos = !anexosAbertoPara ? 0 : (anexosAbertoPara.tipo === "geral" ? (mapa.anexosGerais || []).length : ((((mapa.rodape || {})[anexosAbertoPara.fornId]) || {}).anexos || []).length);
+  // Quando entra arquivo novo com a MESMA janela aberta, a lista rola até o fim (o novo fica à vista). Ao abrir a janela, não rola.
+  var anexosQtdAntRef = useRef({ chave: null, qtd: 0 });
+  useEffect(function () {
+    var chaveAtual = anexosAbertoPara ? (anexosAbertoPara.tipo === "geral" ? "geral" : "forn_" + anexosAbertoPara.fornId) : null;
+    var ant = anexosQtdAntRef.current;
+    var el = anexosListaRef.current;
+    if (chaveAtual && ant.chave === chaveAtual && qtdAnexosAbertos > ant.qtd && el) el.scrollTop = el.scrollHeight;
+    anexosQtdAntRef.current = { chave: chaveAtual, qtd: qtdAnexosAbertos };
+  }, [qtdAnexosAbertos, anexosAbertoPara]);
   var mapContainerRef = useRef();
   var tableRef = useRef();
   // Estados do modal de associação
@@ -1374,25 +1407,116 @@ var _useState27 = useState(init),
     if (alvo.tipo === "geral") setAnexosGerais(novaLista);
     else setRodape(alvo.fornId, "anexos", novaLista);
   };
-  var handleUploadAnexo = function handleUploadAnexo(alvo, file) {
-    if (!file || !alvo) return;
-    setAnexosErro("");
-    // Validação síncrona ANTES de mexer no estado de "enviando" — um arquivo do tipo errado
-    // não deve nem piscar um spinner, o aviso já aparece na hora.
-    var erroValidacao = anexoValidar(file);
-    if (erroValidacao) { setAnexosErro(erroValidacao); return; }
-    setAnexosEnviando(true);
-    var destino = alvo.tipo === "geral" ? "geral" : ("forn_" + alvo.fornId);
-    sbUploadAnexo(mapa.id, destino, file).then(function (meta) {
-      // Lê a lista de novo (não a de fora do .then) — evita perder um arquivo se dois uploads
-      // terminarem em sequência rápida (ex: usuário escolhe 2 arquivos um atrás do outro).
-      var listaAtual = anexosDe(alvo);
-      salvarListaAnexos(alvo, listaAtual.concat([meta]));
-      setAnexosEnviando(false);
-    }).catch(function (e) {
-      setAnexosEnviando(false);
-      setAnexosErro((e && e.message) || "Falha ao enviar o arquivo. Verifique sua internet e tente de novo.");
+  var anexoChave = function anexoChave(alvo) {
+    return alvo.tipo === "geral" ? "geral" : "forn_" + alvo.fornId;
+  };
+  var anexoRotulo = function anexoRotulo(alvo) {
+    return alvo.tipo === "geral" ? "OBSERVAÇÃO GERAL DO MAPA" : (alvo.fornNome || "FORNECEDOR");
+  };
+  // NOVO (v25): acrescenta/tira arquivos da lista olhando SEMPRE o estado mais novo do mapa (a função roda
+  // dentro do update), nunca a lista que estava na tela quando o clique aconteceu. Sem isso, um arquivo que
+  // acabou de subir podia ser apagado da lista por uma exclusão feita no meio de um envio em lote.
+  // (salvarListaAnexos, acima, troca a lista INTEIRA — não usar para acrescentar nem para remover.)
+  var mudarListaAnexos = function mudarListaAnexos(alvo, fn) {
+    update(function (m) {
+      if (alvo.tipo === "geral") return _objectSpread(_objectSpread({}, m), {}, { anexosGerais: fn(m.anexosGerais || []) });
+      var rod = m.rodape || {};
+      var linha = rod[alvo.fornId] || {};
+      return _objectSpread(_objectSpread({}, m), {}, {
+        rodape: _objectSpread(_objectSpread({}, rod), {}, _defineProperty({}, alvo.fornId, _objectSpread(_objectSpread({}, linha), {}, { anexos: fn(linha.anexos || []) })))
+      });
     });
+  };
+  var motivoCurtoAnexo = function motivoCurtoAnexo(texto) {
+    if (/Tipo n.o permitido/.test(texto)) return "tipo não permitido (só PDF ou Excel)";
+    if (/muito grande/.test(texto)) return "maior que 15MB";
+    return texto;
+  };
+  var motivoFalhaEnvio = function motivoFalhaEnvio(e) {
+    var msg = (e && e.message) || "";
+    var m = msg.match(/\((\d{3})\)/);
+    if (/^Falha ao enviar/.test(msg) && m) return "o servidor recusou o envio (código " + m[1] + ")";
+    if (e && e.name === "TypeError") return "falha de conexão — verifique a internet";
+    return msg || "falha ao enviar";
+  };
+  // NOVO (v25): envia 1 ou VÁRIOS arquivos, um de cada vez (na ordem escolhida). Cada arquivo é conferido
+  // (tipo e tamanho) e enviado separadamente: um que falhe NÃO impede os outros. No fim, mostra quantos
+  // entraram e, se algum não entrou, o nome e o motivo. Com 1 arquivo só, as mensagens de erro são as mesmas de antes.
+  var handleUploadAnexos = function handleUploadAnexos(alvo, arquivos) {
+    if (!alvo || !arquivos || !arquivos.length) return;
+    if (anexosLoteRef.current) { setAnexosErro("Aguarde: já há arquivos sendo enviados."); return; }
+    setAnexosErro("");
+    setAnexosOk("");
+    var unico = arquivos.length === 1;
+    var mapaId = mapaRef.current.id;
+    var chave = anexoChave(alvo);
+    var rotulo = anexoRotulo(alvo);
+    var problemas = []; // {i, nome, motivo, completo, envio}
+    var fila = [];      // {i, file} — só os que passaram na conferência
+    arquivos.forEach(function (f, i) {
+      var ev = anexoValidar(f);
+      if (ev) problemas.push({ i: i, nome: f.name, motivo: motivoCurtoAnexo(ev), completo: ev, envio: false });
+      else fila.push({ i: i, file: f });
+    });
+    var enviados = 0;
+    var finalizar = function finalizar() {
+      anexosLoteRef.current = null; // libera a trava SEMPRE, aconteça o que acontecer depois
+      try {
+        setAnexosLote(null);
+        setAnexosEnviando(false);
+        problemas.sort(function (a, b) { return a.i - b.i; });
+        var okTxt = enviados > 0 ? "✅ " + enviados + (enviados === 1 ? " arquivo anexado." : " arquivos anexados.") : "";
+        var erroTxt = "";
+        if (problemas.length) {
+          if (unico) erroTxt = problemas[0].completo;
+          else {
+            erroTxt = problemas.length + (problemas.length === 1 ? " arquivo NÃO foi anexado:" : " arquivos NÃO foram anexados:") + "\n" +
+              problemas.map(function (p) { return "• " + p.nome + " — " + p.motivo; }).join("\n");
+            if (problemas.some(function (p) { return p.envio; })) erroTxt += "\nTente enviar de novo só os que falharam.";
+          }
+        }
+        var painelAberto = !!(anexosAbertoRef.current && anexoChave(anexosAbertoRef.current) === chave);
+        if (!anexosMontadoRef.current || !painelAberto) {
+          // O painel já foi fechado (ou o usuário saiu do mapa): se algo falhou, avisa por alerta, senão ninguém ficaria sabendo.
+          if (erroTxt) alert("📎 ARQUIVOS — " + rotulo + "\n\n" + (okTxt ? okTxt + "\n\n" : "") + "❌ " + erroTxt);
+          return;
+        }
+        setAnexosOk(okTxt);
+        setAnexosErro(erroTxt);
+      } catch (x) {}
+    };
+    if (!fila.length) { finalizar(); return; } // nada passou na conferência: só mostra os avisos
+    anexosLoteRef.current = { chave: chave };
+    setAnexosEnviando(true);
+    var passo = function passo(k) {
+      if (k >= fila.length) return Promise.resolve();
+      if (!anexosMontadoRef.current) {
+        // saiu do mapa no meio do envio: o que já subiu fica; o resto NÃO é enviado (e será avisado)
+        for (var j = k; j < fila.length; j++) problemas.push({ i: fila[j].i, nome: fila[j].file.name, motivo: "não enviado — você saiu do mapa antes do fim do envio", completo: "", envio: true });
+        return Promise.resolve();
+      }
+      var it = fila[k];
+      setAnexosLote({ chave: chave, rotulo: rotulo, atual: k + 1, total: fila.length, nome: it.file.name });
+      return sbUploadAnexo(mapaId, chave, it.file).then(function (meta) { return { meta: meta }; }, function (e) { return { erro: e }; }).then(function (r) {
+        if (r.meta) {
+          var aqui = anexosMontadoRef.current && mapaRef.current && mapaRef.current.id === mapaId;
+          if (aqui) {
+            mudarListaAnexos(alvo, function (l) { return l.concat([r.meta]); });
+            enviados++;
+          } else {
+            // O arquivo subiu, mas o usuário já saiu do mapa: ninguém enxergaria este arquivo — não deixa lixo no armazenamento.
+            sbExcluirAnexo(r.meta.caminho).catch(function () {});
+            problemas.push({ i: it.i, nome: it.file.name, motivo: "não anexado — você saiu do mapa antes de terminar", completo: "", envio: true });
+          }
+        } else {
+          var e = r.erro;
+          problemas.push({ i: it.i, nome: it.file.name, motivo: motivoFalhaEnvio(e), completo: (e && e.message) || "Falha ao enviar o arquivo. Verifique sua internet e tente de novo.", envio: true });
+          try { logEventoDiag("✖ Anexo não enviado (" + rotulo + "): " + it.file.name + " — " + ((e && e.message) || "erro desconhecido")); } catch (x) {}
+        }
+        return passo(k + 1);
+      });
+    };
+    passo(0).then(finalizar, finalizar);
   };
   var handleExcluirAnexo = function handleExcluirAnexo(alvo, idx) {
     var listaAtual = anexosDe(alvo);
@@ -1400,11 +1524,10 @@ var _useState27 = useState(init),
     if (!item) return;
     if (!window.confirm("Remover \"" + item.nome + "\"? Esta ação não pode ser desfeita.")) return;
     setAnexosErro("");
+    setAnexosOk("");
     sbExcluirAnexo(item.caminho).then(function () {
-      var listaMaisNova = anexosDe(alvo); // relê, por segurança (mesmo motivo do upload acima)
-      var i2 = listaMaisNova.indexOf(item);
-      var novaLista = i2 >= 0 ? listaMaisNova.slice(0, i2).concat(listaMaisNova.slice(i2 + 1)) : listaMaisNova;
-      salvarListaAnexos(alvo, novaLista);
+      // v25: tira da lista MAIS NOVA, pelo caminho (único) — não apaga da lista um arquivo que acabou de subir durante um envio em lote.
+      mudarListaAnexos(alvo, function (l) { return l.filter(function (x) { return x.caminho !== item.caminho; }); });
     }).catch(function (e) {
       setAnexosErro((e && e.message) || "Falha ao excluir o arquivo. Verifique sua internet e tente de novo.");
     });
@@ -3283,21 +3406,21 @@ var _useState27 = useState(init),
   // backups do mapa logo abaixo — não inventa um jeito novo de abrir/fechar popup.
   anexosAbertoPara && /*#__PURE__*/React.createElement("div", {
     style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.45)", zIndex: 9900, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "60px 16px 16px" },
-    onClick: function (e) { if (e.target === e.currentTarget) { setAnexosAbertoPara(null); setAnexosErro(""); } }
+    onClick: function (e) { if (e.target === e.currentTarget) { setAnexosAbertoPara(null); setAnexosErro(""); setAnexosOk(""); } }
   }, /*#__PURE__*/React.createElement("div", {
-    style: { background: "#fff", border: "2px solid #f0a500", borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,0.25)", maxWidth: 420, width: "100%", overflow: "hidden" }
+    style: { background: "#fff", border: "2px solid #f0a500", borderRadius: 10, boxShadow: "0 8px 28px rgba(0,0,0,0.25)", maxWidth: 420, width: "100%", overflow: "hidden", maxHeight: "100%", display: "flex", flexDirection: "column" }
   },
     /*#__PURE__*/React.createElement("div", {
-      style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "12px 16px", background: "#fff8ec", borderBottom: "1px solid #f0dba0" }
+      style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "12px 16px", background: "#fff8ec", borderBottom: "1px solid #f0dba0", flexShrink: 0 }
     },
       /*#__PURE__*/React.createElement("span", { style: { fontWeight: 800, fontSize: 13, color: "#b87800" } },
         "📎 ARQUIVOS — ", anexosAbertoPara.tipo === "geral" ? "OBSERVA\xC7\xC3O GERAL DO MAPA" : anexosAbertoPara.fornNome),
       /*#__PURE__*/React.createElement("span", {
-        onClick: function () { setAnexosAbertoPara(null); setAnexosErro(""); },
+        onClick: function () { setAnexosAbertoPara(null); setAnexosErro(""); setAnexosOk(""); },
         style: { cursor: "pointer", color: "#999", fontSize: 16, lineHeight: "16px" }
       }, "✕")
     ),
-    /*#__PURE__*/React.createElement("div", { style: { padding: "12px 16px", maxHeight: "50vh", overflowY: "auto" } },
+    /*#__PURE__*/React.createElement("div", { ref: anexosListaRef, "data-anexo-lista": "1", style: { padding: "12px 16px", maxHeight: "50vh", overflowY: "auto", flex: "0 1000 auto", minHeight: 72 } },
       (function () {
         var lista = anexosDe(anexosAbertoPara);
         if (!lista.length) return /*#__PURE__*/React.createElement("div", { style: { textAlign: "center", color: "#aaa", fontSize: 11, padding: "18px 0" } }, "Nenhum arquivo anexado ainda");
@@ -3328,25 +3451,35 @@ var _useState27 = useState(init),
         });
       })()
     ),
-    /*#__PURE__*/React.createElement("div", { style: { padding: "10px 16px 14px" } },
+    /*#__PURE__*/React.createElement("div", { "data-anexo-rodape": "1", style: { padding: "10px 16px 14px", flex: "0 1 auto", minHeight: 0, overflowY: "auto" } },
       /*#__PURE__*/React.createElement("input", {
-        type: "file", accept: ".pdf,.xlsx,.xls,.csv", id: "input-anexo-painel", style: { display: "none" },
+        type: "file", accept: ".pdf,.xlsx,.xls,.csv", multiple: true, id: "input-anexo-painel", style: { display: "none" },
         onChange: function (e) {
-          var file = e.target.files && e.target.files[0];
+          // v25: copia a lista de arquivos ANTES de limpar o campo (limpar o campo esvazia a lista original)
+          var arquivos = e.target.files ? Array.prototype.slice.call(e.target.files) : [];
           e.target.value = "";
-          if (file) handleUploadAnexo(anexosAbertoPara, file);
+          if (arquivos.length) handleUploadAnexos(anexosAbertoPara, arquivos);
         }
       }),
       /*#__PURE__*/React.createElement("button", {
         onClick: function () { document.getElementById("input-anexo-painel").click(); },
         disabled: anexosEnviando,
         style: { width: "100%", background: "#2a5298", color: "#fff", border: "none", borderRadius: 7, padding: 10, fontSize: 12, fontWeight: 700, cursor: anexosEnviando ? "default" : "pointer", opacity: anexosEnviando ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }
-      }, anexosEnviando ? "ENVIANDO..." : "📎 + ADICIONAR ARQUIVO"),
+      }, anexosLote ? (anexosLoteAqui ? ("ENVIANDO " + anexosLote.atual + " DE " + anexosLote.total + "…") : ("AGUARDE — ENVIANDO " + anexosLote.atual + " DE " + anexosLote.total + " EM OUTRO ANEXO…")) : (anexosEnviando ? "ENVIANDO..." : "📎 + ADICIONAR ARQUIVO(S)")),
+      anexosLoteAqui && /*#__PURE__*/React.createElement("div", { "data-anexo-progresso": "1", style: { marginTop: 8 } },
+        anexosLote.total > 1 && /*#__PURE__*/React.createElement("div", { style: { height: 6, background: "#e4e8f4", borderRadius: 3, overflow: "hidden" } },
+          /*#__PURE__*/React.createElement("div", { style: { height: "100%", width: Math.round(((anexosLote.atual - 1) / anexosLote.total) * 100) + "%", background: "#2a5298", transition: "width .2s" } })),
+        /*#__PURE__*/React.createElement("div", { style: { fontSize: 10, color: "#666", textAlign: "center", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, "Enviando: " + anexosLote.nome)),
+      anexosOk && /*#__PURE__*/React.createElement("div", {
+        "data-anexo-ok": "1",
+        style: { fontSize: 10.5, color: "#186818", background: "#e6f4ea", borderRadius: 6, padding: "6px 8px", marginTop: 8 }
+      }, anexosOk),
       anexosErro && /*#__PURE__*/React.createElement("div", {
-        style: { fontSize: 10.5, color: "#c0392b", background: "#fdecea", borderRadius: 6, padding: "6px 8px", marginTop: 8 }
+        "data-anexo-erro": "1",
+        style: { fontSize: 10.5, color: "#c0392b", background: "#fdecea", borderRadius: 6, padding: "6px 8px", marginTop: 8, whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: "min(130px, 24vh)", overflowY: "auto" }
       }, "❌ " + anexosErro),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: 9.5, color: "#999", textAlign: "center", marginTop: 8, lineHeight: 1.4 } },
-        "PDF ou Excel (.pdf, .xlsx, .xls, .csv) · até 15MB por arquivo")
+        "PDF ou Excel (.pdf, .xlsx, .xls, .csv) · até 15MB por arquivo · dá para selecionar vários de uma vez")
     )
   )),
   // FIX (pedido do Claudio — poder restaurar um backup de mapa, sem precisar de mim): mesmo
